@@ -816,6 +816,14 @@ components:
           type: array
           items:
             type: string
+        entityCount:
+          type: integer
+        documentCount:
+          type: integer
+        timelineCount:
+          type: integer
+        relationshipCount:
+          type: integer
         createdAt:
           type: string
         updatedAt:

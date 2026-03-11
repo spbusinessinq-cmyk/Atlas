@@ -1,17 +1,18 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Briefcase, 
-  Files, 
-  Activity, 
+import {
+  Briefcase,
+  Files,
+  Activity,
   Bell,
   Search,
   ShieldAlert,
   ChevronLeft,
   Database,
-  Menu
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,6 +21,16 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const { data: cases } = useListCases();
+  const { data: documents } = useListDocuments();
+  const { data: entities } = useListEntities();
+  const { data: pendingMentions } = useListEntityMentions({ status: "pending" });
+
+  const activeCaseCount = cases?.filter(c => c.status === "active" || c.status === "open").length ?? 0;
+  const docCount = documents?.length ?? 0;
+  const entityCount = entities?.length ?? 0;
+  const flagCount = pendingMentions?.length ?? 0;
 
   const navItems = [
     { icon: Briefcase, label: "CASE CONTROL", href: "/" },
@@ -31,31 +42,46 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen w-full bg-[#080a0d] text-foreground overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className={cn(
-        "flex-shrink-0 border-r border-[#ffffff0d] bg-black flex flex-col justify-between z-20 transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
-      )}>
+      <aside
+        className={cn(
+          "flex-shrink-0 border-r border-[#ffffff0d] bg-[#040507] flex flex-col justify-between z-20 transition-all duration-300",
+          isCollapsed ? "w-12" : "w-56"
+        )}
+      >
         <div>
-          <div className="h-8 flex items-center justify-between px-4 border-b border-[#ffffff0d]">
-            {!isCollapsed && <span className="font-mono text-[10px] text-red-600 uppercase tracking-widest">SYS:NEXUS</span>}
-            <button onClick={() => setIsCollapsed(!isCollapsed)} className="text-muted-foreground hover:text-white transition-colors ml-auto">
-              {isCollapsed ? <Menu className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+          <div className="h-8 flex items-center justify-between px-3 border-b border-[#ffffff0d]">
+            {!isCollapsed && (
+              <span className="font-mono text-[10px] text-red-600 uppercase tracking-widest">
+                SYS:ATLAS
+              </span>
+            )}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="text-neutral-600 hover:text-white transition-colors ml-auto"
+            >
+              {isCollapsed ? (
+                <Menu className="w-3 h-3" />
+              ) : (
+                <ChevronLeft className="w-3 h-3" />
+              )}
             </button>
           </div>
-          <nav className="p-2 space-y-1 mt-2">
+          <nav className="p-1.5 space-y-0.5 mt-1">
             {navItems.map((item) => {
-              const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+              const isActive =
+                location === item.href ||
+                (item.href !== "/" && location.startsWith(item.href));
               return (
                 <Link key={item.href} href={item.href} className="block">
                   <div
                     className={cn(
-                      "w-full flex items-center px-3 py-2.5 transition-all group relative cursor-pointer text-xs font-mono uppercase tracking-wider",
-                      isActive 
-                        ? "bg-[#dc262610] text-primary border-l-2 border-red-600" 
-                        : "text-muted-foreground hover:text-foreground hover:bg-[#ffffff05] border-l-2 border-transparent"
+                      "w-full flex items-center px-2.5 py-2 transition-all cursor-pointer text-[10px] font-mono uppercase tracking-wider",
+                      isActive
+                        ? "bg-[#dc262608] text-primary border-l-2 border-red-600"
+                        : "text-neutral-600 hover:text-neutral-300 hover:bg-[#ffffff04] border-l-2 border-transparent"
                     )}
                   >
-                    <item.icon className="w-4 h-4 flex-shrink-0 mr-3" />
+                    <item.icon className="w-3.5 h-3.5 flex-shrink-0 mr-2.5" />
                     {!isCollapsed && <span>{item.label}</span>}
                   </div>
                 </Link>
@@ -63,58 +89,73 @@ export function Layout({ children }: LayoutProps) {
             })}
           </nav>
         </div>
-        
-        <div className="p-4 border-t border-[#ffffff0d] flex flex-col gap-2">
+
+        <div className="p-3 border-t border-[#ffffff0d]">
           {!isCollapsed && (
-            <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-tight">
-              // NEXUS-CORE v1.0<br />
+            <div className="text-[9px] font-mono text-neutral-700 uppercase tracking-widest leading-relaxed">
+              // ATLAS-CORE V1.0
+              <br />
               // RESTRICTED
             </div>
           )}
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 bg-[#080a0d] relative">
         {/* TOP BAR */}
-        <header className="h-8 flex-shrink-0 border-b border-[#ffffff0d] flex items-center justify-between px-4 bg-black z-10 w-full">
+        <header className="h-7 flex-shrink-0 border-b border-[#ffffff0d] flex items-center justify-between px-3 bg-[#040507] z-10 w-full">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-red-600" />
-            <span className="font-bold text-white tracking-widest text-xs">NEXUS</span>
-          </div>
-          
-          <div className="flex items-center gap-4 text-[10px] font-mono uppercase text-muted-foreground hidden md:flex tracking-widest">
-            <div className="flex items-center gap-2">
-              <span>[ NEXUS CORE: ONLINE ]</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            </div>
-            <div className="w-px h-3 bg-[#ffffff0d]" />
-            <span>ACTIVE DOSSIERS: N</span>
-            <div className="w-px h-3 bg-[#ffffff0d]" />
-            <span>OPEN FLAGS: 0</span>
-            <div className="w-px h-3 bg-[#ffffff0d]" />
-            <span>DOC INGEST: N</span>
-            <div className="w-px h-3 bg-[#ffffff0d]" />
-            <span>ENTITY REGISTRY: N</span>
+            <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
+            <span className="font-bold text-white tracking-widest text-[11px] font-mono">
+              RSR // ATLAS
+            </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <input 
-                type="text" 
-                placeholder="SEARCH..." 
-                className="w-32 md:w-48 bg-transparent border-none text-[10px] font-mono text-white placeholder:text-muted-foreground focus:outline-none focus:ring-0 text-right pr-6 transition-all"
-              />
-              <Search className="w-3 h-3 absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <div className="flex items-center gap-3 text-[9px] font-mono uppercase text-neutral-600 hidden md:flex tracking-widest">
+            <div className="flex items-center gap-1.5">
+              <span className="text-neutral-500">[ ATLAS CORE: ONLINE ]</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
             </div>
-            <div className="w-px h-3 bg-[#ffffff0d]" />
-            <button className="text-muted-foreground hover:text-white relative">
+            <span className="w-px h-3 bg-[#ffffff08]" />
+            <span>
+              DOSSIERS:{" "}
+              <span className="text-white">{activeCaseCount}</span>
+            </span>
+            <span className="w-px h-3 bg-[#ffffff08]" />
+            <span>
+              FLAGS:{" "}
+              <span className={flagCount > 0 ? "text-amber-400" : "text-white"}>
+                {flagCount}
+              </span>
+            </span>
+            <span className="w-px h-3 bg-[#ffffff08]" />
+            <span>
+              DOC INGEST: <span className="text-white">{docCount}</span>
+            </span>
+            <span className="w-px h-3 bg-[#ffffff08]" />
+            <span>
+              ENTITY REG: <span className="text-white">{entityCount}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative group hidden sm:block">
+              <input
+                type="text"
+                placeholder="SEARCH..."
+                className="w-36 bg-transparent border-none text-[9px] font-mono text-white placeholder:text-neutral-700 focus:outline-none focus:ring-0 text-right pr-5 transition-all"
+              />
+              <Search className="w-3 h-3 absolute right-0 top-1/2 -translate-y-1/2 text-neutral-700 group-focus-within:text-primary transition-colors" />
+            </div>
+            <span className="w-px h-3 bg-[#ffffff08]" />
+            <button className="text-neutral-600 hover:text-white transition-colors">
               <Bell className="w-3 h-3" />
             </button>
           </div>
         </header>
-        
-        <div className="flex-1 overflow-auto p-4 md:p-6 text-foreground">
+
+        <div className="flex-1 overflow-auto p-4 text-foreground">
           {children}
         </div>
       </main>

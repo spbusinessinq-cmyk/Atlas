@@ -11,13 +11,34 @@ import {
   moneyFlowsTable,
   entityMentionsTable,
 } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 router.get("/cases", async (_req, res) => {
   const cases = await db.select().from(casesTable).orderBy(casesTable.createdAt);
-  res.json(cases.map(formatCase));
+
+  // Aggregate counts for all cases in 4 queries (not N+1)
+  const [entityCounts, docCounts, timelineCounts, relCounts] = await Promise.all([
+    db.select({ caseId: entitiesTable.caseId, count: sql<number>`cast(count(*) as int)` })
+      .from(entitiesTable).groupBy(entitiesTable.caseId),
+    db.select({ caseId: documentsTable.caseId, count: sql<number>`cast(count(*) as int)` })
+      .from(documentsTable).groupBy(documentsTable.caseId),
+    db.select({ caseId: timelineEntriesTable.caseId, count: sql<number>`cast(count(*) as int)` })
+      .from(timelineEntriesTable).groupBy(timelineEntriesTable.caseId),
+    db.select({ caseId: relationshipsTable.caseId, count: sql<number>`cast(count(*) as int)` })
+      .from(relationshipsTable).groupBy(relationshipsTable.caseId),
+  ]);
+
+  const toMap = (rows: { caseId: number | null; count: number }[]) =>
+    Object.fromEntries(rows.filter(r => r.caseId != null).map(r => [r.caseId!, r.count]));
+
+  const entityMap = toMap(entityCounts);
+  const docMap = toMap(docCounts);
+  const timelineMap = toMap(timelineCounts);
+  const relMap = toMap(relCounts);
+
+  res.json(cases.map(c => formatCase(c, entityMap[c.id], docMap[c.id], timelineMap[c.id], relMap[c.id])));
 });
 
 router.get("/cases/:id", async (req, res) => {
@@ -54,7 +75,7 @@ router.get("/cases/:id/summary", async (req, res) => {
   );
 
   res.json({
-    case: formatCase(rows[0]),
+    case: formatCase(rows[0], entities.length, documents.length, timeline.length, relationships.length),
     entities: entities.map(formatEntity),
     documents: documents.map(formatDocument),
     timeline: timeline.map((t) => formatTimeline(t, entityMap)),
@@ -93,13 +114,23 @@ router.delete("/cases/:id", async (req, res) => {
   res.status(204).send();
 });
 
-function formatCase(c: typeof casesTable.$inferSelect) {
+function formatCase(
+  c: typeof casesTable.$inferSelect,
+  entityCount?: number,
+  documentCount?: number,
+  timelineCount?: number,
+  relationshipCount?: number
+) {
   return {
     id: c.id,
     title: c.title,
     description: c.description,
     status: c.status,
     tags: c.tags || [],
+    entityCount: entityCount ?? 0,
+    documentCount: documentCount ?? 0,
+    timelineCount: timelineCount ?? 0,
+    relationshipCount: relationshipCount ?? 0,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };

@@ -1,37 +1,106 @@
 import React from "react";
-import { Activity, FileText, Users, AlertTriangle, PenTool } from "lucide-react";
+import { Activity, Database, FileText, Link2, Clock, Cpu } from "lucide-react";
 
-export function RightRail() {
-  const activities = [
-    { type: 'DOC_INGEST', desc: 'File "Bank_Statement_Q3.pdf" attached to operation', time: '10:42 AM', icon: FileText, color: 'text-[#0891b2]' },
-    { type: 'ENTITY_LINKED', desc: 'New association identified: VICTOR_K', time: '09:15 AM', icon: Users, color: 'text-[#16a34a]' },
-    { type: 'ORION_MATCH', desc: 'Cross-reference detected in ORION global feed', time: 'YESTERDAY', icon: Activity, color: 'text-[#dc2626]' },
-    { type: 'NOTE_UPDATE', desc: 'Analyst logs updated by SYSTEM_ADMIN', time: 'YESTERDAY', icon: PenTool, color: 'text-muted-foreground' },
-    { type: 'FLAG', desc: 'Confidence threshold below 40% on relation', time: '2 DAYS AGO', icon: AlertTriangle, color: 'text-[#d97706]' },
+interface RightRailProps {
+  entities?: number;
+  documents?: number;
+  relationships?: number;
+  timeline?: number;
+  moneyFlows?: number;
+  pendingMentions?: number;
+  caseStatus?: string;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  open: "text-blue-400 bg-blue-500/10 border-blue-500/30",
+  active: "text-red-500 bg-red-500/10 border-red-500/30",
+  closed: "text-neutral-400 bg-neutral-500/10 border-neutral-500/30",
+  archived: "text-amber-500 bg-amber-500/10 border-amber-500/30",
+};
+
+export function RightRail({
+  entities = 0,
+  documents = 0,
+  relationships = 0,
+  timeline = 0,
+  moneyFlows = 0,
+  pendingMentions = 0,
+  caseStatus,
+}: RightRailProps) {
+  const metrics = [
+    { icon: Database, label: "ENTITIES", value: entities, color: "text-cyan-500" },
+    { icon: FileText, label: "DOCUMENTS", value: documents, color: "text-neutral-400" },
+    { icon: Link2, label: "LINKS", value: relationships, color: "text-amber-500" },
+    { icon: Clock, label: "TIMELINE", value: timeline, color: "text-purple-400" },
+    { icon: Activity, label: "MONEY FLOWS", value: moneyFlows, color: "text-green-500" },
   ];
 
   return (
-    <div className="w-72 flex-shrink-0 flex flex-col gap-4 hidden xl:flex">
-      <div className="nexus-panel rounded-none flex-1">
+    <div className="w-56 flex-shrink-0 flex flex-col gap-3 hidden xl:flex">
+      {/* Case Status */}
+      <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
-          <span className="nexus-label">// CASE SIGNALS</span>
-          <Activity className="w-3 h-3 text-muted-foreground" />
+          <span className="nexus-label">CASE STATUS</span>
         </div>
-        <div className="p-3 space-y-3">
-          {activities.map((act, i) => (
-            <div key={i} className="flex flex-col gap-1 pb-3 border-b border-[#ffffff0d] last:border-0 last:pb-0">
-              <div className="flex items-center justify-between">
-                <div className={`flex items-center gap-1.5 font-mono text-[10px] ${act.color}`}>
-                  <act.icon className="w-3 h-3" />
-                  {act.type}
-                </div>
-                <span className="font-mono text-[9px] text-muted-foreground">{act.time}</span>
+        <div className="p-3 space-y-1">
+          {caseStatus && (
+            <div className={`inline-flex items-center gap-1.5 px-2 py-1 border font-mono text-[9px] uppercase tracking-widest ${STATUS_COLORS[caseStatus] || STATUS_COLORS.open}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              {caseStatus}
+            </div>
+          )}
+          {metrics.map((m) => (
+            <div
+              key={m.label}
+              className="flex items-center justify-between py-1.5 border-b border-[#ffffff05] last:border-0"
+            >
+              <div className="flex items-center gap-2">
+                <m.icon className={`w-3 h-3 ${m.color}`} />
+                <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
+                  {m.label}
+                </span>
               </div>
-              <div className="text-xs text-neutral-400 leading-snug">{act.desc}</div>
+              <span className="font-mono text-[11px] font-bold text-white tabular-nums">
+                {m.value.toString().padStart(2, "0")}
+              </span>
             </div>
           ))}
         </div>
       </div>
+
+      {/* ATLAS Status */}
+      {pendingMentions > 0 && (
+        <div className="nexus-panel rounded-none border-amber-500/20">
+          <div className="nexus-header-strip border-amber-500/10 bg-amber-500/5">
+            <span className="nexus-label flex items-center gap-1.5 text-amber-500">
+              <Cpu className="w-3 h-3" />
+              ATLAS PENDING
+            </span>
+            <span className="font-mono text-[11px] font-bold text-amber-400 tabular-nums">
+              {pendingMentions}
+            </span>
+          </div>
+          <div className="px-3 py-2">
+            <p className="font-mono text-[9px] text-neutral-600 uppercase tracking-wider leading-relaxed">
+              Entity detections awaiting triage in Document Vault
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Feed empty state if nothing notable */}
+      {pendingMentions === 0 && entities === 0 && documents === 0 && (
+        <div className="nexus-panel rounded-none">
+          <div className="nexus-header-strip">
+            <span className="nexus-label">SIGNAL FEED</span>
+          </div>
+          <div className="px-3 py-6 text-center font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
+            NO ACTIVITY
+            <br />
+            RECORDED
+          </div>
+        </div>
+      )}
     </div>
   );
 }

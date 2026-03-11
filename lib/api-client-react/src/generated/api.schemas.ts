@@ -24,6 +24,10 @@ export interface Case {
   description?: string;
   status: CaseStatus;
   tags?: string[];
+  entityCount?: number;
+  documentCount?: number;
+  timelineCount?: number;
+  relationshipCount?: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -10,6 +10,7 @@ import CaseDetail from "@/pages/case-detail";
 import EntityList from "@/pages/entities";
 import EntityProfile from "@/pages/entity-profile";
 import DocumentLibrary from "@/pages/documents";
+import SystemLog from "@/pages/logs";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/entities" component={EntityList} />
       <Route path="/entities/:id" component={EntityProfile} />
       <Route path="/documents" component={DocumentLibrary} />
+      <Route path="/logs" component={SystemLog} />
       <Route component={NotFound} />
     </Switch>
   );

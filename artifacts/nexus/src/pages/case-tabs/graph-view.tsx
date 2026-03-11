@@ -137,7 +137,7 @@ export default function GraphView({ entities, relationships, caseId }: GraphView
     return (
       <div className="nexus-panel rounded-none h-full flex items-center justify-center">
         <div className="text-center font-mono text-neutral-600 text-sm uppercase tracking-widest">
-          INSUFFICIENT DATA FOR NEXUS GRAPH
+          INSUFFICIENT DATA FOR ATLAS LINK GRAPH
         </div>
       </div>
     );

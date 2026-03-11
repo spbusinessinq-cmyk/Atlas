@@ -1,0 +1,331 @@
+Do one major refinement pass on the current app.
+
+This is NOT a rebuild.
+Do NOT replace the architecture.
+Do NOT generate mock data.
+Do NOT use placeholder counts, fake cards, fake entities, fake documents, fake timeline items, or demo feed entries anywhere in the UI.
+
+This pass has 3 priorities:
+
+1. FULL BRAND REPLACEMENT
+2. REMOVE ALL MOCK / STATIC DATA
+3. TIGHTEN AND SHARPEN THE DESIGN
+
+==================================================
+SYSTEM BRANDING
+==================================================
+
+Replace all visible branding from NEXUS to ATLAS.
+
+Use this identity everywhere in the product:
+
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+Update all branding references in:
+- top bar
+- sidebar
+- page headers
+- footer
+- metadata labels
+- restricted/error screens
+- browser title if applicable
+- empty states
+- system labels
+
+Replace:
+- SYS:NEXUS -> SYS:ATLAS
+- NEXUS CORE -> ATLAS CORE
+- NEXUS-CORE V1.0 -> ATLAS-CORE V1.0
+- any visible “NEXUS” product naming in the interface
+
+Keep ORION and BLACKDOG references untouched if they exist.
+
+==================================================
+NO MOCK DATA / NO PLACEHOLDERS
+==================================================
+
+The UI must only render real backend-driven data or true empty states.
+
+Required rules:
+- no hardcoded case card data
+- no hardcoded counts in telemetry
+- no hardcoded document rows
+- no hardcoded graph nodes
+- no hardcoded entity rows
+- no hardcoded relationship edges
+- no hardcoded money flow examples
+- no fake event feed items
+- no fake dashboard metrics
+
+If there is no real data, show a polished empty state.
+
+Examples:
+- ACTIVE DOSSIERS should be empty if there are no cases
+- ENTITY REGISTRY should be empty if there are no entities
+- DOCUMENT VAULT should be empty if no docs exist
+- telemetry counters should use real values from backend queries
+- if backend value is unavailable, display 0 or N/A, but never fake data
+
+Audit the current frontend for static arrays, seeded UI cards, fake labels, or fallback mock objects and remove them.
+
+==================================================
+ATLAS DESIGN PASS
+==================================================
+
+Make the design tighter, denser, and sharper.
+
+Target aesthetic:
+- premium investigative command center
+- same family as ORION and BLACKDOG
+- more compact and information-dense
+- less dead space
+- cleaner alignment
+- stronger typography hierarchy
+- more severe / disciplined visual tone
+
+Design rules:
+- black / near-black background
+- white primary text
+- red as primary accent
+- green for confirmed/online
+- amber for pending/watch
+- subtle cyan only for neutral metadata if needed
+- restrained use of glow
+- thin borders
+- modular panel framing
+- tight vertical rhythm
+- tighter card padding
+- smaller but clearer telemetry labels
+- stronger use of uppercase micro-labels
+- monospace for metadata, timestamps, IDs, counts, and statuses
+- bold sans for primary titles
+
+Reduce wasted empty space across:
+- dashboard
+- case cards
+- document rows
+- entity tables
+- tab headers
+- top bar
+- page body margins
+- sidebar item spacing
+
+==================================================
+TOP BAR / TELEMETRY
+==================================================
+
+Refine the top bar to feel more like a premium system strip.
+
+Use:
+RSR // ATLAS
+[ ATLAS CORE: ONLINE ]
+
+Telemetry values must be real:
+- ACTIVE DOSSIERS
+- OPEN FLAGS
+- DOC INGEST
+- ENTITY REGISTRY
+
+Use live backend counts only.
+No mock values.
+
+Tighten spacing and separators so the strip looks crisp and high-end.
+Make it feel closer to ORION / BLACKDOG.
+
+==================================================
+SIDEBAR
+==================================================
+
+Update sidebar branding to:
+SYS:ATLAS
+
+Navigation:
+- CASE CONTROL
+- ENTITY REGISTRY
+- DOCUMENT VAULT
+- SYSTEM LOG
+
+If future routes already exist, preserve them, but keep naming consistent with ATLAS.
+
+Make the sidebar tighter:
+- reduce wasted height
+- improve active state
+- align icons/text more precisely
+- preserve left red active indicator
+- sharpen typography
+
+Footer:
+ATLAS-CORE V1.0
+RESTRICTED
+
+==================================================
+CASE DASHBOARD / ACTIVE DOSSIERS
+==================================================
+
+Make case cards more premium and more useful.
+
+Current problems:
+- too much empty space
+- card feels too loose
+- bottom telemetry strip is too sparse
+
+Improve each dossier card:
+- tighter header row
+- stronger status treatment
+- cleaner CASE-ID display
+- better metadata alignment
+- denser lower telemetry strip
+
+Use real values only:
+- entity count
+- document count
+- timeline count
+- optionally relationship count if available
+
+If values do not exist yet, show 0 or N/A from real backend logic, not hardcoded text.
+
+Page header should read:
+ACTIVE DOSSIERS
+CASE CONTROL
+
+Make the page grid tighter and cleaner.
+
+==================================================
+CASE DETAIL PAGE
+==================================================
+
+Rebrand to ATLAS and tighten the dossier header.
+
+Example style:
+OPERATION RED FLAG // DOSSIER
+
+Header should feel sharper:
+- case ID
+- status
+- init date
+- entities
+- docs
+- relationships if available
+
+Tabs should be tighter and more polished:
+- OVERVIEW
+- ENTITY REGISTRY
+- DOCUMENT VAULT
+- LINK ANALYSIS
+- TEMPORAL TRACE
+- ANALYST NOTES
+
+Make the active tab state feel stronger and cleaner.
+
+==================================================
+DOCUMENT VAULT
+==================================================
+
+The document vault needs to look more premium and more “evidence system.”
+
+Improve:
+- row density
+- metadata alignment
+- PDF/file icon area
+- source/date formatting
+- ingest/analyze action buttons
+- spacing inside the panel
+
+No mock rows.
+Only real uploaded docs.
+
+Empty state should say something like:
+NO DOCUMENTS INGESTED
+Upload source material to begin analysis.
+
+If ANALYZE exists, make that action visually sharp and integrated into the system style.
+
+==================================================
+ENTITY REGISTRY
+==================================================
+
+Tighten the registry table.
+
+Use real backend data only.
+
+Improve columns and spacing.
+If no entities exist, show:
+NO REGISTERED ENTITIES
+
+This page should feel like a true classified registry, not a basic table.
+
+==================================================
+SYSTEM LOG
+==================================================
+
+Do not show fake errors or fake restricted screens unless they are tied to real routing or permissions behavior.
+
+If this page is not fully implemented yet, give it a polished real empty state rather than fake threat messaging.
+
+Use:
+SYSTEM LOG
+No activity recorded yet.
+
+No invented incidents.
+No simulated alerts.
+No pretend security messages.
+
+==================================================
+EMPTY STATES
+==================================================
+
+All empty states should be intentional and premium.
+
+Examples:
+- NO ACTIVE DOSSIERS
+- NO REGISTERED ENTITIES
+- NO DOCUMENTS INGESTED
+- NO TIMELINE EVENTS
+- NO LINK ANALYSIS AVAILABLE
+
+Style them with:
+- mono sublabel
+- subtle border box or restrained centered panel
+- no cheesy illustrations
+- no fake system chatter
+
+==================================================
+DATA WIRING
+==================================================
+
+Audit the frontend carefully and ensure all pages use real API hooks / backend data.
+
+Check:
+- dossier list
+- dossier counts
+- entity registry table
+- document vault rows
+- case detail header counts
+- timeline counts
+- relationship counts
+- top telemetry strip
+
+Remove any remaining static seeded objects or fallback mock arrays.
+
+==================================================
+FINAL DELIVERABLE
+==================================================
+
+Make one complete ATLAS refinement pass.
+
+Goals:
+- fully branded as ATLAS
+- acronym visible where appropriate
+- no mock data anywhere
+- tighter spacing
+- denser and sharper UI
+- more premium command-center feel
+- cleaner empty states
+- real backend-driven telemetry and rows only
+
+At the end, summarize:
+1. all branding changes made
+2. all mock/static data removed
+3. all files updated
+4. any areas still awaiting backend support for real data
