@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 import GraphCanvas, { LinkIntelPanel, EntityIntelPanel } from "./case-tabs/graph-view";
 import EntitiesTab from "./case-tabs/entities-tab";
-import DocumentsTab from "./case-tabs/documents-tab";
+import DocumentsTab, { DocumentInspector } from "./case-tabs/documents-tab";
 import TimelineTab from "./case-tabs/timeline-tab";
 import NotesTab from "./case-tabs/notes-tab";
 
@@ -53,6 +53,7 @@ export default function CaseDetail() {
   const [activeSection, setActiveSection] = useState<SectionId>("graph");
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<number | null>(null);
+  const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
 
   const handleSectionChange = useCallback(
     (section: SectionId) => {
@@ -60,6 +61,9 @@ export default function CaseDetail() {
       if (section !== "graph") {
         setSelectedEntityId(null);
         setSelectedRelId(null);
+      }
+      if (section !== "documents") {
+        setSelectedDocId(null);
       }
     },
     []
@@ -101,6 +105,7 @@ export default function CaseDetail() {
 
   const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
   const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
+  const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
 
   const statusColor =
     STATUS_COLORS[caseData.status as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.open;
@@ -260,7 +265,12 @@ export default function CaseDetail() {
 
           {activeSection === "documents" && (
             <div className="h-full">
-              <DocumentsTab caseId={caseId} documents={documents} />
+              <DocumentsTab
+                caseId={caseId}
+                documents={documents}
+                selectedDocId={selectedDocId}
+                onDocumentSelect={(doc) => setSelectedDocId(doc ? doc.id : null)}
+              />
             </div>
           )}
 
@@ -298,7 +308,15 @@ export default function CaseDetail() {
             onClose={() => setSelectedEntityId(null)}
           />
         )}
-        {(activeSection !== "graph" || (!selectedRel && !selectedEntity)) && (
+        {activeSection === "documents" && selectedDoc && (
+          <DocumentInspector
+            doc={selectedDoc}
+            caseId={caseId}
+            onClose={() => setSelectedDocId(null)}
+          />
+        )}
+        {!(activeSection === "graph" && (selectedRel || selectedEntity)) &&
+          !(activeSection === "documents" && selectedDoc) && (
           <DefaultInspector
             caseData={caseData}
             entities={entities}

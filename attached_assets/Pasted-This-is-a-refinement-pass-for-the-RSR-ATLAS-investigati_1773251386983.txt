@@ -1,0 +1,262 @@
+This is a refinement pass for the RSR // ATLAS investigative workspace.
+
+Do NOT rebuild the application.
+Do NOT redesign the theme.
+Do NOT introduce mock data.
+Preserve the current backend architecture and data contracts.
+
+The goals of this pass are:
+
+1. Make the investigation workspace cleaner and less crowded
+2. Improve the Document Vault usability
+3. Prevent panels from overlapping or competing for screen space
+4. Preserve a graph-first investigation environment
+5. Introduce the ATLAS compass logo in the top bar
+6. Maintain a disciplined intelligence-system design
+
+-----------------------------------
+
+ATLAS BRANDING
+
+Use the following identity everywhere:
+
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+Replace any remaining references to NEXUS.
+
+In the top bar add a small compass-style ATLAS icon to the left of:
+
+RSR // ATLAS
+
+Compass concept:
+
+minimal line compass symbol
+thin white lines
+small red center point
+
+This should appear subtle and system-like, not decorative.
+
+Example concept:
+
+  ▲
+◄ ● ►
+  ▼
+
+Use this as a minimalist icon (18–22px).
+
+-----------------------------------
+
+WORKSPACE PHILOSOPHY
+
+ATLAS is an investigative workspace.
+
+The investigation map (Link Analysis graph) must remain the central focus.
+
+Documents, notes, and entity registries should behave like tools that open when needed, not panels permanently occupying space.
+
+Avoid overlapping windows or multiple panels fighting for attention.
+
+-----------------------------------
+
+CASE WORKSPACE LAYOUT
+
+Preserve the existing 3-panel structure but refine behavior.
+
+LEFT PANEL
+Case navigation rail.
+
+Contains:
+Overview
+Link Analysis
+Entity Registry
+Document Vault
+Temporal Trace
+Flow Trace
+Analyst
+
+This panel remains fixed and narrow.
+
+CENTER PANEL
+The investigation canvas.
+
+Default content:
+Link Analysis graph.
+
+The graph should occupy the majority of the workspace.
+
+No extra panels should appear over the graph unless explicitly opened.
+
+RIGHT PANEL
+Context inspector.
+
+This panel only displays contextual information based on user actions.
+
+Possible states:
+
+Entity selected
+Relationship selected
+Document selected
+Default case summary
+
+-----------------------------------
+
+DOCUMENT VAULT BEHAVIOR
+
+The Document Vault must behave like an evidence drawer rather than a permanent workspace panel.
+
+Adjust the Document Vault so that:
+
+1. It displays a clean list of documents only
+2. No document preview panels occupy the investigation canvas
+3. Clicking a document opens the document inspector in the RIGHT PANEL
+4. The graph workspace remains untouched
+
+Document rows should show:
+
+file icon
+title
+source
+ingest date
+case ID
+actions (Analyze, Open)
+
+Make rows denser and more readable.
+
+Avoid oversized spacing.
+
+-----------------------------------
+
+DOCUMENT INSPECTOR
+
+When a document is clicked:
+
+The RIGHT PANEL should display a document inspector containing:
+
+Document title
+Source
+Ingest date
+Case reference
+Extracted entities
+Pending entity detections
+Money references (if detected)
+Quick actions
+
+The inspector must stay within the right panel and not overlay the graph.
+
+-----------------------------------
+
+GRAPH WORKSPACE
+
+The Link Analysis graph must remain visually dominant.
+
+Adjust the layout so that:
+
+The graph fills the center panel completely.
+
+Empty state should say:
+
+NO ENTITIES IN THIS CASE
+Add entities to begin link analysis.
+
+Do not create placeholder nodes.
+
+Once entities are approved, nodes should appear automatically.
+
+-----------------------------------
+
+ENTITY INTERACTION
+
+Clicking a node should populate the RIGHT PANEL with:
+
+Entity name
+Entity type
+Aliases
+Mention count
+Linked documents
+Related entities
+Notes
+
+The graph itself should remain visible at all times.
+
+-----------------------------------
+
+SPACING AND TYPOGRAPHY
+
+Improve readability across the interface.
+
+Increase sizes for:
+
+panel titles
+entity names
+document titles
+case titles
+
+Keep small mono text only for:
+
+IDs
+counts
+timestamps
+status labels
+
+Reduce unnecessary empty space around panels.
+
+-----------------------------------
+
+DASHBOARD REFINEMENT
+
+The Active Dossiers page should remain simple but clean.
+
+Keep the metric strip at the top:
+
+Total dossiers
+Entity registry
+Document vault
+ATLAS pending triage
+
+Ensure these values come only from real backend counts.
+
+Do not display placeholder data.
+
+-----------------------------------
+
+SYSTEM LOG PAGE
+
+Keep the System Log page minimal.
+
+If no logs exist, show:
+
+SYSTEM LOG
+No activity recorded yet.
+
+Do not display simulated alerts or fake warnings.
+
+-----------------------------------
+
+SUCCESS CRITERIA
+
+After this pass:
+
+The case workspace should feel calm, clean, and focused.
+
+The graph remains central.
+
+Documents behave like evidence drawers.
+
+The inspector panel provides contextual intelligence without crowding the screen.
+
+The ATLAS compass logo appears in the top bar.
+
+No panels overlap or obscure the investigation canvas.
+
+No mock data is introduced.
+
+-----------------------------------
+
+At the end of the pass provide a summary of:
+
+1. layout improvements
+2. document vault usability changes
+3. graph workspace adjustments
+4. branding updates (compass logo)
+5. files modified

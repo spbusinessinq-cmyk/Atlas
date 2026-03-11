@@ -6,13 +6,25 @@ import {
   Activity,
   Bell,
   Search,
-  ShieldAlert,
   ChevronLeft,
   Database,
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
+
+function AtlasCompass() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <line x1="10" y1="2" x2="10" y2="7.5" stroke="white" strokeWidth="0.75" opacity="0.45" />
+      <line x1="10" y1="12.5" x2="10" y2="18" stroke="white" strokeWidth="0.75" opacity="0.45" />
+      <line x1="2" y1="10" x2="7.5" y2="10" stroke="white" strokeWidth="0.75" opacity="0.45" />
+      <line x1="12.5" y1="10" x2="18" y2="10" stroke="white" strokeWidth="0.75" opacity="0.45" />
+      <circle cx="10" cy="10" r="7.5" stroke="white" strokeWidth="0.5" opacity="0.12" />
+      <circle cx="10" cy="10" r="2" fill="#dc2626" />
+    </svg>
+  );
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -106,7 +118,7 @@ export function Layout({ children }: LayoutProps) {
         {/* TOP BAR */}
         <header className="h-7 flex-shrink-0 border-b border-[#ffffff0d] flex items-center justify-between px-3 bg-[#040507] z-10 w-full">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
+            <AtlasCompass />
             <span className="font-bold text-white tracking-widest text-[11px] font-mono">
               RSR // ATLAS
             </span>
