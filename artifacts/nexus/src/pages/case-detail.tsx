@@ -140,7 +140,7 @@ export default function CaseDetail() {
             </TabsContent>
 
             <TabsContent value="entities" className="m-0 h-full"><EntitiesTab caseId={caseId} entities={entities} /></TabsContent>
-            <TabsContent value="graph" className="m-0 h-[600px] border border-[#ffffff0d] bg-[#000]"><GraphView entities={entities} relationships={relationships} /></TabsContent>
+            <TabsContent value="graph" className="m-0 h-[600px] border border-[#ffffff0d] bg-[#000]"><GraphView entities={entities} relationships={relationships} caseId={caseId} /></TabsContent>
             <TabsContent value="documents" className="m-0 h-full"><DocumentsTab caseId={caseId} documents={documents} /></TabsContent>
             <TabsContent value="timeline" className="m-0 h-full"><TimelineTab caseId={caseId} timeline={timeline} /></TabsContent>
             <TabsContent value="notes" className="m-0 h-full"><NotesTab caseId={caseId} notes={notes} /></TabsContent>

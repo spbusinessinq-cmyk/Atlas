@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { relationshipsTable, entitiesTable } from "@workspace/db/schema";
+import { relationshipsTable, entitiesTable, relationshipEvidenceTable } from "@workspace/db/schema";
 import { eq, or } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -32,20 +32,27 @@ router.get("/relationships", async (req, res) => {
   const entities = await db.select().from(entitiesTable);
   const entityMap = Object.fromEntries(entities.map((e) => [e.id, e.name]));
 
-  res.json(rows.map((r) => formatRelationship(r, entityMap)));
+  // Get evidence counts
+  const allEvidence = await db.select().from(relationshipEvidenceTable);
+  const evidenceCounts: Record<number, number> = {};
+  allEvidence.forEach((e) => {
+    evidenceCounts[e.relationshipId] = (evidenceCounts[e.relationshipId] || 0) + 1;
+  });
+
+  res.json(rows.map((r) => formatRelationship(r, entityMap, evidenceCounts)));
 });
 
 router.post("/relationships", async (req, res) => {
-  const { entityAId, entityBId, relationshipType, evidenceDocumentId, confidence, caseId } =
+  const { entityAId, entityBId, relationshipType, evidenceDocumentId, confidence, dateRange, caseId } =
     req.body;
   const rows = await db
     .insert(relationshipsTable)
-    .values({ entityAId, entityBId, relationshipType, evidenceDocumentId, confidence, caseId })
+    .values({ entityAId, entityBId, relationshipType, evidenceDocumentId, confidence, dateRange, caseId })
     .returning();
 
   const entities = await db.select().from(entitiesTable);
   const entityMap = Object.fromEntries(entities.map((e) => [e.id, e.name]));
-  res.status(201).json(formatRelationship(rows[0], entityMap));
+  res.status(201).json(formatRelationship(rows[0], entityMap, {}));
 });
 
 router.delete("/relationships/:id", async (req, res) => {
@@ -56,7 +63,8 @@ router.delete("/relationships/:id", async (req, res) => {
 
 function formatRelationship(
   r: typeof relationshipsTable.$inferSelect,
-  entityMap: Record<number, string>
+  entityMap: Record<number, string>,
+  evidenceCounts: Record<number, number>
 ) {
   return {
     id: r.id,
@@ -67,7 +75,9 @@ function formatRelationship(
     relationshipType: r.relationshipType,
     evidenceDocumentId: r.evidenceDocumentId,
     confidence: r.confidence,
+    dateRange: r.dateRange,
     caseId: r.caseId,
+    evidenceCount: evidenceCounts[r.id] || 0,
     createdAt: r.createdAt.toISOString(),
   };
 }

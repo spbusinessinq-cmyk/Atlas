@@ -9,6 +9,7 @@ export const relationshipsTable = pgTable("relationships", {
   relationshipType: text("relationship_type").notNull(),
   evidenceDocumentId: integer("evidence_document_id"),
   confidence: real("confidence"),
+  dateRange: text("date_range"),
   caseId: integer("case_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

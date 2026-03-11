@@ -19,11 +19,30 @@ router.get("/money-flows", async (req, res) => {
 });
 
 router.post("/money-flows", async (req, res) => {
-  const { sourceEntityId, destinationEntityId, amount, date, description, supportingDocumentId, caseId } =
-    req.body;
+  const {
+    sourceEntityId,
+    destinationEntityId,
+    amount,
+    currency,
+    date,
+    description,
+    supportingDocumentId,
+    confidenceLevel,
+    caseId,
+  } = req.body;
   const rows = await db
     .insert(moneyFlowsTable)
-    .values({ sourceEntityId, destinationEntityId, amount, date, description, supportingDocumentId, caseId })
+    .values({
+      sourceEntityId,
+      destinationEntityId,
+      amount,
+      currency: currency || "USD",
+      date,
+      description,
+      supportingDocumentId,
+      confidenceLevel,
+      caseId,
+    })
     .returning();
   const entities = await db.select().from(entitiesTable);
   const entityMap = Object.fromEntries(entities.map((e) => [e.id, e.name]));
@@ -47,9 +66,11 @@ function formatMoneyFlow(
     sourceEntityName: entityMap[m.sourceEntityId] || `Entity ${m.sourceEntityId}`,
     destinationEntityName: entityMap[m.destinationEntityId] || `Entity ${m.destinationEntityId}`,
     amount: m.amount,
+    currency: m.currency || "USD",
     date: m.date,
     description: m.description,
     supportingDocumentId: m.supportingDocumentId,
+    confidenceLevel: m.confidenceLevel,
     caseId: m.caseId,
     createdAt: m.createdAt.toISOString(),
   };

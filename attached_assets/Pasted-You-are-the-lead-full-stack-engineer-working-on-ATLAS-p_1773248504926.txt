@@ -1,0 +1,239 @@
+You are the lead full-stack engineer working on ATLAS, part of the RSR Intelligence Systems platform.
+
+SYSTEM NAME
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+ATLAS is the investigative intelligence engine that works alongside:
+
+RSR ORION – global event monitoring
+RSR BLACKDOG – security and operational protection
+
+ATLAS is responsible for investigative analysis of entities, documents, relationships, and funding flows.
+
+Your task is to upgrade ATLAS from a UI prototype into a functional investigative analysis engine.
+
+DO NOT rewrite the existing UI.
+Extend the backend and add new modules while integrating with the current React interface.
+
+---
+
+CORE FEATURES TO IMPLEMENT
+
+The next development phase must add three major capabilities:
+
+1. AUTOMATIC ENTITY EXTRACTION
+2. MONEY FLOW TRACKING
+3. NETWORK GRAPH ANALYSIS
+
+---
+
+FEATURE 1 — DOCUMENT ENTITY EXTRACTION
+
+When a document is uploaded into the DOCUMENT VAULT, ATLAS should automatically analyze the text and extract potential entities.
+
+Entity types to detect:
+
+Person
+Organization
+Government Agency
+Company
+Nonprofit
+Location
+Program
+Facility
+Financial Institution
+
+Implementation steps:
+
+• Extract text from uploaded PDFs using pdf-parse
+• Run Named Entity Recognition using spaCy, compromise.js, or a lightweight NLP model
+• Generate candidate entities
+
+For each detected entity:
+
+Create a suggested entity object with:
+
+name
+entity_type
+confidence_score
+document_source
+position_in_text
+
+These should appear in the UI as:
+
+"ENTITY DETECTION RESULTS"
+
+The investigator can approve or reject each detected entity before it enters the ENTITY REGISTRY.
+
+---
+
+FEATURE 2 — MONEY FLOW TRACKING
+
+ATLAS must support tracing financial flows across entities.
+
+Add a new module:
+
+FLOW TRACE
+
+Database table:
+
+money_flows
+
+Fields:
+
+id
+source_entity_id
+destination_entity_id
+amount
+currency
+date
+description
+supporting_document_id
+confidence_level
+
+Money flows should appear in:
+
+• Case dashboards
+• Entity pages
+• Timeline entries
+• Graph visualization
+
+Example chain:
+
+Federal Grant → LA County → LAHSA → Nonprofit Shelter Org → Hotel Program
+
+Each step should be stored as an individual flow record.
+
+ATLAS should be able to visualize this as a **financial chain graph**.
+
+---
+
+FEATURE 3 — NETWORK GRAPH ANALYSIS
+
+Upgrade the existing React Flow graph.
+
+Nodes represent entities.
+
+Edges represent relationships.
+
+Edge types include:
+
+contracts_with
+funded_by
+managed_by
+partnered_with
+appointed_by
+announced_by
+located_at
+donated_to
+
+Each edge must support metadata:
+
+relationship_type
+confidence_level
+source_documents
+date_range
+
+Graph UI improvements:
+
+• Node color by entity type
+• Edge color by relationship type
+• Edge thickness based on number of supporting documents
+• Hover tooltip showing evidence references
+
+Add a right-side panel:
+
+"LINK INTELLIGENCE"
+
+Displaying:
+
+relationship description
+supporting documents
+confidence score
+timeline references
+
+---
+
+DATABASE ADDITIONS
+
+Add new tables:
+
+entity_mentions
+money_flows
+relationship_evidence
+
+entity_mentions
+
+id
+document_id
+entity_name
+confidence
+approved
+
+relationship_evidence
+
+id
+relationship_id
+document_id
+excerpt
+
+---
+
+CASE INTELLIGENCE PANELS
+
+Add the following panels to the Case Dashboard:
+
+LINK ANALYSIS
+GRAPH PREVIEW
+FLOW TRACE
+TEMPORAL TRACE
+CASE SIGNALS
+
+Each panel should display summarized data from the backend.
+
+---
+
+SYSTEM TELEMETRY
+
+Add small status indicators in the top bar:
+
+ATLAS CORE: ONLINE
+GRAPH ENGINE: ACTIVE
+DOC PARSER: READY
+ENTITY DETECTOR: ACTIVE
+FLOW TRACE: STANDBY
+
+---
+
+GOAL
+
+ATLAS should allow investigators to:
+
+Upload documents
+Automatically detect entities
+Approve entities into the registry
+Link entities together
+Track financial flows
+Visualize connections in a network graph
+Trace events over time
+
+ATLAS should feel like a real investigative intelligence platform.
+
+Do not simplify the system.
+
+Build it modularly so additional features like AI analysis and automated relationship discovery can be added later.
+
+---
+
+IMPLEMENTATION ORDER
+
+1. Document text extraction
+2. Entity detection pipeline
+3. Entity approval workflow
+4. Money flow schema and UI panels
+5. Graph relationship metadata
+6. Link intelligence side panel
+7. Case dashboard data aggregation
+
+Begin implementing the backend services, database schema, and API endpoints required for these features.

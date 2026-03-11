@@ -5,7 +5,10 @@
  * NEXUS / ATLAS Investigative Intelligence Platform API
  * OpenAPI spec version: 0.2.0
  */
+import type { ListEntityMentionsStatus } from "./listEntityMentionsStatus";
 
-export type ListEntitiesParams = {
+export type ListEntityMentionsParams = {
+  documentId?: number;
   caseId?: number;
+  status?: ListEntityMentionsStatus;
 };

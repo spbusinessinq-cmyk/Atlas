@@ -8,14 +8,18 @@ import timelineRouter from "./timeline";
 import eventsRouter from "./events";
 import notesRouter from "./notes";
 import moneyFlowsRouter from "./money_flows";
+import entityMentionsRouter from "./entity_mentions";
+import relationshipEvidenceRouter from "./relationship_evidence";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(casesRouter);
 router.use(entitiesRouter);
+router.use(entityMentionsRouter);
 router.use(documentsRouter);
 router.use(relationshipsRouter);
+router.use(relationshipEvidenceRouter);
 router.use(timelineRouter);
 router.use(eventsRouter);
 router.use(notesRouter);

@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export type ListEntitiesParams = {
-  caseId?: number;
-};
+export interface CreateRelationshipEvidenceInput {
+  relationshipId: number;
+  documentId: number;
+  excerpt?: string;
+}

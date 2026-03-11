@@ -6,3 +6,5 @@ export * from "./timeline_entries";
 export * from "./events";
 export * from "./notes";
 export * from "./money_flows";
+export * from "./entity_mentions";
+export * from "./relationship_evidence";

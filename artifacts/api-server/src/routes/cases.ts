@@ -9,8 +9,9 @@ import {
   notesTable,
   relationshipsTable,
   moneyFlowsTable,
+  entityMentionsTable,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -31,7 +32,7 @@ router.get("/cases/:id/summary", async (req, res) => {
   const rows = await db.select().from(casesTable).where(eq(casesTable.id, id));
   if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-  const [entities, documents, timeline, events, notes, allRelationships, moneyFlows] =
+  const [entities, documents, timeline, events, notes, allRelationships, moneyFlows, pendingMentionsRows] =
     await Promise.all([
       db.select().from(entitiesTable).where(eq(entitiesTable.caseId, id)),
       db.select().from(documentsTable).where(eq(documentsTable.caseId, id)),
@@ -40,6 +41,9 @@ router.get("/cases/:id/summary", async (req, res) => {
       db.select().from(notesTable).where(eq(notesTable.caseId, id)),
       db.select().from(relationshipsTable).where(eq(relationshipsTable.caseId, id)),
       db.select().from(moneyFlowsTable).where(eq(moneyFlowsTable.caseId, id)),
+      db.select().from(entityMentionsTable).where(
+        and(eq(entityMentionsTable.caseId, id), eq(entityMentionsTable.status, "pending"))
+      ),
     ]);
 
   const entityIds = entities.map((e) => e.id);
@@ -58,6 +62,7 @@ router.get("/cases/:id/summary", async (req, res) => {
     notes: notes.map(formatNote),
     relationships: relationships.map((r) => formatRelationship(r, entityMap)),
     moneyFlows: moneyFlows.map((m) => formatMoneyFlow(m, entityMap)),
+    pendingMentions: pendingMentionsRows.length,
   });
 });
 
@@ -178,7 +183,9 @@ function formatRelationship(
     relationshipType: r.relationshipType,
     evidenceDocumentId: r.evidenceDocumentId,
     confidence: r.confidence,
+    dateRange: r.dateRange,
     caseId: r.caseId,
+    evidenceCount: 0,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -195,9 +202,11 @@ function formatMoneyFlow(
     destinationEntityName:
       entityMap[m.destinationEntityId] || `Entity ${m.destinationEntityId}`,
     amount: m.amount,
+    currency: m.currency || "USD",
     date: m.date,
     description: m.description,
     supportingDocumentId: m.supportingDocumentId,
+    confidenceLevel: m.confidenceLevel,
     caseId: m.caseId,
     createdAt: m.createdAt.toISOString(),
   };

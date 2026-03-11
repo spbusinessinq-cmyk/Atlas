@@ -5,14 +5,12 @@
  * NEXUS / ATLAS Investigative Intelligence Platform API
  * OpenAPI spec version: 0.2.0
  */
-import type { CaseStatus } from "./caseStatus";
 
-export interface Case {
+export interface RelationshipEvidence {
   id: number;
-  title: string;
-  description?: string;
-  status: CaseStatus;
-  tags?: string[];
+  relationshipId: number;
+  documentId: number;
+  documentTitle?: string;
+  excerpt?: string;
   createdAt: string;
-  updatedAt: string;
 }

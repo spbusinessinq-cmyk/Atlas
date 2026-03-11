@@ -7,9 +7,11 @@ export const moneyFlowsTable = pgTable("money_flows", {
   sourceEntityId: integer("source_entity_id").notNull(),
   destinationEntityId: integer("destination_entity_id").notNull(),
   amount: real("amount").notNull(),
+  currency: text("currency").default("USD"),
   date: text("date"),
   description: text("description"),
   supportingDocumentId: integer("supporting_document_id"),
+  confidenceLevel: real("confidence_level"),
   caseId: integer("case_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

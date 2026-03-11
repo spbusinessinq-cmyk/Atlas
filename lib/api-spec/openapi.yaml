@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.1.0
-  description: NEXUS Investigative Intelligence Platform API
+  version: 0.2.0
+  description: NEXUS / ATLAS Investigative Intelligence Platform API
 servers:
   - url: /api
     description: Base API path
@@ -25,6 +25,10 @@ tags:
     description: Case notes
   - name: money-flows
     description: Money flow tracking
+  - name: entity-mentions
+    description: Extracted entity detection results
+  - name: relationship-evidence
+    description: Evidence references for relationships
 
 paths:
   /healthz:
@@ -344,6 +348,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/Document"
 
+  /documents/{id}/analyze:
+    post:
+      operationId: analyzeDocument
+      tags: [documents]
+      summary: Run entity extraction on a document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Analysis complete — returns extracted entity mentions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeDocumentResult"
+        "404":
+          description: Document not found
+        "422":
+          description: Cannot extract text from this file
+
   /relationships:
     get:
       operationId: listRelationships
@@ -632,6 +659,138 @@ paths:
         "204":
           description: Deleted
 
+  /entity-mentions:
+    get:
+      operationId: listEntityMentions
+      tags: [entity-mentions]
+      summary: List entity detection results
+      parameters:
+        - name: documentId
+          in: query
+          schema:
+            type: integer
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Entity mentions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EntityMention"
+
+  /entity-mentions/{id}/approve:
+    post:
+      operationId: approveEntityMention
+      tags: [entity-mentions]
+      summary: Approve an entity mention — creates entity in registry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                caseId:
+                  type: integer
+                overrideName:
+                  type: string
+                overrideType:
+                  type: string
+      responses:
+        "200":
+          description: Approved — returns created entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+
+  /entity-mentions/{id}/reject:
+    post:
+      operationId: rejectEntityMention
+      tags: [entity-mentions]
+      summary: Reject an entity mention
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityMention"
+
+  /relationship-evidence:
+    get:
+      operationId: listRelationshipEvidence
+      tags: [relationship-evidence]
+      summary: List evidence for a relationship
+      parameters:
+        - name: relationshipId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Evidence list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RelationshipEvidence"
+    post:
+      operationId: createRelationshipEvidence
+      tags: [relationship-evidence]
+      summary: Add evidence to a relationship
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRelationshipEvidenceInput"
+      responses:
+        "201":
+          description: Evidence added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelationshipEvidence"
+
+  /relationship-evidence/{id}:
+    delete:
+      operationId: deleteRelationshipEvidence
+      tags: [relationship-evidence]
+      summary: Remove evidence from a relationship
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -727,7 +886,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MoneyFlow"
-      required: [case, entities, documents, timeline, events, notes, relationships, moneyFlows]
+        pendingMentions:
+          type: integer
+      required: [case, entities, documents, timeline, events, notes, relationships, moneyFlows, pendingMentions]
 
     Entity:
       type: object
@@ -837,6 +998,51 @@ components:
           type: integer
       required: [title]
 
+    AnalyzeDocumentResult:
+      type: object
+      properties:
+        documentId:
+          type: integer
+        mentionsCreated:
+          type: integer
+        mentions:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntityMention"
+        textLength:
+          type: integer
+        extractionMethod:
+          type: string
+      required: [documentId, mentionsCreated, mentions, textLength, extractionMethod]
+
+    EntityMention:
+      type: object
+      properties:
+        id:
+          type: integer
+        documentId:
+          type: integer
+        caseId:
+          type: integer
+        entityName:
+          type: string
+        entityType:
+          type: string
+        confidence:
+          type: number
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        context:
+          type: string
+        startPos:
+          type: integer
+        endPos:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, documentId, entityName, entityType, confidence, status, createdAt]
+
     Relationship:
       type: object
       properties:
@@ -856,7 +1062,11 @@ components:
           type: integer
         confidence:
           type: number
+        dateRange:
+          type: string
         caseId:
+          type: integer
+        evidenceCount:
           type: integer
         createdAt:
           type: string
@@ -875,9 +1085,39 @@ components:
           type: integer
         confidence:
           type: number
+        dateRange:
+          type: string
         caseId:
           type: integer
       required: [entityAId, entityBId, relationshipType]
+
+    RelationshipEvidence:
+      type: object
+      properties:
+        id:
+          type: integer
+        relationshipId:
+          type: integer
+        documentId:
+          type: integer
+        documentTitle:
+          type: string
+        excerpt:
+          type: string
+        createdAt:
+          type: string
+      required: [id, relationshipId, documentId, createdAt]
+
+    CreateRelationshipEvidenceInput:
+      type: object
+      properties:
+        relationshipId:
+          type: integer
+        documentId:
+          type: integer
+        excerpt:
+          type: string
+      required: [relationshipId, documentId]
 
     TimelineEntry:
       type: object
@@ -1007,12 +1247,16 @@ components:
           type: string
         amount:
           type: number
+        currency:
+          type: string
         date:
           type: string
         description:
           type: string
         supportingDocumentId:
           type: integer
+        confidenceLevel:
+          type: number
         caseId:
           type: integer
         createdAt:
@@ -1028,12 +1272,16 @@ components:
           type: integer
         amount:
           type: number
+        currency:
+          type: string
         date:
           type: string
         description:
           type: string
         supportingDocumentId:
           type: integer
+        confidenceLevel:
+          type: number
         caseId:
           type: integer
       required: [sourceEntityId, destinationEntityId, amount]
