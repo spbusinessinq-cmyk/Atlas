@@ -21,13 +21,16 @@ import {
   ArrowLeft,
   AlertTriangle,
   ScanLine,
+  CheckCircle2,
+  Upload,
+  ChevronRight,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 import GraphCanvas, { LinkIntelPanel, EntityIntelPanel, SuggestedEdge } from "./case-tabs/graph-view";
 import EntitiesTab from "./case-tabs/entities-tab";
-import DocumentsTab, { DocumentInspector } from "./case-tabs/documents-tab";
+import DocumentsTab, { DocumentInspector, DocumentViewer } from "./case-tabs/documents-tab";
 import TimelineTab from "./case-tabs/timeline-tab";
 import NotesTab from "./case-tabs/notes-tab";
 
@@ -64,25 +67,24 @@ export default function CaseDetail() {
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<number | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
+  const [viewingDocId, setViewingDocId] = useState<number | null>(null);
 
   const { data: approvedMentions = [] } = useListEntityMentions({
     caseId,
     status: "approved",
   });
 
-  const handleSectionChange = useCallback(
-    (section: SectionId) => {
-      setActiveSection(section);
-      if (section !== "graph") {
-        setSelectedEntityId(null);
-        setSelectedRelId(null);
-      }
-      if (section !== "documents") {
-        setSelectedDocId(null);
-      }
-    },
-    []
-  );
+  const handleSectionChange = useCallback((section: SectionId) => {
+    setActiveSection(section);
+    if (section !== "graph") {
+      setSelectedEntityId(null);
+      setSelectedRelId(null);
+    }
+    if (section !== "documents") {
+      setSelectedDocId(null);
+      setViewingDocId(null);
+    }
+  }, []);
 
   const handleEntitySelect = useCallback((id: number | null) => {
     setSelectedEntityId(id);
@@ -121,6 +123,7 @@ export default function CaseDetail() {
   const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
   const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
+  const viewingDoc = documents.find((d) => d.id === viewingDocId) || null;
 
   const statusColor =
     STATUS_COLORS[caseData.status as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.open;
@@ -143,21 +146,60 @@ export default function CaseDetail() {
       selectedEntityId={selectedEntityId}
       selectedRelId={selectedRelId}
       selectedDocId={selectedDocId}
+      viewingDocId={viewingDocId}
       selectedEntity={selectedEntity}
       selectedRel={selectedRel}
       selectedDoc={selectedDoc}
+      viewingDoc={viewingDoc}
       statusColor={statusColor}
       statusDot={statusDot}
       onSectionChange={handleSectionChange}
       onEntitySelect={handleEntitySelect}
       onRelSelect={handleRelSelect}
       onDocSelect={(doc) => setSelectedDocId(doc ? doc.id : null)}
+      onViewDoc={(doc) => { setViewingDocId(doc ? doc.id : null); if (doc) setSelectedDocId(doc.id); }}
       onEntityClose={() => setSelectedEntityId(null)}
       onRelClose={() => setSelectedRelId(null)}
       onDocClose={() => setSelectedDocId(null)}
     />
   );
 }
+
+// ─── Workflow Pipeline Strip ──────────────────────────────────────────────────
+
+type StepStatus = "done" | "active" | "pending";
+interface WorkflowStep { id: string; label: string; status: StepStatus }
+
+function WorkflowStrip({ steps }: { steps: WorkflowStep[] }) {
+  return (
+    <div className="flex items-center gap-0 px-3 py-1 bg-[#000] border-b border-[#ffffff06] overflow-x-auto flex-shrink-0">
+      {steps.map((step, i) => (
+        <React.Fragment key={step.id}>
+          <div className={cn(
+            "flex items-center gap-1 px-2 py-0.5 font-mono text-[8px] uppercase tracking-widest whitespace-nowrap",
+            step.status === "done" && "text-green-600",
+            step.status === "active" && "text-cyan-400",
+            step.status === "pending" && "text-neutral-800",
+          )}>
+            {step.status === "done" && <CheckCircle2 className="w-2.5 h-2.5" />}
+            {step.status === "active" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 flex-shrink-0 animate-pulse" />
+            )}
+            {step.status === "pending" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-800 flex-shrink-0" />
+            )}
+            {step.label}
+          </div>
+          {i < steps.length - 1 && (
+            <ChevronRight className="w-2.5 h-2.5 text-[#ffffff0d] flex-shrink-0" />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ─── Inner Component ──────────────────────────────────────────────────────────
 
 function CaseDetailInner({
   caseId,
@@ -174,15 +216,18 @@ function CaseDetailInner({
   selectedEntityId,
   selectedRelId,
   selectedDocId,
+  viewingDocId,
   selectedEntity,
   selectedRel,
   selectedDoc,
+  viewingDoc,
   statusColor,
   statusDot,
   onSectionChange,
   onEntitySelect,
   onRelSelect,
   onDocSelect,
+  onViewDoc,
   onEntityClose,
   onRelClose,
   onDocClose,
@@ -201,15 +246,18 @@ function CaseDetailInner({
   selectedEntityId: number | null;
   selectedRelId: number | null;
   selectedDocId: number | null;
+  viewingDocId: number | null;
   selectedEntity: Entity | null;
   selectedRel: Relationship | null;
   selectedDoc: Document | null;
+  viewingDoc: Document | null;
   statusColor: string;
   statusDot: string;
   onSectionChange: (s: SectionId) => void;
   onEntitySelect: (id: number | null) => void;
   onRelSelect: (id: number | null) => void;
   onDocSelect: (doc: Document | null) => void;
+  onViewDoc: (doc: Document | null) => void;
   onEntityClose: () => void;
   onRelClose: () => void;
   onDocClose: () => void;
@@ -260,6 +308,87 @@ function CaseDetailInner({
     return suggestions;
   }, [approvedMentions, relationships, entities, documents]);
 
+  const workflowSteps = useMemo((): WorkflowStep[] => {
+    const hasDocuments = documents.length > 0;
+    const hasAnalysis = (approvedMentions.length + pendingMentions) > 0;
+    const hasPending = pendingMentions > 0;
+    const hasEntities = entities.length > 0;
+    const hasLinks = relationships.length > 0;
+    const hasReview = notes.length > 0 || hasLinks;
+
+    return [
+      {
+        id: "ingest",
+        label: "INGEST",
+        status: hasDocuments ? "done" : "active",
+      },
+      {
+        id: "analyze",
+        label: "ANALYZE",
+        status: (hasAnalysis || hasEntities) ? "done" : hasDocuments ? "active" : "pending",
+      },
+      {
+        id: "approve",
+        label: "APPROVE",
+        status: hasEntities ? "done" : hasPending ? "active" : "pending",
+      },
+      {
+        id: "map",
+        label: "MAP",
+        status: hasLinks ? "done" : hasEntities ? "active" : "pending",
+      },
+      {
+        id: "review",
+        label: "REVIEW",
+        status: hasReview ? "active" : "pending",
+      },
+    ];
+  }, [documents, approvedMentions, pendingMentions, entities, relationships, notes]);
+
+  const nextAction = useMemo(() => {
+    if (documents.length === 0) {
+      return {
+        message: "Ingest source material to begin the investigation.",
+        cta: "INGEST DOCUMENT",
+        navigate: "documents" as SectionId,
+        icon: Upload,
+        color: "border-red-500/25 bg-red-500/5 text-red-400",
+      };
+    }
+    if (pendingMentions > 0) {
+      return {
+        message: `${pendingMentions} detected ${pendingMentions === 1 ? "entity" : "entities"} awaiting approval. Approve to populate the investigation graph.`,
+        cta: "REVIEW DETECTIONS",
+        navigate: "documents" as SectionId,
+        icon: AlertTriangle,
+        color: "border-amber-500/25 bg-amber-500/5 text-amber-400",
+      };
+    }
+    if (entities.length === 0 && documents.length > 0) {
+      return {
+        message: "Analyze documents to extract entities and references.",
+        cta: "ANALYZE DOCUMENTS",
+        navigate: "documents" as SectionId,
+        icon: ScanLine,
+        color: "border-cyan-500/20 bg-cyan-500/5 text-cyan-400",
+      };
+    }
+    if (entities.length > 0 && relationships.length === 0 && notes.length === 0) {
+      return {
+        message: "Review graph nodes and begin building links or analyst notes.",
+        cta: "OPEN LINK ANALYSIS",
+        navigate: "graph" as SectionId,
+        icon: GitBranch,
+        color: "border-cyan-500/20 bg-cyan-500/5 text-cyan-400",
+      };
+    }
+    return null;
+  }, [documents, pendingMentions, entities, relationships, notes]);
+
+  const centerLabel = viewingDoc
+    ? `VIEWING: ${viewingDoc.title}`
+    : SECTIONS.find((s) => s.id === activeSection)?.label;
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* ──────── LEFT RAIL ──────── */}
@@ -296,8 +425,7 @@ function CaseDetailInner({
           {SECTIONS.map((s) => {
             const Icon = s.icon;
             const isActive = activeSection === s.id;
-            const hasBadge =
-              s.id === "documents" && (pendingMentions) > 0;
+            const hasBadge = s.id === "documents" && pendingMentions > 0;
             return (
               <button
                 key={s.id}
@@ -357,10 +485,8 @@ function CaseDetailInner({
       {/* ──────── CENTER CANVAS ──────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#080a0d]">
         <div className="nexus-header-strip flex-shrink-0">
-          <span className="nexus-label">
-            {SECTIONS.find((s) => s.id === activeSection)?.label}
-          </span>
-          {activeSection === "graph" && (
+          <span className="nexus-label truncate max-w-xs">{centerLabel}</span>
+          {activeSection === "graph" && !viewingDoc && (
             <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
               {entities.length} NODES&nbsp;·&nbsp;{relationships.length} EDGES
               {suggestedEdges.length > 0 && (
@@ -372,12 +498,12 @@ function CaseDetailInner({
           )}
         </div>
 
+        <WorkflowStrip steps={workflowSteps} />
+
         <div
           className={cn(
             "flex-1",
-            activeSection === "graph"
-              ? "overflow-hidden"
-              : "overflow-auto"
+            activeSection === "graph" ? "overflow-hidden" : "overflow-auto"
           )}
         >
           {activeSection === "graph" && (
@@ -414,12 +540,20 @@ function CaseDetailInner({
 
           {activeSection === "documents" && (
             <div className="h-full">
-              <DocumentsTab
-                caseId={caseId}
-                documents={documents}
-                selectedDocId={selectedDocId}
-                onDocumentSelect={onDocSelect}
-              />
+              {viewingDoc ? (
+                <DocumentViewer
+                  doc={viewingDoc}
+                  onBack={() => onViewDoc(null)}
+                />
+              ) : (
+                <DocumentsTab
+                  caseId={caseId}
+                  documents={documents}
+                  selectedDocId={selectedDocId}
+                  onDocumentSelect={onDocSelect}
+                  onViewDocument={onViewDoc}
+                />
+              )}
             </div>
           )}
 
@@ -463,6 +597,7 @@ function CaseDetailInner({
             doc={selectedDoc}
             caseId={caseId}
             onClose={onDocClose}
+            onView={() => onViewDoc(selectedDoc)}
           />
         )}
         {!(activeSection === "graph" && (selectedRel || selectedEntity)) &&
@@ -473,6 +608,7 @@ function CaseDetailInner({
             documents={documents}
             notes={notes}
             pendingMentions={pendingMentions}
+            nextAction={nextAction}
             onNavigate={onSectionChange}
           />
         )}
@@ -672,12 +808,21 @@ function FlowTracePanel({ moneyFlows }: { moneyFlows: MoneyFlow[] }) {
 
 // ─── Default Inspector ───────────────────────────────────────────────────────
 
+interface NextActionConfig {
+  message: string;
+  cta: string;
+  navigate: SectionId;
+  icon: React.ElementType;
+  color: string;
+}
+
 function DefaultInspector({
   caseData,
   entities,
   documents,
   notes,
   pendingMentions,
+  nextAction,
   onNavigate,
 }: {
   caseData: {
@@ -690,10 +835,9 @@ function DefaultInspector({
   documents: Document[];
   notes: Note[];
   pendingMentions: number;
+  nextAction: NextActionConfig | null;
   onNavigate: (s: SectionId) => void;
 }) {
-  const showNextAction = entities.length === 0 && documents.length > 0 && pendingMentions === 0;
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="nexus-header-strip flex-shrink-0">
@@ -725,45 +869,25 @@ function DefaultInspector({
           </div>
         )}
 
-        {pendingMentions > 0 && (
+        {nextAction && (
           <div
-            className="p-2.5 border border-amber-500/25 bg-amber-500/5 space-y-2 cursor-pointer hover:bg-amber-500/10 transition-colors"
-            onClick={() => onNavigate("documents")}
+            className={cn(
+              "p-2.5 border space-y-2 cursor-pointer transition-colors",
+              nextAction.color
+            )}
+            onClick={() => onNavigate(nextAction.navigate)}
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-              <span className="font-mono text-[9px] text-amber-500 uppercase tracking-widest">
-                ATLAS DETECTIONS
-              </span>
-            </div>
-            <div className="font-bold text-lg text-amber-400 font-mono tabular-nums">
-              {pendingMentions}
-            </div>
-            <div className="font-mono text-[9px] text-amber-600 uppercase tracking-wider">
-              ENTITIES PENDING TRIAGE
-            </div>
-            <div className="font-mono text-[9px] text-amber-700 hover:text-amber-500 transition-colors">
-              OPEN DOCUMENT VAULT →
-            </div>
-          </div>
-        )}
-
-        {showNextAction && (
-          <div
-            className="p-2.5 border border-cyan-500/20 bg-cyan-500/5 space-y-2 cursor-pointer hover:bg-cyan-500/8 transition-colors"
-            onClick={() => onNavigate("documents")}
-          >
-            <div className="flex items-center gap-2">
-              <ScanLine className="w-3.5 h-3.5 text-cyan-500" />
-              <span className="font-mono text-[9px] text-cyan-500 uppercase tracking-widest">
+              <nextAction.icon className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="font-mono text-[9px] uppercase tracking-widest font-bold">
                 NEXT ACTION
               </span>
             </div>
-            <div className="font-mono text-[9px] text-cyan-700 uppercase tracking-wider leading-relaxed">
-              Analyze documents and approve entities to populate the investigation graph.
+            <div className="font-mono text-[9px] opacity-80 leading-relaxed uppercase tracking-wide">
+              {nextAction.message}
             </div>
-            <div className="font-mono text-[9px] text-cyan-800 hover:text-cyan-600 transition-colors uppercase">
-              OPEN DOCUMENT VAULT →
+            <div className="font-mono text-[9px] opacity-60 uppercase tracking-widest hover:opacity-90 transition-opacity">
+              {nextAction.cta} →
             </div>
           </div>
         )}

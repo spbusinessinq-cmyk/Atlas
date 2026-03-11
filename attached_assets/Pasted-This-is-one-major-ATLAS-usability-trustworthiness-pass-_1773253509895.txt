@@ -1,0 +1,328 @@
+This is one major ATLAS usability + trustworthiness pass.
+
+Do NOT rebuild the app.
+Do NOT redesign from scratch.
+Do NOT introduce mock data.
+Do NOT add fake cases, fake entities, fake documents, fake links, fake counts, or seeded demo content.
+
+Preserve the current ATLAS architecture and visual style where possible, but improve usability, trust, and workflow clarity.
+
+SYSTEM NAME
+
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+==================================================
+PRIMARY GOALS
+==================================================
+
+This pass must achieve 5 things:
+
+1. Remove any fake / seeded / test case data from the app
+2. Make Document Vault actually usable by allowing real document viewing/opening
+3. Make the workflow understandable and thinkable
+4. Improve trust in the system by showing only real user-created data
+5. Make the next action in each case obvious
+
+==================================================
+1. REMOVE FAKE / SEEDED / TEST DATA
+==================================================
+
+Audit the app for any automatically created demo/test/seed content.
+
+Important:
+The current case may be fake test data or automatically seeded data.
+This must be removed unless it was genuinely created by the current user through the live UI.
+
+Requirements:
+- remove all seeded/sample/demo/test cases
+- remove all auto-created placeholder records
+- remove all hardcoded “Operation Red Flag” style demo content if it is not truly live user-created data
+- do not silently recreate test content on app start
+- dashboard should show only real user-created cases from the database
+- if no real cases exist, show a clean empty state:
+  NO ACTIVE DOSSIERS
+  Create a case to begin an investigation.
+
+If the database has existing seed rows, either:
+- remove them safely, or
+- clearly distinguish and suppress demo data from the UI
+
+Goal:
+ATLAS should feel trustworthy and real, not like a template app.
+
+==================================================
+2. DOCUMENT VAULT MUST SUPPORT REAL DOCUMENT VIEWING
+==================================================
+
+The Document Vault currently shows document rows, but the user also needs a real way to view/open the actual document.
+
+Add a real document viewing flow.
+
+Required behavior:
+- each document row must support:
+  - SELECT row -> populate right-side Document Inspector
+  - VIEW / OPEN document -> open the actual file content
+  - ANALYZE document
+
+Do NOT make VIEW and SELECT the same thing.
+They are separate actions.
+
+Required document row actions:
+- ANALYZE
+- VIEW
+- DOWNLOAD (if already supported)
+
+Document viewing options:
+Preferred:
+- open an in-app document viewer in the CENTER PANEL
+- preserve the left rail and right inspector
+- center panel switches from document list to document viewer when VIEW is clicked
+
+Acceptable fallback:
+- open the stored file in a new browser tab if in-app preview is not feasible
+
+Best approach:
+Inside a case, Document Vault behaves like this:
+- document list in center panel
+- click row = show metadata in right inspector
+- click VIEW = center panel shows actual document preview
+- click BACK TO VAULT = return to document list
+
+If the file is a PDF:
+- render PDF preview if possible
+- if preview is not feasible, provide a reliable open-in-new-tab behavior
+
+If the file is not previewable:
+show:
+PREVIEW NOT AVAILABLE
+Open or download the source file.
+
+==================================================
+3. MAKE THE CASE WORKFLOW UNDERSTANDABLE
+==================================================
+
+ATLAS still feels visually strong but mentally unclear.
+Fix the workflow clarity.
+
+Inside each case, add a small persistent workflow strip near the top of the center or right-side area.
+
+Use a pipeline like:
+
+INGEST
+ANALYZE
+APPROVE
+MAP
+REVIEW
+
+Behavior:
+- highlight completed steps
+- highlight current step
+- derive state from real backend data
+
+Suggested logic:
+- INGEST complete if documents > 0
+- ANALYZE active if docs exist but no detections/mentions yet
+- APPROVE active if pending detections exist
+- MAP active if entities exist and graph can render
+- REVIEW active if notes/links/timeline exist
+
+Do not fake statuses.
+
+This should help the user instantly understand:
+- where they are
+- what’s done
+- what happens next
+
+==================================================
+4. STRONGER NEXT ACTION GUIDANCE
+==================================================
+
+In the case workspace, the system should clearly guide the user toward the next useful action.
+
+Examples:
+If no documents:
+NEXT ACTION
+Ingest source material to begin investigation.
+
+If documents exist but not analyzed:
+NEXT ACTION
+Analyze documents to extract entities and references.
+
+If pending detections exist:
+NEXT ACTION
+Approve detected entities to populate the investigation graph.
+
+If entities exist but no notes/relationships:
+NEXT ACTION
+Review graph nodes and begin building links or analyst notes.
+
+Show one primary next action only.
+Do not overload the user.
+
+Add a clear CTA button where appropriate:
+- INGEST DOCUMENT
+- ANALYZE DOCUMENT
+- REVIEW DETECTIONS
+- OPEN LINK ANALYSIS
+- OPEN ANALYST NOTES
+
+==================================================
+5. DOCUMENT VAULT UX REFINEMENT
+==================================================
+
+Keep Document Vault as a clean evidence browser.
+
+But improve usability:
+
+- make row actions clearer
+- separate SELECT vs VIEW vs ANALYZE
+- selected row should have strong active state
+- VIEW action should be obvious
+- document title should be larger and easier to scan
+- source/date/id formatting should be more legible
+- action buttons should be aligned consistently
+
+Recommended row layout:
+[file icon] title
+source • ingest date • case id
+[ANALYZE] [VIEW] [DOWNLOAD]
+
+No inline expansion clutter in the row list.
+
+==================================================
+6. DOCUMENT INSPECTOR REFINEMENT
+==================================================
+
+The right-side Document Inspector should remain useful and clean.
+
+When a document is selected, show:
+- document title
+- source
+- ingest date
+- case reference
+- file type
+- analyze action
+- view action
+- download action
+- detected entities
+- pending detections
+- approved entities
+- money references if available
+
+If no detections yet:
+NO DETECTIONS AVAILABLE
+Run ANALYZE to extract entities and references.
+
+Make this feel like a true evidence metadata panel.
+
+==================================================
+7. CENTER PANEL VIEW MODES
+==================================================
+
+For the case workspace, the center panel should support clean mode switching without confusion.
+
+Examples:
+- Link Analysis = graph in center
+- Document Vault = document list in center
+- VIEW document = actual document preview in center
+- Entity Registry = registry table in center
+- Analyst = notes in center
+
+Do not overlay multiple competing panels.
+Only one center mode at a time.
+
+If a document preview is opened, keep the right-side inspector intact.
+
+==================================================
+8. DASHBOARD TRUST / EMPTY STATE
+==================================================
+
+The dashboard should show only real cases.
+
+If there are no real cases:
+show a premium empty state:
+NO ACTIVE DOSSIERS
+Create a case to begin an investigation.
+
+Add one clear CTA:
+NEW CASE
+
+No fake dossier cards.
+No demo content.
+No seeded case summaries.
+
+==================================================
+9. ENTITY REGISTRY TRUST
+==================================================
+
+The Entity Registry should only show real approved entities from real documents or manual creation.
+
+If empty:
+NO REGISTERED ENTITIES
+Approve entities from a case or add them manually.
+
+No sample rows.
+
+==================================================
+10. KEEP THE SYSTEM CLEAN
+==================================================
+
+Preserve the current ATLAS visual style:
+- black / near-black background
+- white text
+- red primary accent
+- teal/cyan secondary scan accent
+- amber pending
+- green approved
+
+Preserve the radar identity.
+Preserve the graph-first case design.
+
+Do not add decorative clutter.
+Do not over-animate.
+Focus on:
+- trust
+- clarity
+- usability
+
+==================================================
+11. SMALL FIXES
+==================================================
+
+Fix rough edges during this pass:
+- button hit areas
+- row click reliability
+- selected state persistence
+- active nav consistency
+- browser title
+- no visible NEXUS references
+- no orphan routes
+- no dead “System Log” confusion if log is empty
+- no hidden seeded records
+
+==================================================
+SUCCESS CONDITION
+==================================================
+
+After this pass, ATLAS should feel real and understandable:
+
+- no fake seeded case content
+- dashboard reflects only real data
+- documents can be selected, analyzed, and actually viewed
+- workflow strip explains the investigation process
+- next action is obvious
+- the case workspace remains clean and graph-first
+- the app feels more trustworthy and usable
+
+==================================================
+FINAL SUMMARY
+==================================================
+
+At the end, summarize:
+1. fake/seeded data removed
+2. document viewing flow implemented
+3. workflow strip implementation
+4. next-action guidance changes
+5. files modified
+6. any remaining limitations for document preview

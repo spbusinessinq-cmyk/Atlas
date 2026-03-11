@@ -23,6 +23,9 @@ import {
   X,
   AlertCircle,
   ScanLine,
+  Eye,
+  ExternalLink,
+  ArrowLeft,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -41,6 +44,7 @@ interface DocumentsTabProps {
   documents: Document[];
   selectedDocId?: number | null;
   onDocumentSelect?: (doc: Document | null) => void;
+  onViewDocument?: (doc: Document) => void;
 }
 
 export default function DocumentsTab({
@@ -48,6 +52,7 @@ export default function DocumentsTab({
   documents,
   selectedDocId,
   onDocumentSelect,
+  onViewDocument,
 }: DocumentsTabProps) {
   return (
     <div className="nexus-panel rounded-none h-full flex flex-col">
@@ -59,21 +64,20 @@ export default function DocumentsTab({
       <div className="flex-1 overflow-auto">
         {documents.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 py-16">
-            <FileText className="w-6 h-6 text-neutral-800" />
+            <FileText className="w-8 h-8 text-neutral-800" />
             <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
               NO EVIDENCE ATTACHED
             </div>
-            <div className="font-mono text-[9px] text-neutral-800 uppercase tracking-widest">
-              Use INGEST to upload documents
+            <div className="font-mono text-[9px] text-neutral-800 uppercase tracking-wider">
+              Use INGEST to upload source documents
             </div>
           </div>
         ) : (
           <>
             <div className="flex bg-[#ffffff04] border-b border-[#ffffff06] px-3 py-1.5 font-mono text-[9px] text-neutral-700 uppercase tracking-widest sticky top-0">
-              <div className="w-7 mr-3 flex-shrink-0" />
+              <div className="w-8 mr-3 flex-shrink-0" />
               <div className="flex-1">TITLE / SOURCE</div>
-              <div className="w-28 text-right hidden sm:block">DATE / ID</div>
-              <div className="w-28 text-right">ACTIONS</div>
+              <div className="w-48 text-right">ACTIONS</div>
             </div>
             {documents.map((doc) => (
               <DocumentRow
@@ -84,6 +88,10 @@ export default function DocumentsTab({
                 onSelect={() =>
                   onDocumentSelect?.(selectedDocId === doc.id ? null : doc)
                 }
+                onView={() => {
+                  onDocumentSelect?.(doc);
+                  onViewDocument?.(doc);
+                }}
               />
             ))}
           </>
@@ -98,11 +106,13 @@ function DocumentRow({
   caseId,
   isSelected,
   onSelect,
+  onView,
 }: {
   doc: Document;
   caseId: number;
   isSelected: boolean;
   onSelect: () => void;
+  onView: () => void;
 }) {
   const queryClient = useQueryClient();
   const analyzeMutation = useAnalyzeDocument({
@@ -117,54 +127,88 @@ function DocumentRow({
 
   return (
     <div
-      onClick={onSelect}
       className={cn(
-        "flex items-center gap-3 px-3 py-2.5 border-b border-[#ffffff06] cursor-pointer transition-all duration-150",
+        "flex items-center gap-0 border-b border-[#ffffff06] transition-all duration-150",
         isSelected
-          ? "bg-red-500/5 border-l-2 border-l-red-600"
-          : "hover:bg-[#ffffff04] border-l-2 border-l-transparent"
+          ? "bg-[#dc262608] border-l-2 border-l-red-600"
+          : "border-l-2 border-l-transparent"
       )}
     >
-      <div className="w-7 h-7 flex-shrink-0 bg-[#000] border border-[#ffffff0d] flex items-center justify-center">
-        <span className={cn(
-          "text-[7px] font-mono",
-          isSelected ? "text-red-500" : "text-neutral-700"
-        )}>DOC</span>
-      </div>
-
-      <div className="flex-1 min-w-0">
+      <div
+        onClick={onSelect}
+        className={cn(
+          "flex items-center gap-3 flex-1 min-w-0 px-3 py-3 cursor-pointer",
+          isSelected ? "hover:bg-[#dc26260a]" : "hover:bg-[#ffffff04]"
+        )}
+      >
         <div
           className={cn(
-            "text-sm font-semibold uppercase truncate transition-colors",
-            isSelected ? "text-white" : "text-neutral-300 group-hover:text-white"
+            "w-8 h-8 flex-shrink-0 border flex items-center justify-center",
+            isSelected
+              ? "bg-red-500/10 border-red-500/30"
+              : "bg-[#000] border-[#ffffff0d]"
           )}
-          title={doc.title}
         >
-          {doc.title}
-        </div>
-        <div className="flex items-center gap-2 text-[9px] font-mono mt-0.5 uppercase tracking-wider">
-          <span className={cn(
-            "truncate max-w-[120px]",
-            isSelected ? "text-neutral-500" : "text-neutral-700"
-          )}>
-            {doc.source || "UNKNOWN SOURCE"}
+          <span
+            className={cn(
+              "text-[7px] font-mono",
+              isSelected ? "text-red-400" : "text-neutral-700"
+            )}
+          >
+            DOC
           </span>
         </div>
-      </div>
 
-      <div className="hidden sm:flex flex-col items-end flex-shrink-0 min-w-[88px]">
-        <span className="font-mono text-[9px] text-neutral-700">
-          {formatDate(doc.uploadedAt).split(",")[0]}
-        </span>
-        <span className="font-mono text-[8px] text-neutral-800 mt-0.5">
-          ID:{doc.id}
-        </span>
+        <div className="flex-1 min-w-0">
+          <div
+            className={cn(
+              "text-sm font-semibold uppercase truncate transition-colors leading-tight",
+              isSelected ? "text-white" : "text-neutral-300"
+            )}
+            title={doc.title}
+          >
+            {doc.title}
+          </div>
+          <div className="flex items-center gap-2 text-[9px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
+            <span className="truncate max-w-[140px]">
+              {doc.source || "UNKNOWN SOURCE"}
+            </span>
+            <span className="text-[#ffffff10]">·</span>
+            <span className="flex-shrink-0">
+              {formatDate(doc.uploadedAt).split(",")[0]}
+            </span>
+          </div>
+        </div>
       </div>
 
       <div
-        className="flex items-center gap-1.5 flex-shrink-0"
+        className="flex items-center gap-1 px-2 flex-shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          onClick={() => analyzeMutation.mutate({ id: doc.id })}
+          disabled={analyzeMutation.isPending}
+          className={cn(
+            "flex items-center gap-1 px-2 py-1.5 border font-mono text-[9px] uppercase tracking-widest transition-colors",
+            analyzeMutation.isPending
+              ? "border-neutral-800 text-neutral-700 cursor-not-allowed"
+              : "border-cyan-500/30 text-cyan-600 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/60"
+          )}
+          title="Run entity extraction"
+        >
+          <Cpu className="w-3 h-3" />
+          {analyzeMutation.isPending ? "…" : "ANALYZE"}
+        </button>
+
+        <button
+          onClick={onView}
+          className="flex items-center gap-1 px-2 py-1.5 border border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
+          title="View document"
+        >
+          <Eye className="w-3 h-3" />
+          VIEW
+        </button>
+
         {doc.filePath && (
           <a
             href={doc.filePath}
@@ -176,35 +220,127 @@ function DocumentRow({
             <Download className="w-3.5 h-3.5" />
           </a>
         )}
-        <button
-          onClick={() => analyzeMutation.mutate({ id: doc.id })}
-          disabled={analyzeMutation.isPending}
-          className={cn(
-            "flex items-center gap-1 px-2 py-1 border font-mono text-[9px] uppercase tracking-widest transition-colors",
-            analyzeMutation.isPending
-              ? "border-neutral-700 text-neutral-600 cursor-not-allowed"
-              : "border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 hover:border-cyan-500/70"
-          )}
-          title="Run entity extraction"
-        >
-          <Cpu className="w-3 h-3" />
-          {analyzeMutation.isPending ? "SCANNING..." : "ANALYZE"}
-        </button>
       </div>
     </div>
   );
 }
 
-// ─── Document Inspector (used in Right Panel) ─────────────────────────────────
+// ─── Document Viewer (center panel) ───────────────────────────────────────────
+
+export function DocumentViewer({
+  doc,
+  onBack,
+}: {
+  doc: Document;
+  onBack: () => void;
+}) {
+  const ext = doc.filePath
+    ? doc.filePath.split(".").pop()?.toLowerCase()
+    : undefined;
+  const isPdf = ext === "pdf";
+  const isImage = ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext || "");
+  const hasFile = !!doc.filePath;
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-[#000]">
+      <div className="nexus-header-strip flex-shrink-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 font-mono text-[9px] text-neutral-600 hover:text-white uppercase tracking-widest transition-colors flex-shrink-0"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            BACK TO VAULT
+          </button>
+          <span className="text-[#ffffff12] text-xs">|</span>
+          <span className="font-mono text-[10px] text-neutral-400 uppercase truncate">
+            {doc.title}
+          </span>
+          {ext && (
+            <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff0d] px-1 py-0.5 uppercase flex-shrink-0">
+              {ext}
+            </span>
+          )}
+        </div>
+        {doc.filePath && (
+          <a
+            href={doc.filePath}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 font-mono text-[9px] text-neutral-600 hover:text-white uppercase transition-colors flex-shrink-0"
+          >
+            <ExternalLink className="w-3 h-3" />
+            OPEN IN TAB
+          </a>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        {!hasFile ? (
+          <div className="h-full flex flex-col items-center justify-center gap-4">
+            <FileText className="w-8 h-8 text-neutral-800" />
+            <div className="text-center space-y-1">
+              <div className="font-mono text-[10px] text-neutral-600 uppercase tracking-widest">
+                NO FILE ATTACHED
+              </div>
+              <div className="font-mono text-[9px] text-neutral-800 uppercase">
+                Upload a file through the INGEST workflow to view it here.
+              </div>
+            </div>
+          </div>
+        ) : isPdf ? (
+          <iframe
+            src={doc.filePath}
+            className="w-full h-full border-0"
+            title={doc.title}
+          />
+        ) : isImage ? (
+          <div className="h-full flex items-center justify-center p-6 overflow-auto">
+            <img
+              src={doc.filePath}
+              alt={doc.title}
+              className="max-w-full max-h-full object-contain"
+            />
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center gap-4">
+            <FileText className="w-8 h-8 text-neutral-700" />
+            <div className="text-center space-y-1.5">
+              <div className="font-mono text-[10px] text-neutral-600 uppercase tracking-widest">
+                PREVIEW NOT AVAILABLE
+              </div>
+              <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-wider">
+                Open or download the source file.
+              </div>
+            </div>
+            <a
+              href={doc.filePath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 font-mono text-[9px] uppercase tracking-widest transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              OPEN FILE
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Document Inspector (right panel) ─────────────────────────────────────────
 
 export function DocumentInspector({
   doc,
   caseId,
   onClose,
+  onView,
 }: {
   doc: Document;
   caseId: number;
   onClose: () => void;
+  onView?: () => void;
 }) {
   const queryClient = useQueryClient();
 
@@ -245,6 +381,9 @@ export function DocumentInspector({
   });
 
   const hasAnyMentions = pendingMentions.length > 0 || approvedMentions.length > 0;
+  const ext = doc.filePath
+    ? doc.filePath.split(".").pop()?.toLowerCase()
+    : undefined;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -263,9 +402,14 @@ export function DocumentInspector({
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
         <div className="p-2.5 border border-[#ffffff08] bg-[#0a0e14] space-y-2">
-          <div className="text-base font-bold text-white uppercase leading-tight tracking-tight">
+          <div className="text-sm font-bold text-white uppercase leading-tight tracking-tight">
             {doc.title}
           </div>
+          {ext && (
+            <span className="inline-block font-mono text-[8px] text-neutral-600 border border-[#ffffff0d] px-1.5 py-0.5 uppercase">
+              {ext.toUpperCase()} FILE
+            </span>
+          )}
           <div className="space-y-0.5 font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
             <div>
               SOURCE:{" "}
@@ -286,24 +430,38 @@ export function DocumentInspector({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="space-y-1.5">
           <button
-            onClick={(e) => { e.stopPropagation(); analyzeMutation.mutate({ id: doc.id }); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              analyzeMutation.mutate({ id: doc.id });
+            }}
             disabled={analyzeMutation.isPending}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 hover:border-cyan-500/60 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 hover:border-cyan-500/60 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
           >
             <Cpu className="w-3 h-3" />
-            {analyzeMutation.isPending ? "SCANNING..." : "ANALYZE"}
+            {analyzeMutation.isPending ? "SCANNING..." : "ANALYZE DOCUMENT"}
           </button>
+
+          {onView && (
+            <button
+              onClick={onView}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
+            >
+              <Eye className="w-3 h-3" />
+              VIEW DOCUMENT
+            </button>
+          )}
+
           {doc.filePath && (
             <a
               href={doc.filePath}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 py-1.5 px-3 border border-[#ffffff0d] text-neutral-600 hover:text-white font-mono text-[9px] uppercase transition-colors"
-              title="Download"
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-[#ffffff0d] text-neutral-600 hover:text-white font-mono text-[9px] uppercase transition-colors"
             >
               <Download className="w-3 h-3" />
+              DOWNLOAD
             </a>
           )}
         </div>
@@ -380,10 +538,13 @@ export function DocumentInspector({
                   <span className="text-xs font-semibold text-neutral-400 uppercase truncate">
                     {m.entityName}
                   </span>
-                  <span className={cn(
-                    "ml-auto text-[8px] font-mono px-1 py-0.5 border uppercase",
-                    ENTITY_TYPE_COLORS[m.entityType] || "text-neutral-500 border-neutral-500/30"
-                  )}>
+                  <span
+                    className={cn(
+                      "ml-auto text-[8px] font-mono px-1 py-0.5 border uppercase",
+                      ENTITY_TYPE_COLORS[m.entityType] ||
+                        "text-neutral-500 border-neutral-500/30"
+                    )}
+                  >
                     {m.entityType.replace(/_/g, " ")}
                   </span>
                 </div>
