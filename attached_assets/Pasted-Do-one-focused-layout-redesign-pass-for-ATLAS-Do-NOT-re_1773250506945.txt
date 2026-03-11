@@ -1,0 +1,82 @@
+Do one focused layout redesign pass for ATLAS.
+
+Do NOT rebuild the backend.
+Do NOT add major new intelligence features yet.
+Focus on layout, usability, information density, and visual hierarchy.
+
+PRIMARY GOAL:
+ATLAS should feel like a live investigative workspace, not a sparse file browser.
+
+CORE DIRECTION:
+The default case experience must become graph-first, similar to an Obsidian-style intelligence board.
+
+CASE PAGE LAYOUT:
+Redesign the case detail page into a 3-panel workspace:
+
+1. LEFT CASE RAIL
+- case title / status / ID
+- case section navigation
+- Overview
+- Entities
+- Documents
+- Timeline
+- Flow Trace
+- Notes
+- Signals
+- mini case metrics
+
+2. CENTER MAIN CANVAS
+- default to LINK ANALYSIS graph view
+- this should be the primary visual focus
+- graph should occupy most of the screen
+- support node and edge selection
+
+3. RIGHT INSPECTOR PANEL
+Context-sensitive panel that changes based on selection:
+- if entity selected: show dossier summary, aliases, linked docs, related entities, mentions
+- if relationship selected: show relationship type, evidence docs, confidence, excerpts
+- if document selected: show source, metadata, extracted entities, actions
+- if nothing selected: show case summary + analyst notes + recent signals
+
+DESIGN IMPROVEMENTS:
+- reduce dead empty space everywhere
+- increase information density
+- enlarge primary typography
+- keep mono typography only for IDs, counts, timestamps, metadata
+- use larger bold sans for page titles, panel titles, document names, entity names
+- tighten spacing and panel framing
+- add internal panel borders and headers
+- preserve ATLAS design language
+- maintain black / red / white system theme
+
+GRAPH REQUIREMENTS:
+- make graph the centerpiece of the case
+- use color-coded node types
+- show labels clearly
+- display empty state only when no real entities/relationships exist
+- graph should feel like an investigative map, not a dev placeholder
+
+DASHBOARD PAGE:
+Redesign ACTIVE DOSSIERS page so it feels more alive:
+- add top metric strip/cards using real backend counts
+- show dossier cards in a denser cleaner layout
+- add recent activity / pending approvals / recent documents panel if real backend data exists
+- no fake data
+
+TEXT / TYPOGRAPHY:
+- current text is too small
+- increase size of primary labels and headers
+- improve legibility across tables, cards, tabs, and panels
+- maintain micro-label style only where appropriate
+
+IMPORTANT:
+- use only real backend data
+- no mock data
+- no placeholder graph nodes
+- no fake system activity
+
+At the end, summarize:
+1. layout changes made
+2. typography changes made
+3. case page structural changes
+4. what parts are ready for the future auto-dossier engine

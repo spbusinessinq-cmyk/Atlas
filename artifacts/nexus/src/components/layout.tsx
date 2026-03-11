@@ -155,7 +155,10 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 text-foreground">
+        <div className={cn(
+          "flex-1 overflow-auto text-foreground",
+          /^\/cases\/\d/.test(location) ? "" : "p-4"
+        )}>
           {children}
         </div>
       </main>

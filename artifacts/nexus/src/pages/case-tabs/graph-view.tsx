@@ -1,11 +1,10 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useCallback } from "react";
 import {
   ReactFlow,
   Controls,
   Background,
   BackgroundVariant,
   MarkerType,
-  Edge,
   NodeMouseHandler,
   EdgeMouseHandler,
 } from "@xyflow/react";
@@ -19,16 +18,10 @@ import {
   useListDocuments,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { X, Plus, Trash2, FileText, Link2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
-interface GraphViewProps {
-  entities: Entity[];
-  relationships: Relationship[];
-  caseId: number;
-}
-
-const TYPE_COLORS: Record<string, string> = {
+export const TYPE_COLORS: Record<string, string> = {
   person: "#06b6d4",
   organization: "#f59e0b",
   company: "#22c55e",
@@ -38,16 +31,27 @@ const TYPE_COLORS: Record<string, string> = {
   other: "#737373",
 };
 
-export default function GraphView({ entities, relationships, caseId }: GraphViewProps) {
-  const [selectedRelId, setSelectedRelId] = useState<number | null>(null);
-  const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
+interface GraphCanvasProps {
+  entities: Entity[];
+  relationships: Relationship[];
+  caseId: number;
+  selectedEntityId: number | null;
+  selectedRelId: number | null;
+  onEntitySelect: (id: number | null) => void;
+  onRelSelect: (id: number | null) => void;
+}
 
-  const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
-  const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
-
+export default function GraphCanvas({
+  entities,
+  relationships,
+  selectedEntityId,
+  selectedRelId,
+  onEntitySelect,
+  onRelSelect,
+}: GraphCanvasProps) {
   const nodes = useMemo(() => {
-    const radius = 240;
-    const center = { x: 380, y: 280 };
+    const radius = 260;
+    const center = { x: 420, y: 300 };
     return entities.map((entity, i) => {
       const angle = (i / entities.length) * 2 * Math.PI;
       const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
@@ -60,20 +64,20 @@ export default function GraphView({ entities, relationships, caseId }: GraphView
           y: center.y + radius * Math.sin(angle),
         },
         style: {
-          background: isSelected ? "#0d1f2a" : "#0d1117",
+          background: isSelected ? "#0d1f2a" : "#090d12",
           color: "#ffffff",
-          border: isSelected ? `2px solid ${color}` : `1px solid ${color}40`,
+          border: isSelected ? `2px solid ${color}` : `1px solid ${color}50`,
           borderLeft: `3px solid ${color}`,
           borderRadius: "0",
-          padding: "8px 14px",
+          padding: "10px 16px",
           fontFamily: "monospace",
-          fontSize: "10px",
-          width: 155,
+          fontSize: "11px",
+          width: 165,
           textAlign: "left" as const,
           textTransform: "uppercase" as const,
           fontWeight: "bold",
           letterSpacing: "0.05em",
-          boxShadow: isSelected ? `0 0 12px ${color}33` : "none",
+          boxShadow: isSelected ? `0 0 16px ${color}40` : `0 0 4px ${color}15`,
         },
       };
     });
@@ -91,17 +95,17 @@ export default function GraphView({ entities, relationships, caseId }: GraphView
         data: { relId: rel.id },
         style: {
           stroke: isSelected ? "#f59e0b" : "#dc2626",
-          strokeWidth: isSelected ? 2.5 : 1,
-          opacity: isSelected ? 1 : 0.55,
+          strokeWidth: isSelected ? 2.5 : 1.5,
+          opacity: isSelected ? 1 : 0.6,
         },
         labelStyle: {
           fill: isSelected ? "#f59e0b" : "#ffffff",
           fontWeight: 700,
           fontFamily: "monospace",
-          fontSize: 8,
+          fontSize: 9,
           textTransform: "uppercase" as const,
         },
-        labelBgStyle: { fill: "#000000", fillOpacity: 0.85 },
+        labelBgStyle: { fill: "#000000", fillOpacity: 0.9 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
           color: isSelected ? "#f59e0b" : "#dc2626",
@@ -115,87 +119,76 @@ export default function GraphView({ entities, relationships, caseId }: GraphView
   const onEdgeClick: EdgeMouseHandler = useCallback(
     (_evt, edge) => {
       const relId = (edge.data as { relId: number })?.relId;
-      setSelectedRelId((prev) => (prev === relId ? null : relId));
-      setSelectedEntityId(null);
+      onRelSelect(relId ?? null);
     },
-    []
+    [onRelSelect]
   );
 
-  const onNodeClick: NodeMouseHandler = useCallback((_evt, node) => {
-    setSelectedEntityId((prev) =>
-      prev === parseInt(node.id) ? null : parseInt(node.id)
-    );
-    setSelectedRelId(null);
-  }, []);
+  const onNodeClick: NodeMouseHandler = useCallback(
+    (_evt, node) => {
+      onEntitySelect(parseInt(node.id));
+    },
+    [onEntitySelect]
+  );
 
   const onPaneClick = useCallback(() => {
-    setSelectedRelId(null);
-    setSelectedEntityId(null);
-  }, []);
+    onEntitySelect(null);
+    onRelSelect(null);
+  }, [onEntitySelect, onRelSelect]);
 
   if (entities.length === 0) {
     return (
-      <div className="nexus-panel rounded-none h-full flex items-center justify-center">
-        <div className="text-center font-mono text-neutral-600 text-sm uppercase tracking-widest">
-          INSUFFICIENT DATA FOR ATLAS LINK GRAPH
+      <div className="h-full flex flex-col items-center justify-center bg-[#000] gap-4">
+        <div className="w-16 h-px bg-[#ffffff08]" />
+        <div className="text-center font-mono text-neutral-700 text-xs uppercase tracking-widest">
+          NO ENTITIES IN THIS CASE
+          <br />
+          <span className="text-[10px] text-neutral-800 mt-1 block">
+            Add entities to begin link analysis
+          </span>
         </div>
+        <div className="w-16 h-px bg-[#ffffff08]" />
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full flex">
-      <div className="relative flex-1 h-full">
-        <div className="absolute top-0 left-0 w-full z-10 pointer-events-none">
-          <div className="nexus-header-strip">
-            <span className="nexus-label">LINK ANALYSIS — {entities.length} NODES / {relationships.length} EDGES</span>
-          </div>
-        </div>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          fitView
-          colorMode="dark"
-          className="bg-[#000]"
-          onEdgeClick={onEdgeClick}
-          onNodeClick={onNodeClick}
-          onPaneClick={onPaneClick}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#ffffff1a" />
-          <Controls
-            style={{
-              backgroundColor: "#0d1117",
-              border: "1px solid #ffffff1a",
-              borderRadius: "0",
-            }}
-            className="border border-[#ffffff1a] rounded-none overflow-hidden"
-          />
-        </ReactFlow>
-        <div className="absolute bottom-2 left-2 z-10 font-mono text-[9px] text-neutral-700 uppercase tracking-widest pointer-events-none">
-          CLICK EDGE FOR LINK INTEL · CLICK NODE FOR ENTITY PROFILE
-        </div>
+    <div className="relative w-full h-full">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        colorMode="dark"
+        className="bg-[#000]"
+        onEdgeClick={onEdgeClick}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1}
+          color="#ffffff10"
+        />
+        <Controls
+          style={{
+            backgroundColor: "#0d1117",
+            border: "1px solid #ffffff1a",
+            borderRadius: "0",
+          }}
+        />
+      </ReactFlow>
+      <div className="absolute bottom-3 left-3 z-10 font-mono text-[9px] text-neutral-800 uppercase tracking-widest pointer-events-none">
+        CLICK EDGE → LINK INTELLIGENCE &nbsp;·&nbsp; CLICK NODE → ENTITY DOSSIER
       </div>
-
-      {selectedRel && (
-        <LinkIntelPanel
-          relationship={selectedRel}
-          caseId={caseId}
-          onClose={() => setSelectedRelId(null)}
-        />
-      )}
-
-      {selectedEntity && !selectedRel && (
-        <EntityIntelPanel
-          entity={selectedEntity}
-          relationships={relationships}
-          onClose={() => setSelectedEntityId(null)}
-        />
-      )}
     </div>
   );
 }
 
-function LinkIntelPanel({
+// ─── Named Exports ────────────────────────────────────────────────────────────
+
+export function LinkIntelPanel({
   relationship,
   caseId,
   onClose,
@@ -211,7 +204,6 @@ function LinkIntelPanel({
   const { data: evidenceList = [] } = useListRelationshipEvidence({
     relationshipId: relationship.id,
   });
-
   const { data: docs = [] } = useListDocuments({ caseId });
 
   const addMutation = useCreateRelationshipEvidence({
@@ -223,12 +215,10 @@ function LinkIntelPanel({
       },
     },
   });
-
   const deleteMutation = useDeleteRelationshipEvidence({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/relationship-evidence"] });
-      },
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: ["/api/relationship-evidence"] }),
     },
   });
 
@@ -237,97 +227,99 @@ function LinkIntelPanel({
     : null;
 
   return (
-    <div className="w-80 border-l border-[#ffffff1a] bg-[#070b10] flex flex-col h-full overflow-hidden flex-shrink-0">
-      <div className="nexus-header-strip">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="nexus-header-strip flex-shrink-0">
         <span className="nexus-label flex items-center gap-1.5">
           <Link2 className="w-3 h-3 text-amber-500" />
           LINK INTELLIGENCE
         </span>
-        <button onClick={onClose} className="text-neutral-600 hover:text-white transition-colors">
+        <button
+          onClick={onClose}
+          className="text-neutral-600 hover:text-white transition-colors"
+        >
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        <div className="space-y-1">
-          <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest mb-2">
+        <div className="p-2.5 border border-amber-500/20 bg-amber-500/5 space-y-2">
+          <div className="font-mono text-[9px] text-amber-500/70 uppercase tracking-widest">
             RELATIONSHIP VECTOR
           </div>
-          <div className="p-2 border border-amber-500/20 bg-amber-500/5">
-            <div className="flex items-center gap-2 text-xs font-mono">
-              <span className="text-cyan-400 font-bold truncate max-w-[90px]" title={relationship.entityAName}>
-                {relationship.entityAName}
-              </span>
-              <span className="text-amber-500 text-[9px] uppercase">
-                —{relationship.relationshipType}→
-              </span>
-              <span className="text-cyan-400 font-bold truncate max-w-[90px]" title={relationship.entityBName}>
-                {relationship.entityBName}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 mt-2">
-              {confidencePct !== null && (
-                <div className="text-[9px] font-mono text-neutral-500 uppercase">
-                  CONF: <span className="text-white">{confidencePct}%</span>
-                </div>
-              )}
-              {relationship.dateRange && (
-                <div className="text-[9px] font-mono text-neutral-500 uppercase">
-                  RANGE: <span className="text-white">{relationship.dateRange}</span>
-                </div>
-              )}
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-cyan-400 uppercase truncate max-w-[80px]">
+              {relationship.entityAName}
+            </span>
+            <span className="text-[9px] font-mono text-amber-500 uppercase whitespace-nowrap">
+              —{relationship.relationshipType}→
+            </span>
+            <span className="text-sm font-bold text-cyan-400 uppercase truncate max-w-[80px]">
+              {relationship.entityBName}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {confidencePct !== null && (
+              <div className="text-[9px] font-mono text-neutral-600">
+                CONF:{" "}
+                <span className={confidencePct >= 70 ? "text-green-400" : confidencePct >= 40 ? "text-amber-400" : "text-red-400"}>
+                  {confidencePct}%
+                </span>
+              </div>
+            )}
+            {relationship.dateRange && (
+              <div className="text-[9px] font-mono text-neutral-600">
+                RANGE: <span className="text-neutral-400">{relationship.dateRange}</span>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="space-y-2">
           <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
-            EVIDENCE CHAIN — {evidenceList.length} DOCS
+            EVIDENCE CHAIN ({evidenceList.length})
           </div>
           {evidenceList.length === 0 ? (
-            <div className="text-[10px] font-mono text-neutral-700 py-4 text-center border border-dashed border-[#ffffff08]">
+            <div className="text-[10px] font-mono text-neutral-800 py-4 text-center border border-dashed border-[#ffffff06]">
               NO EVIDENCE LINKED
             </div>
           ) : (
-            <div className="space-y-1">
-              {evidenceList.map((ev) => (
-                <div
-                  key={ev.id}
-                  className="flex items-start gap-2 p-2 border border-[#ffffff08] bg-[#0a0e14]"
-                >
-                  <FileText className="w-3 h-3 text-neutral-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-mono text-white font-bold truncate">
-                      {ev.documentTitle || `DOC ${ev.documentId}`}
-                    </div>
-                    {ev.excerpt && (
-                      <div className="text-[9px] font-mono text-neutral-500 mt-0.5 line-clamp-2">
-                        &ldquo;{ev.excerpt}&rdquo;
-                      </div>
-                    )}
+            evidenceList.map((ev) => (
+              <div
+                key={ev.id}
+                className="flex items-start gap-2 p-2 border border-[#ffffff08] bg-[#0a0e14]"
+              >
+                <FileText className="w-3 h-3 text-neutral-700 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-white truncate">
+                    {ev.documentTitle || `DOC ${ev.documentId}`}
                   </div>
-                  <button
-                    onClick={() => deleteMutation.mutate({ id: ev.id })}
-                    className="text-neutral-700 hover:text-red-500 transition-colors flex-shrink-0"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                  {ev.excerpt && (
+                    <div className="text-[9px] font-mono text-neutral-600 mt-0.5 line-clamp-2">
+                      &ldquo;{ev.excerpt}&rdquo;
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+                <button
+                  onClick={() => deleteMutation.mutate({ id: ev.id })}
+                  className="text-neutral-700 hover:text-red-500 transition-colors flex-shrink-0"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))
           )}
         </div>
 
-        <div className="space-y-2 border-t border-[#ffffff0d] pt-3">
+        <div className="space-y-2 border-t border-[#ffffff08] pt-3">
           <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
-            LINK EVIDENCE
+            ADD EVIDENCE
           </div>
           <select
             value={selectedDocId || ""}
             onChange={(e) =>
               setSelectedDocId(e.target.value ? parseInt(e.target.value) : undefined)
             }
-            className="w-full bg-[#000] border border-[#ffffff1a] text-white font-mono text-[10px] px-2 py-1.5 uppercase"
+            className="w-full bg-[#000] border border-[#ffffff12] text-white font-mono text-[10px] px-2 py-1.5 uppercase focus:outline-none focus:border-amber-500/50"
           >
             <option value="">SELECT DOCUMENT</option>
             {docs.map((d) => (
@@ -341,7 +333,7 @@ function LinkIntelPanel({
             onChange={(e) => setExcerpt(e.target.value)}
             placeholder="EXCERPT (OPTIONAL)"
             rows={2}
-            className="w-full bg-[#000] border border-[#ffffff1a] text-white font-mono text-[10px] px-2 py-1.5 resize-none placeholder:text-neutral-700 focus:border-amber-500/60 focus:outline-none"
+            className="w-full bg-[#000] border border-[#ffffff12] text-white font-mono text-[10px] px-2 py-1.5 resize-none placeholder:text-neutral-800 focus:border-amber-500/50 focus:outline-none"
           />
           <button
             disabled={!selectedDocId || addMutation.isPending}
@@ -355,10 +347,10 @@ function LinkIntelPanel({
                 },
               });
             }}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 font-mono text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40"
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 font-mono text-[10px] uppercase tracking-widest transition-colors disabled:opacity-30"
           >
             <Plus className="w-3 h-3" />
-            {addMutation.isPending ? "LINKING..." : "ADD EVIDENCE"}
+            {addMutation.isPending ? "LINKING..." : "LINK EVIDENCE"}
           </button>
         </div>
       </div>
@@ -366,7 +358,7 @@ function LinkIntelPanel({
   );
 }
 
-function EntityIntelPanel({
+export function EntityIntelPanel({
   entity,
   relationships,
   onClose,
@@ -381,33 +373,42 @@ function EntityIntelPanel({
   );
 
   return (
-    <div className="w-72 border-l border-[#ffffff1a] bg-[#070b10] flex flex-col h-full overflow-hidden flex-shrink-0">
-      <div className="nexus-header-strip">
-        <span className="nexus-label">ENTITY PROFILE</span>
-        <button onClick={onClose} className="text-neutral-600 hover:text-white transition-colors">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="nexus-header-strip flex-shrink-0">
+        <span className="nexus-label">ENTITY DOSSIER</span>
+        <button
+          onClick={onClose}
+          className="text-neutral-600 hover:text-white transition-colors"
+        >
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
+
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        <div className="p-3 border bg-[#0a0e14]" style={{ borderColor: `${color}40` }}>
-          <div className="font-bold text-sm text-white font-mono uppercase mb-1">{entity.name}</div>
+        <div
+          className="p-3 border space-y-2"
+          style={{ borderColor: `${color}30`, background: `${color}08` }}
+        >
+          <div className="text-base font-bold text-white uppercase tracking-tight">
+            {entity.name}
+          </div>
           <span
-            className="text-[9px] font-mono px-1.5 py-0.5 border uppercase tracking-wider"
-            style={{ color, borderColor: `${color}60`, background: `${color}0d` }}
+            className="inline-block text-[9px] font-mono uppercase px-1.5 py-0.5 border tracking-widest"
+            style={{ color, borderColor: `${color}50`, background: `${color}12` }}
           >
             {entity.type.replace(/_/g, " ")}
           </span>
           {entity.description && (
-            <p className="mt-2 text-[10px] text-neutral-400 font-mono leading-relaxed">
+            <p className="text-xs text-neutral-400 leading-relaxed">
               {entity.description}
             </p>
           )}
           {entity.aliases && entity.aliases.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 pt-1">
               {entity.aliases.map((a) => (
                 <span
                   key={a}
-                  className="text-[9px] font-mono text-neutral-500 border border-[#ffffff0d] px-1 py-0.5"
+                  className="text-[9px] font-mono text-neutral-600 border border-[#ffffff0d] px-1.5 py-0.5"
                 >
                   AKA: {a}
                 </span>
@@ -416,13 +417,13 @@ function EntityIntelPanel({
           )}
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
-            CONNECTIONS — {connectedRels.length}
+            CONNECTIONS ({connectedRels.length})
           </div>
           {connectedRels.length === 0 ? (
-            <div className="text-[10px] font-mono text-neutral-700 py-3 text-center">
-              NO CONNECTIONS
+            <div className="text-[10px] font-mono text-neutral-800 py-3 text-center">
+              NO CONNECTIONS IN THIS CASE
             </div>
           ) : (
             connectedRels.map((r) => {
@@ -431,13 +432,15 @@ function EntityIntelPanel({
               return (
                 <div
                   key={r.id}
-                  className="flex items-center gap-2 p-2 border border-[#ffffff08] bg-[#0a0e14] text-[10px] font-mono"
+                  className="flex items-center gap-2 p-2 border border-[#ffffff06] bg-[#0a0e14] text-[10px] font-mono"
                 >
-                  <span className="text-neutral-500 text-[8px]">{isSource ? "→" : "←"}</span>
-                  <span className="text-amber-500 text-[9px] uppercase truncate">
+                  <span className="text-neutral-700 text-[8px]">
+                    {isSource ? "→" : "←"}
+                  </span>
+                  <span className="text-amber-500 text-[9px] uppercase">
                     {r.relationshipType}
                   </span>
-                  <span className="text-white truncate" title={otherName}>
+                  <span className="text-white truncate text-xs font-semibold uppercase">
                     {otherName}
                   </span>
                 </div>
