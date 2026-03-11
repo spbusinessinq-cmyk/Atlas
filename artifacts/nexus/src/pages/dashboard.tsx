@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useListCases,
   useListEntities,
@@ -10,7 +10,7 @@ import {
   CaseStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronRight, LayoutGrid, List, Briefcase, Database, Files, Cpu } from "lucide-react";
+import { Plus, ChevronRight, LayoutGrid, List, Briefcase, Database, Files, Cpu, Zap, Search, CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,154 @@ const STATUS_STYLES: Record<CaseStatus, { dot: string; text: string; label: stri
   closed: { dot: "bg-neutral-600", text: "text-neutral-500", label: "CLOSED" },
   archived: { dot: "bg-amber-500", text: "text-amber-400", label: "ARCHIVED" },
 };
+
+type SeedStatus = "idle" | "seeding" | "done" | "error";
+
+function SeedLauncher() {
+  const [target, setTarget] = useState("");
+  const [status, setStatus] = useState<SeedStatus>("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [seededCaseId, setSeededCaseId] = useState<number | null>(null);
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+
+  const seed = target.trim();
+  const queryVariations = seed
+    ? [seed, `${seed} investigation`, `${seed} contracts`, `${seed} funding`, `${seed} program`]
+    : [];
+
+  const handleSeed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!seed) return;
+    setStatus("seeding");
+    setErrorMsg(null);
+
+    try {
+      const resp = await fetch("/api/cases/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: seed }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      setSeededCaseId(data.caseId);
+      setStatus("done");
+      queryClient.invalidateQueries({ queryKey: ["/api/cases"] });
+      setTimeout(() => navigate(`/cases/${data.caseId}`), 1800);
+    } catch (err) {
+      setErrorMsg(String(err));
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="border border-red-500/20 bg-red-500/[0.03] mb-5">
+      <div className="nexus-header-strip border-b border-red-500/15">
+        <div className="flex items-center gap-2 font-mono text-[9px] text-red-400 uppercase tracking-widest">
+          <Zap className="w-3 h-3" />
+          START NEW INVESTIGATION
+        </div>
+        <div className="font-mono text-[9px] text-neutral-700 uppercase">ATLAS SEED LAUNCHER</div>
+      </div>
+
+      <form onSubmit={handleSeed} className="p-4">
+        <div className="flex gap-3 items-end">
+          <div className="flex-1 space-y-1">
+            <label className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest block">
+              Investigation Target
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-600" />
+              <input
+                type="text"
+                value={target}
+                onChange={(e) => {
+                  setTarget(e.target.value);
+                  if (status === "done" || status === "error") setStatus("idle");
+                }}
+                placeholder='e.g. "Highland Gardens Hotel Los Angeles"'
+                disabled={status === "seeding"}
+                className="w-full bg-black border border-[#ffffff12] text-white font-mono text-sm pl-8 pr-3 h-9 focus:outline-none focus:border-red-500/50 disabled:opacity-40 placeholder:text-neutral-700"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={!seed || status === "seeding"}
+            className="h-9 px-5 bg-red-600 hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 flex-shrink-0"
+          >
+            {status === "seeding" ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+                SEEDING...
+              </>
+            ) : (
+              <>
+                <Zap className="w-3 h-3" />
+                INITIATE
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Query preview */}
+        {queryVariations.length > 0 && status === "idle" && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider self-center">
+              Will search:
+            </span>
+            {queryVariations.map((q) => (
+              <span
+                key={q}
+                className="px-2 py-0.5 border border-[#ffffff08] bg-[#ffffff03] font-mono text-[9px] text-neutral-500"
+              >
+                {q}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Seeding progress */}
+        {status === "seeding" && (
+          <div className="mt-3 space-y-1.5">
+            <div className="font-mono text-[9px] text-orange-400 uppercase tracking-widest animate-pulse">
+              ATLAS IS INGESTING SOURCES AND BUILDING ENTITY GRAPH...
+            </div>
+            <div className="h-0.5 bg-neutral-900 overflow-hidden">
+              <div className="h-full bg-red-500 animate-[scan_2s_linear_infinite]" style={{ width: "40%" }} />
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {queryVariations.map((q) => (
+                <span key={q} className="px-2 py-0.5 border border-orange-500/20 bg-orange-500/5 font-mono text-[9px] text-orange-500/70">
+                  {q}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Success */}
+        {status === "done" && seededCaseId && (
+          <div className="mt-3 flex items-center gap-2 text-green-400 font-mono text-[10px]">
+            <CheckCircle className="w-3.5 h-3.5" />
+            CASE-{seededCaseId.toString().padStart(6, "0")} CREATED — REDIRECTING TO INVESTIGATION...
+          </div>
+        )}
+
+        {/* Error */}
+        {status === "error" && (
+          <div className="mt-3 flex items-center gap-2 text-red-400 font-mono text-[10px]">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            SEED FAILED: {errorMsg}
+          </div>
+        )}
+      </form>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { data: cases, isLoading } = useListCases();
@@ -86,6 +234,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
+      {/* Seed Launcher */}
+      <SeedLauncher />
+
       {/* Metric strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {metrics.map((m) => {

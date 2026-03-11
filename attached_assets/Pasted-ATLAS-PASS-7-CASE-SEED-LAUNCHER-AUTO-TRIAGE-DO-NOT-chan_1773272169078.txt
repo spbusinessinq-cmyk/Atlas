@@ -1,0 +1,209 @@
+ATLAS PASS 7 — CASE SEED LAUNCHER + AUTO TRIAGE
+
+DO NOT change existing API endpoints unless necessary.
+DO NOT remove existing ingest or entity logic.
+
+Goal:
+Allow the user to type a target and have ATLAS automatically start building the investigation.
+
+========================================
+1. CASE SEED LAUNCHER
+========================================
+
+Add a new input on the Case Control dashboard.
+
+Label:
+START NEW INVESTIGATION
+
+Field:
+Investigation Target
+
+Example input:
+"Highland Gardens Hotel Los Angeles"
+
+When submitted ATLAS should:
+
+1. Create a new case
+2. Use the target as the case title
+3. Save the target as the investigation seed
+
+Immediately trigger automated ingestion.
+
+========================================
+2. AUTO WEB SEARCH
+========================================
+
+After case creation ATLAS should automatically:
+
+Run a search query using the seed phrase.
+
+Search query variations:
+
+seed phrase
+seed phrase investigation
+seed phrase contracts
+seed phrase funding
+seed phrase program
+
+Return top results.
+
+Limit results to:
+3–8 sources.
+
+========================================
+3. SEARCH QUALITY FILTERS
+========================================
+
+Improve search quality.
+
+Bias toward:
+
+news
+investigative journalism
+public records
+nonprofit watchdog reporting
+
+Demote:
+
+travel sites
+listicles
+SEO spam
+irrelevant lifestyle pages
+
+Boost sources containing:
+
+contract
+funding
+program
+department
+authority
+housing
+investigation
+audit
+lawsuit
+
+========================================
+4. AUTO DOCUMENT INGEST
+========================================
+
+For each result:
+
+Fetch article
+Extract body text
+Store in Document Vault
+Attach to case
+
+Run the existing analyze pipeline automatically.
+
+========================================
+5. ENTITY EXTRACTION
+========================================
+
+Run the current entity extractor on each ingested document.
+
+Detect:
+
+people
+organizations
+programs
+locations
+facilities
+
+Save detections as usual.
+
+========================================
+6. AUTO TRIAGE / AUTO APPROVAL
+========================================
+
+Add a triage rule system.
+
+If detection confidence ≥ 85%
+AND entity appears in multiple documents
+
+Automatically approve the entity.
+
+Add it to:
+
+Entity Registry
+Graph nodes
+
+Entities that do not meet the rule:
+
+Remain in pending review.
+
+========================================
+7. GRAPH SEEDING
+========================================
+
+Once entities are auto-approved:
+
+Generate graph nodes.
+
+Create edges between entities that appear in the same document.
+
+Edge type:
+CO-MENTION
+
+Label edges as:
+
+POSSIBLE ASSOCIATION
+
+========================================
+8. CASE SEED SUMMARY
+========================================
+
+After ingestion completes generate a short case summary.
+
+Example:
+
+"Initial investigation seeded from the target 'Highland Gardens Hotel Los Angeles'. 
+ATLAS ingested 6 sources and detected 18 entities connected to housing programs, nonprofit organizations, and municipal departments."
+
+Save this summary to the case overview.
+
+========================================
+9. EXPANSION SUGGESTIONS
+========================================
+
+Generate follow-up searches.
+
+Examples:
+
+Highland Gardens Hotel contract
+Highland Gardens Hotel Project Homekey
+Highland Gardens Hotel housing program
+Highland Gardens Hotel investigation
+
+Show these in Expansion Suggestions.
+
+========================================
+10. SYSTEM LOG EVENTS
+========================================
+
+Add system log entries for:
+
+CASE CREATED
+AUTO INGEST STARTED
+DOCUMENT INGESTED
+ENTITY AUTO APPROVED
+GRAPH UPDATED
+
+========================================
+END RESULT
+========================================
+
+User types:
+
+Highland Gardens Hotel Los Angeles
+
+ATLAS automatically:
+
+creates a case
+searches the web
+ingests top sources
+extracts entities
+auto-approves strong ones
+seeds the graph
+creates a case summary
+
+The investigation begins immediately.

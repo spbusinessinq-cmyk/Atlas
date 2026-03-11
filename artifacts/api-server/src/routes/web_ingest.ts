@@ -1,6 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { documentsTable, entityMentionsTable } from "@workspace/db/schema";
+import {
+  documentsTable,
+  entityMentionsTable,
+  casesTable,
+  entitiesTable,
+  relationshipsTable,
+} from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import { parse as parseHtml } from "node-html-parser";
@@ -405,5 +412,309 @@ router.post("/web-ingest", async (req, res) => {
     analysisRan: true,
   });
 });
+
+// ── Case Seed Launcher ────────────────────────────────────────────────────────
+
+/**
+ * POST /cases/seed
+ * Body: { target: string }
+ * Creates a new case, fires background pipeline, returns immediately.
+ */
+router.post("/cases/seed", async (req, res) => {
+  const { target } = req.body;
+  if (!target?.trim()) return res.status(400).json({ error: "target required" });
+
+  const seedTarget = target.trim();
+
+  const caseRows = await db
+    .insert(casesTable)
+    .values({
+      title: seedTarget,
+      status: "active",
+      description: `Investigation seeded from target: "${seedTarget}". ATLAS is ingesting sources and building the entity graph...`,
+      tags: ["auto-seeded"],
+    })
+    .returning();
+
+  const theCase = caseRows[0];
+  await logEvent("case_created", `Case created via seed launcher: "${seedTarget}"`, { caseId: theCase.id });
+
+  res.status(201).json({ caseId: theCase.id, status: "seeding", title: theCase.title });
+
+  runSeedPipeline(theCase.id, seedTarget).catch((err) =>
+    console.error("[ATLAS SEED] Pipeline error:", err)
+  );
+});
+
+async function runSeedPipeline(caseId: number, target: string): Promise<void> {
+  await logEvent("auto_ingest_started", `Auto-ingestion started for target: "${target}"`, { caseId });
+
+  const queryVariations = [
+    target,
+    `${target} investigation`,
+    `${target} contracts`,
+    `${target} funding`,
+    `${target} program`,
+  ];
+
+  const allResults: (WebSearchResult & { _query: string })[] = [];
+
+  for (const query of queryVariations) {
+    try {
+      const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+      const resp = await fetch(rssUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ATLASBot/1.0)" },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!resp.ok) continue;
+      const xml = await resp.text();
+      const items = parseRssItems(xml, query);
+      for (const r of items) allResults.push({ ...r, _query: query });
+    } catch {
+      // Continue with next query variant
+    }
+  }
+
+  // Deduplicate by URL
+  const seenUrls = new Set<string>();
+  const uniqueResults: WebSearchResult[] = [];
+  for (const r of allResults) {
+    if (!seenUrls.has(r.url)) {
+      seenUrls.add(r.url);
+      uniqueResults.push(r);
+    }
+  }
+
+  // Sort by relevance to primary target, pick top 3–8
+  uniqueResults.sort((a, b) => scoreResult(b, target) - scoreResult(a, target));
+  const toIngest = uniqueResults.slice(0, 6);
+
+  const ingestedDocIds: number[] = [];
+
+  for (const result of toIngest) {
+    try {
+      let rawText = result.snippet || result.title;
+
+      try {
+        const articleResp = await fetch(result.url, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept: "text/html,application/xhtml+xml,*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+          redirect: "follow",
+          signal: AbortSignal.timeout(12000),
+        });
+        const ct = articleResp.headers.get("content-type") || "";
+        if (ct.includes("text/html") || ct.includes("text/plain")) {
+          const html = await articleResp.text();
+          const extracted = extractArticleText(html, rawText);
+          rawText =
+            extracted.status === "incomplete"
+              ? `[EXTRACTION_INCOMPLETE]\n${extracted.text || rawText}`
+              : extracted.text;
+        }
+      } catch {
+        rawText = `[EXTRACTION_INCOMPLETE]\n${result.snippet || result.title}`;
+      }
+
+      const docRows = await db
+        .insert(documentsTable)
+        .values({
+          title: result.title,
+          source: result.sourceDomain || null,
+          sourceUrl: result.url,
+          sourceDomain: result.sourceDomain || tryHostname(result.url),
+          publishDate: result.publishDate || null,
+          caseId,
+          ingestMethod: "web",
+          rawText,
+          previewType: "web-article",
+        })
+        .returning();
+
+      const doc = docRows[0];
+      ingestedDocIds.push(doc.id);
+
+      await logEvent(
+        "document_ingested",
+        `Document ingested: "${result.title}" from ${result.sourceDomain}`,
+        { caseId, documentId: doc.id }
+      );
+
+      const textForAnalysis = rawText.replace(/^\[EXTRACTION_INCOMPLETE\]\n/, "");
+      const entities = extractEntities(textForAnalysis);
+
+      for (const m of entities) {
+        try {
+          await db.insert(entityMentionsTable).values({
+            documentId: doc.id,
+            caseId,
+            entityName: m.entityName,
+            entityType: m.entityType,
+            confidence: m.confidence,
+            status: "pending",
+            context: m.context,
+            startPos: m.startPos,
+            endPos: m.endPos,
+          });
+        } catch {
+          // Skip duplicate/constraint errors
+        }
+      }
+    } catch (err) {
+      console.error(`[ATLAS SEED] Failed to ingest ${result.url}:`, err);
+    }
+  }
+
+  // ── Auto-triage ───────────────────────────────────────────────────────────
+
+  const allMentions = await db
+    .select()
+    .from(entityMentionsTable)
+    .where(eq(entityMentionsTable.caseId, caseId));
+
+  // Group by entity name (case-insensitive)
+  interface EntryData {
+    displayName: string;
+    type: string;
+    docIds: Set<number>;
+    maxConfidence: number;
+    mentionIds: number[];
+  }
+  const entityMap = new Map<string, EntryData>();
+
+  for (const m of allMentions) {
+    const key = m.entityName.toLowerCase();
+    if (!entityMap.has(key)) {
+      entityMap.set(key, {
+        displayName: m.entityName,
+        type: m.entityType,
+        docIds: new Set(),
+        maxConfidence: 0,
+        mentionIds: [],
+      });
+    }
+    const entry = entityMap.get(key)!;
+    if (m.documentId) entry.docIds.add(m.documentId);
+    entry.maxConfidence = Math.max(entry.maxConfidence, m.confidence ?? 0);
+    entry.mentionIds.push(m.id);
+  }
+
+  // Auto-approve: confidence >= 0.85 AND appears in 2+ documents
+  const approvedEntityIds = new Map<string, number>(); // key → entity.id
+
+  for (const [key, entry] of entityMap) {
+    if (entry.maxConfidence >= 0.85 && entry.docIds.size >= 2) {
+      try {
+        const entityRows = await db
+          .insert(entitiesTable)
+          .values({
+            name: entry.displayName,
+            type: entry.type,
+            caseId,
+            aliases: [],
+          })
+          .returning();
+
+        const entityId = entityRows[0].id;
+        approvedEntityIds.set(key, entityId);
+
+        // Mark all mentions of this entity as approved
+        for (const mentionId of entry.mentionIds) {
+          await db
+            .update(entityMentionsTable)
+            .set({ status: "approved" })
+            .where(eq(entityMentionsTable.id, mentionId));
+        }
+
+        await logEvent(
+          "entity_auto_approved",
+          `Entity auto-approved: ${entry.displayName} [${entry.type.replace(/_/g, " ").toUpperCase()}] — confidence ${(entry.maxConfidence * 100).toFixed(0)}%, ${entry.docIds.size} docs`,
+          { caseId, entityId }
+        );
+      } catch {
+        // Entity may already exist — skip
+      }
+    }
+  }
+
+  // ── Graph seeding: CO-MENTION edges ──────────────────────────────────────
+
+  if (approvedEntityIds.size >= 2) {
+    // Build doc → approved entities map
+    const docEntityKeys = new Map<number, string[]>();
+    for (const [key, entry] of entityMap) {
+      if (!approvedEntityIds.has(key)) continue;
+      for (const docId of entry.docIds) {
+        if (!docEntityKeys.has(docId)) docEntityKeys.set(docId, []);
+        docEntityKeys.get(docId)!.push(key);
+      }
+    }
+
+    const createdPairs = new Set<string>();
+    for (const keys of docEntityKeys.values()) {
+      for (let i = 0; i < keys.length; i++) {
+        for (let j = i + 1; j < keys.length; j++) {
+          const a = keys[i];
+          const b = keys[j];
+          const pairKey = [a, b].sort().join("|||");
+          if (createdPairs.has(pairKey)) continue;
+          createdPairs.add(pairKey);
+
+          const entityAId = approvedEntityIds.get(a);
+          const entityBId = approvedEntityIds.get(b);
+          if (!entityAId || !entityBId) continue;
+
+          try {
+            await db.insert(relationshipsTable).values({
+              entityAId,
+              entityBId,
+              relationshipType: "co_mention",
+              caseId,
+              confidence: 0.7,
+            });
+          } catch {
+            // Skip duplicates
+          }
+        }
+      }
+    }
+
+    if (createdPairs.size > 0) {
+      await logEvent(
+        "graph_updated",
+        `Graph seeded with ${createdPairs.size} CO-MENTION edge${createdPairs.size !== 1 ? "s" : ""} between ${approvedEntityIds.size} auto-approved entities`,
+        { caseId }
+      );
+    }
+  }
+
+  // ── Case summary ──────────────────────────────────────────────────────────
+
+  const docsIngested = ingestedDocIds.length;
+  const entitiesApproved = approvedEntityIds.size;
+  const totalDetected = allMentions.length;
+
+  const entityTypeBreakdown = Array.from(approvedEntityIds.keys())
+    .map((k) => entityMap.get(k)?.type)
+    .filter(Boolean);
+  const typeCounts: Record<string, number> = {};
+  for (const t of entityTypeBreakdown) {
+    if (t) typeCounts[t] = (typeCounts[t] || 0) + 1;
+  }
+  const typeDesc = Object.entries(typeCounts)
+    .map(([t, n]) => `${n} ${t.replace(/_/g, " ")}${n !== 1 ? "s" : ""}`)
+    .join(", ");
+
+  const summary =
+    `Initial investigation seeded from target "${target}". ATLAS ingested ${docsIngested} source${docsIngested !== 1 ? "s" : ""} and detected ${totalDetected} entity signal${totalDetected !== 1 ? "s" : ""}, with ${entitiesApproved} auto-approved for the case graph${typeDesc ? ` (${typeDesc})` : ""}.`;
+
+  await db
+    .update(casesTable)
+    .set({ description: summary, updatedAt: new Date() })
+    .where(eq(casesTable.id, caseId));
+}
 
 export default router;
