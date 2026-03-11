@@ -94,7 +94,7 @@ export function Layout({ children }: LayoutProps) {
             )}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-neutral-600 hover:text-white transition-colors ml-auto"
+              className="text-neutral-600 hover:text-white transition-colors ml-auto focus:outline-none"
             >
               {isCollapsed ? (
                 <Menu className="w-3 h-3" />
@@ -109,10 +109,10 @@ export function Layout({ children }: LayoutProps) {
                 location === item.href ||
                 (item.href !== "/" && location.startsWith(item.href));
               return (
-                <Link key={item.href} href={item.href} className="block">
+                <Link key={item.href} href={item.href} className="block outline-none focus:outline-none">
                   <div
                     className={cn(
-                      "w-full flex items-center px-2.5 py-2 transition-all cursor-pointer text-[10px] font-mono uppercase tracking-wider",
+                      "w-full flex items-center px-2.5 py-2 transition-all cursor-pointer text-[10px] font-mono uppercase tracking-wider outline-none",
                       isActive
                         ? "bg-[#dc262608] text-primary border-l-2 border-red-600"
                         : "text-neutral-600 hover:text-neutral-300 hover:bg-[#ffffff04] border-l-2 border-transparent"

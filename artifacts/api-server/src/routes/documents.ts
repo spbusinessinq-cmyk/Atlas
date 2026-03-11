@@ -13,6 +13,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+const ABS_UPLOAD_DIR = path.resolve(uploadDir);
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
@@ -21,6 +23,12 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+/** Resolve a stored filePath like `/uploads/foo.pdf` to an absolute disk path. */
+function resolveFilePath(filePath: string): string {
+  const filename = filePath.replace(/^\/uploads\//, "");
+  return path.join(ABS_UPLOAD_DIR, filename);
+}
 
 router.get("/documents", async (req, res) => {
   const caseId = req.query.caseId ? parseInt(req.query.caseId as string) : undefined;
@@ -38,6 +46,50 @@ router.get("/documents/:id", async (req, res) => {
   const rows = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
   if (!rows.length) return res.status(404).json({ error: "Not found" });
   res.json(formatDoc(rows[0]));
+});
+
+/**
+ * Serve the raw file inline — used by the viewer iframe / img.
+ * Routing through /api/documents/:id/file ensures Replit proxy routes it
+ * to the API server (not the Nexus frontend).
+ */
+router.get("/documents/:id/file", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const rows = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
+  const doc = rows[0];
+  if (!doc.filePath) return res.status(404).json({ error: "No file attached to this document" });
+
+  const absPath = resolveFilePath(doc.filePath);
+  if (!fs.existsSync(absPath)) {
+    return res.status(404).json({ error: "File not found on disk" });
+  }
+
+  res.sendFile(absPath);
+});
+
+/**
+ * Force-download the file as an attachment.
+ * Using Content-Disposition: attachment prevents the browser from treating
+ * this as an in-app navigation.
+ */
+router.get("/documents/:id/download", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const rows = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
+  const doc = rows[0];
+  if (!doc.filePath) return res.status(404).json({ error: "No file attached to this document" });
+
+  const absPath = resolveFilePath(doc.filePath);
+  if (!fs.existsSync(absPath)) {
+    return res.status(404).json({ error: "File not found on disk" });
+  }
+
+  const ext = path.extname(doc.filePath);
+  const safeTitle = (doc.title || "document").replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+  const downloadName = `${safeTitle}${ext}`;
+
+  res.download(absPath, downloadName);
 });
 
 router.post("/documents", async (req, res) => {

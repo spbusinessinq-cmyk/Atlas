@@ -892,34 +892,6 @@ function DefaultInspector({
           </div>
         )}
 
-        <div className="space-y-1">
-          <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest mb-2">
-            QUICK ACCESS
-          </div>
-          {(
-            [
-              { id: "graph", label: "LINK ANALYSIS", val: null },
-              { id: "entities", label: "ENTITY REGISTRY", val: entities.length },
-              { id: "documents", label: "DOCUMENT VAULT", val: documents.length },
-              { id: "notes", label: "ANALYST NOTES", val: notes.length },
-            ] as { id: SectionId; label: string; val: number | null }[]
-          ).map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className="w-full flex items-center justify-between px-2.5 py-2 border border-[#ffffff06] bg-[#0a0e14] hover:bg-[#0f1419] hover:border-[#ffffff10] transition-all text-left group"
-            >
-              <span className="font-mono text-[10px] text-neutral-500 group-hover:text-white uppercase tracking-wider transition-colors">
-                {item.label}
-              </span>
-              {item.val !== null && (
-                <span className="font-mono text-[11px] font-bold text-neutral-600 group-hover:text-neutral-300 tabular-nums transition-colors">
-                  {item.val.toString().padStart(2, "0")}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );

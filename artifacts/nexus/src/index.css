@@ -154,6 +154,22 @@
   }
 }
 
+/* ── Focus / outline reset ──────────────────────────────────────────────────── */
+/* Remove browser default blue focus rings across the entire app.               */
+/* Keyboard users still get a subtle white glow via :focus-visible.             */
+*:focus {
+  outline: none;
+}
+*:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+  outline-offset: 1px;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 1px solid rgba(220, 38, 38, 0.35);
+  outline-offset: 1px;
+}
+
 @keyframes radar-sweep {
   0% { opacity: 0.55; }
   50% { opacity: 0.9; }

@@ -211,9 +211,7 @@ function DocumentRow({
 
         {doc.filePath && (
           <a
-            href={doc.filePath}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/api/documents/${doc.id}/download`}
             className="p-1.5 text-neutral-700 hover:text-white transition-colors"
             title="Download"
           >
@@ -264,7 +262,7 @@ export function DocumentViewer({
         </div>
         {doc.filePath && (
           <a
-            href={doc.filePath}
+            href={`/api/documents/${doc.id}/file`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 font-mono text-[9px] text-neutral-600 hover:text-white uppercase transition-colors flex-shrink-0"
@@ -290,14 +288,14 @@ export function DocumentViewer({
           </div>
         ) : isPdf ? (
           <iframe
-            src={doc.filePath}
+            src={`/api/documents/${doc.id}/file`}
             className="w-full h-full border-0"
             title={doc.title}
           />
         ) : isImage ? (
           <div className="h-full flex items-center justify-center p-6 overflow-auto">
             <img
-              src={doc.filePath}
+              src={`/api/documents/${doc.id}/file`}
               alt={doc.title}
               className="max-w-full max-h-full object-contain"
             />
@@ -314,7 +312,7 @@ export function DocumentViewer({
               </div>
             </div>
             <a
-              href={doc.filePath}
+              href={`/api/documents/${doc.id}/file`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 font-mono text-[9px] uppercase tracking-widest transition-colors"
@@ -455,9 +453,7 @@ export function DocumentInspector({
 
           {doc.filePath && (
             <a
-              href={doc.filePath}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={`/api/documents/${doc.id}/download`}
               className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-[#ffffff0d] text-neutral-600 hover:text-white font-mono text-[9px] uppercase transition-colors"
             >
               <Download className="w-3 h-3" />
