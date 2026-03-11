@@ -1,0 +1,230 @@
+You are a senior full-stack engineer helping build an investigative intelligence platform called NEXUS.
+
+NEXUS is part of a larger system under the Red State Rhetoric (RSR) media network.
+
+The broader ecosystem includes:
+
+- RSR ORION — a global monitoring dashboard that tracks breaking news and places automated pins on a world map
+- BLACK DOG — a security and operational privacy layer for sensitive research and investigative work
+- NEXUS — the investigative intelligence engine
+
+Your task is to build the MVP of NEXUS.
+
+NEXUS should function like a hybrid of:
+- investigative journalism software
+- OSINT research boards
+- intelligence analysis systems
+- network mapping tools
+- case management software
+
+CORE PURPOSE
+
+NEXUS allows a journalist or investigator to open a CASE FILE and build a structured investigation around people, organizations, documents, events, funding flows, and timelines.
+
+Use this stack:
+
+Frontend:
+- React
+- TypeScript
+- Tailwind CSS
+- React Flow for graph visualization
+
+Backend:
+- Node.js
+- Express
+
+Database:
+- PostgreSQL
+
+File Handling:
+- Local file storage for MVP uploads
+
+Build the system around these core objects:
+
+1. Case
+2. Entity
+3. Document
+4. Event
+5. Relationship
+6. TimelineEntry
+7. MoneyFlow
+8. Note
+
+DATA MODELS
+
+Case:
+- id
+- title
+- description
+- status
+- created_at
+- updated_at
+- tags
+
+Entity:
+- id
+- name
+- type
+- description
+- aliases
+- created_at
+
+Entity types should include:
+- person
+- organization
+- company
+- nonprofit
+- government_agency
+- program
+- facility
+- location
+- event
+
+Document:
+- id
+- title
+- file_path
+- source
+- publish_date
+- uploaded_at
+- case_id
+
+Relationship:
+- id
+- entity_a
+- entity_b
+- relationship_type
+- evidence_document_id
+- confidence
+- created_at
+
+TimelineEntry:
+- id
+- title
+- description
+- event_date
+- linked_entity
+- linked_document
+- case_id
+
+Event:
+- id
+- title
+- location
+- latitude
+- longitude
+- source
+- timestamp
+- case_id
+
+MoneyFlow:
+- id
+- source_entity
+- destination_entity
+- amount
+- date
+- description
+- supporting_document
+
+Note:
+- id
+- case_id
+- content
+- created_at
+
+MVP FEATURES
+
+1. CASE DASHBOARD
+Allow users to create a new case and view:
+- case title
+- description
+- entities
+- documents
+- timeline entries
+- notes
+- events
+
+2. ENTITY DATABASE
+Allow users to create entities and view entity profile pages with:
+- name
+- type
+- description
+- relationships
+- linked documents
+- timeline appearances
+
+3. DOCUMENT LIBRARY
+Allow users to upload files and store metadata.
+Documents must be linkable to:
+- cases
+- entities
+- timeline entries
+
+4. RELATIONSHIP GRAPH
+Use React Flow to render an interactive graph:
+- entities are nodes
+- relationships are edges
+- edges display relationship type
+
+5. TIMELINE VIEW
+Create a timeline component showing:
+- date
+- title
+- description
+- linked entities
+- linked documents
+- linked events
+
+6. ORION EVENT INTAKE
+Create a placeholder external event intake system where ORION events can be added into a case.
+Each event should include:
+- title
+- location
+- timestamp
+- source
+These events should also appear in the case timeline.
+
+7. NOTES PANEL
+Each case should include an investigation notes section with simple markdown support.
+
+UI / DESIGN DIRECTION
+
+Design the platform like a dark investigative command center.
+
+Layout:
+- Left sidebar: Cases, Entities, Documents
+- Main workspace: Case Dashboard, Graph View, Timeline View, Document Viewer
+
+Visual style:
+- dark background
+- white text
+- restrained red accents for alerts and emphasis
+- clean, professional, intelligence-style interface
+- modular panel layout
+
+GOAL
+
+The goal of the MVP is to allow a journalist to:
+- create a case
+- upload documents
+- create entities
+- connect entities
+- visualize relationships
+- track a timeline
+- store investigative notes
+- intake ORION event signals into relevant cases
+
+INITIAL BUILD ORDER
+
+1. Create project structure
+2. Build backend API with Express
+3. Create PostgreSQL schema
+4. Implement case creation and case dashboard
+5. Implement entity creation and entity profile pages
+6. Implement document uploads and metadata storage
+7. Implement relationship graph using React Flow
+8. Implement timeline system
+9. Implement ORION placeholder event intake
+10. Implement notes panel
+
+Start by generating the full project structure, database schema, backend routes, and frontend pages for the MVP. Then begin implementing the backend and frontend in a clean, modular way.

@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: NEXUS Investigative Intelligence Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: cases
+    description: Case management
+  - name: entities
+    description: Entity management
+  - name: documents
+    description: Document management
+  - name: relationships
+    description: Relationship management
+  - name: timeline
+    description: Timeline entries
+  - name: events
+    description: ORION events
+  - name: notes
+    description: Case notes
+  - name: money-flows
+    description: Money flow tracking
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +39,599 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /cases:
+    get:
+      operationId: listCases
+      tags: [cases]
+      summary: List all cases
+      responses:
+        "200":
+          description: List of cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Case"
+    post:
+      operationId: createCase
+      tags: [cases]
+      summary: Create a new case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCaseInput"
+      responses:
+        "201":
+          description: Case created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+
+  /cases/{id}:
+    get:
+      operationId: getCase
+      tags: [cases]
+      summary: Get a case by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Case details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        "404":
+          description: Not found
+    put:
+      operationId: updateCase
+      tags: [cases]
+      summary: Update a case
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCaseInput"
+      responses:
+        "200":
+          description: Updated case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+    delete:
+      operationId: deleteCase
+      tags: [cases]
+      summary: Delete a case
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /cases/{id}/summary:
+    get:
+      operationId: getCaseSummary
+      tags: [cases]
+      summary: Get full case summary with all linked objects
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Full case summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseSummary"
+
+  /entities:
+    get:
+      operationId: listEntities
+      tags: [entities]
+      summary: List all entities
+      parameters:
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of entities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Entity"
+    post:
+      operationId: createEntity
+      tags: [entities]
+      summary: Create a new entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntityInput"
+      responses:
+        "201":
+          description: Entity created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+
+  /entities/{id}:
+    get:
+      operationId: getEntity
+      tags: [entities]
+      summary: Get an entity by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Entity with profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityProfile"
+        "404":
+          description: Not found
+    put:
+      operationId: updateEntity
+      tags: [entities]
+      summary: Update an entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEntityInput"
+      responses:
+        "200":
+          description: Updated entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+    delete:
+      operationId: deleteEntity
+      tags: [entities]
+      summary: Delete an entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List documents
+      parameters:
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+    post:
+      operationId: createDocument
+      tags: [documents]
+      summary: Create document metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentInput"
+      responses:
+        "201":
+          description: Document created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get a document by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteDocument
+      tags: [documents]
+      summary: Delete a document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /documents/upload:
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload a file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                caseId:
+                  type: integer
+                title:
+                  type: string
+                source:
+                  type: string
+                publishDate:
+                  type: string
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /relationships:
+    get:
+      operationId: listRelationships
+      tags: [relationships]
+      summary: List relationships
+      parameters:
+        - name: entityId
+          in: query
+          schema:
+            type: integer
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of relationships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Relationship"
+    post:
+      operationId: createRelationship
+      tags: [relationships]
+      summary: Create a relationship
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRelationshipInput"
+      responses:
+        "201":
+          description: Relationship created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Relationship"
+
+  /relationships/{id}:
+    delete:
+      operationId: deleteRelationship
+      tags: [relationships]
+      summary: Delete a relationship
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /timeline:
+    get:
+      operationId: listTimelineEntries
+      tags: [timeline]
+      summary: List timeline entries
+      parameters:
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Timeline entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEntry"
+    post:
+      operationId: createTimelineEntry
+      tags: [timeline]
+      summary: Create a timeline entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTimelineEntryInput"
+      responses:
+        "201":
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineEntry"
+
+  /timeline/{id}:
+    delete:
+      operationId: deleteTimelineEntry
+      tags: [timeline]
+      summary: Delete a timeline entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List ORION events
+      parameters:
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create/intake an ORION event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventInput"
+      responses:
+        "201":
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /events/{id}:
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /notes:
+    get:
+      operationId: listNotes
+      tags: [notes]
+      summary: List notes for a case
+      parameters:
+        - name: caseId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+    post:
+      operationId: createNote
+      tags: [notes]
+      summary: Create a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNoteInput"
+      responses:
+        "201":
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+
+  /notes/{id}:
+    put:
+      operationId: updateNote
+      tags: [notes]
+      summary: Update a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNoteInput"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+    delete:
+      operationId: deleteNote
+      tags: [notes]
+      summary: Delete a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /money-flows:
+    get:
+      operationId: listMoneyFlows
+      tags: [money-flows]
+      summary: List money flows
+      parameters:
+        - name: caseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Money flows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MoneyFlow"
+    post:
+      operationId: createMoneyFlow
+      tags: [money-flows]
+      summary: Create a money flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMoneyFlowInput"
+      responses:
+        "201":
+          description: Money flow created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoneyFlow"
+
+  /money-flows/{id}:
+    delete:
+      operationId: deleteMoneyFlow
+      tags: [money-flows]
+      summary: Delete a money flow
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +639,401 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    Case:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, closed, archived, active]
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, status, createdAt, updatedAt]
+
+    CreateCaseInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, closed, archived, active]
+        tags:
+          type: array
+          items:
+            type: string
+      required: [title]
+
+    UpdateCaseInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, closed, archived, active]
+        tags:
+          type: array
+          items:
+            type: string
+
+    CaseSummary:
+      type: object
+      properties:
+        case:
+          $ref: "#/components/schemas/Case"
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entity"
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Note"
+        relationships:
+          type: array
+          items:
+            $ref: "#/components/schemas/Relationship"
+        moneyFlows:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyFlow"
+      required: [case, entities, documents, timeline, events, notes, relationships, moneyFlows]
+
+    Entity:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [person, organization, company, nonprofit, government_agency, program, facility, location, event]
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        caseId:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, name, type, createdAt]
+
+    CreateEntityInput:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [person, organization, company, nonprofit, government_agency, program, facility, location, event]
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        caseId:
+          type: integer
+      required: [name, type]
+
+    UpdateEntityInput:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [person, organization, company, nonprofit, government_agency, program, facility, location, event]
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+
+    EntityProfile:
+      type: object
+      properties:
+        entity:
+          $ref: "#/components/schemas/Entity"
+        relationships:
+          type: array
+          items:
+            $ref: "#/components/schemas/Relationship"
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        timelineAppearances:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"
+      required: [entity, relationships, documents, timelineAppearances]
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        filePath:
+          type: string
+        source:
+          type: string
+        publishDate:
+          type: string
+        uploadedAt:
+          type: string
+        caseId:
+          type: integer
+      required: [id, title, uploadedAt]
+
+    CreateDocumentInput:
+      type: object
+      properties:
+        title:
+          type: string
+        filePath:
+          type: string
+        source:
+          type: string
+        publishDate:
+          type: string
+        caseId:
+          type: integer
+      required: [title]
+
+    Relationship:
+      type: object
+      properties:
+        id:
+          type: integer
+        entityAId:
+          type: integer
+        entityBId:
+          type: integer
+        entityAName:
+          type: string
+        entityBName:
+          type: string
+        relationshipType:
+          type: string
+        evidenceDocumentId:
+          type: integer
+        confidence:
+          type: number
+        caseId:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, entityAId, entityBId, relationshipType, createdAt]
+
+    CreateRelationshipInput:
+      type: object
+      properties:
+        entityAId:
+          type: integer
+        entityBId:
+          type: integer
+        relationshipType:
+          type: string
+        evidenceDocumentId:
+          type: integer
+        confidence:
+          type: number
+        caseId:
+          type: integer
+      required: [entityAId, entityBId, relationshipType]
+
+    TimelineEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        eventDate:
+          type: string
+        linkedEntityId:
+          type: integer
+        linkedEntityName:
+          type: string
+        linkedDocumentId:
+          type: integer
+        caseId:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, title, eventDate, createdAt]
+
+    CreateTimelineEntryInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        eventDate:
+          type: string
+        linkedEntityId:
+          type: integer
+        linkedDocumentId:
+          type: integer
+        caseId:
+          type: integer
+      required: [title, eventDate]
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        location:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        source:
+          type: string
+        timestamp:
+          type: string
+        caseId:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, title, timestamp, createdAt]
+
+    CreateEventInput:
+      type: object
+      properties:
+        title:
+          type: string
+        location:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        source:
+          type: string
+        timestamp:
+          type: string
+        caseId:
+          type: integer
+      required: [title, timestamp]
+
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+        caseId:
+          type: integer
+        content:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, caseId, content, createdAt]
+
+    CreateNoteInput:
+      type: object
+      properties:
+        caseId:
+          type: integer
+        content:
+          type: string
+      required: [caseId, content]
+
+    UpdateNoteInput:
+      type: object
+      properties:
+        content:
+          type: string
+      required: [content]
+
+    MoneyFlow:
+      type: object
+      properties:
+        id:
+          type: integer
+        sourceEntityId:
+          type: integer
+        destinationEntityId:
+          type: integer
+        sourceEntityName:
+          type: string
+        destinationEntityName:
+          type: string
+        amount:
+          type: number
+        date:
+          type: string
+        description:
+          type: string
+        supportingDocumentId:
+          type: integer
+        caseId:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, sourceEntityId, destinationEntityId, amount, createdAt]
+
+    CreateMoneyFlowInput:
+      type: object
+      properties:
+        sourceEntityId:
+          type: integer
+        destinationEntityId:
+          type: integer
+        amount:
+          type: number
+        date:
+          type: string
+        description:
+          type: string
+        supportingDocumentId:
+          type: integer
+        caseId:
+          type: integer
+      required: [sourceEntityId, destinationEntityId, amount]

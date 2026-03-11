@@ -1,0 +1,18 @@
+packages:
+  "@xyflow/react": "Interactive node-based relationship graphs for intelligence mapping"
+  "framer-motion": "Smooth page transitions and micro-interactions"
+  "date-fns": "Human-readable date formatting for timelines and tables"
+  "react-markdown": "Rendering rich text notes in the case detail view"
+  "clsx": "Utility for constructing className strings"
+  "tailwind-merge": "Utility for merging tailwind classes"
+  "@hookform/resolvers": "Zod validation for forms"
+
+images:
+  - path: "artifacts/nexus/public/images/nexus-logo.png"
+    description: "Minimalist, sharp geometric logo for an intelligence agency called NEXUS. Abstract network or eye motif. Dark aesthetic with deep red accents."
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated Orval hooks from @workspace/api-client-react
+  - React Flow requires a fixed height parent container to render
+  - Application is exclusively dark-mode to fit the austere intelligence aesthetic
