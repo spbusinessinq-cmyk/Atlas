@@ -1,6 +1,15 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "wouter";
-import { useGetCaseSummary, MoneyFlow } from "@workspace/api-client-react";
+import {
+  useGetCaseSummary,
+  useListEntityMentions,
+  Entity,
+  Relationship,
+  Document,
+  TimelineEntry,
+  Note,
+  MoneyFlow,
+} from "@workspace/api-client-react";
 import {
   LayoutGrid,
   GitBranch,
@@ -11,11 +20,12 @@ import {
   Terminal,
   ArrowLeft,
   AlertTriangle,
+  ScanLine,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
-import GraphCanvas, { LinkIntelPanel, EntityIntelPanel } from "./case-tabs/graph-view";
+import GraphCanvas, { LinkIntelPanel, EntityIntelPanel, SuggestedEdge } from "./case-tabs/graph-view";
 import EntitiesTab from "./case-tabs/entities-tab";
 import DocumentsTab, { DocumentInspector } from "./case-tabs/documents-tab";
 import TimelineTab from "./case-tabs/timeline-tab";
@@ -54,6 +64,11 @@ export default function CaseDetail() {
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<number | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
+
+  const { data: approvedMentions = [] } = useListEntityMentions({
+    caseId,
+    status: "approved",
+  });
 
   const handleSectionChange = useCallback(
     (section: SectionId) => {
@@ -113,10 +128,142 @@ export default function CaseDetail() {
     STATUS_DOT[caseData.status as keyof typeof STATUS_DOT] ?? STATUS_DOT.open;
 
   return (
+    <CaseDetailInner
+      caseId={caseId}
+      caseData={caseData}
+      entities={entities}
+      documents={documents}
+      timeline={timeline}
+      notes={notes}
+      relationships={relationships}
+      moneyFlows={moneyFlows}
+      pendingMentions={pendingMentions as number}
+      approvedMentions={approvedMentions}
+      activeSection={activeSection}
+      selectedEntityId={selectedEntityId}
+      selectedRelId={selectedRelId}
+      selectedDocId={selectedDocId}
+      selectedEntity={selectedEntity}
+      selectedRel={selectedRel}
+      selectedDoc={selectedDoc}
+      statusColor={statusColor}
+      statusDot={statusDot}
+      onSectionChange={handleSectionChange}
+      onEntitySelect={handleEntitySelect}
+      onRelSelect={handleRelSelect}
+      onDocSelect={(doc) => setSelectedDocId(doc ? doc.id : null)}
+      onEntityClose={() => setSelectedEntityId(null)}
+      onRelClose={() => setSelectedRelId(null)}
+      onDocClose={() => setSelectedDocId(null)}
+    />
+  );
+}
+
+function CaseDetailInner({
+  caseId,
+  caseData,
+  entities,
+  documents,
+  timeline,
+  notes,
+  relationships,
+  moneyFlows,
+  pendingMentions,
+  approvedMentions,
+  activeSection,
+  selectedEntityId,
+  selectedRelId,
+  selectedDocId,
+  selectedEntity,
+  selectedRel,
+  selectedDoc,
+  statusColor,
+  statusDot,
+  onSectionChange,
+  onEntitySelect,
+  onRelSelect,
+  onDocSelect,
+  onEntityClose,
+  onRelClose,
+  onDocClose,
+}: {
+  caseId: number;
+  caseData: { id: number; title: string; description?: string | null; tags?: string[] | null; status: string; createdAt: string };
+  entities: Entity[];
+  documents: Document[];
+  timeline: TimelineEntry[];
+  notes: Note[];
+  relationships: Relationship[];
+  moneyFlows: MoneyFlow[];
+  pendingMentions: number;
+  approvedMentions: { id: number; documentId: number; entityName: string; entityType: string; confidence: number; status: string }[];
+  activeSection: SectionId;
+  selectedEntityId: number | null;
+  selectedRelId: number | null;
+  selectedDocId: number | null;
+  selectedEntity: Entity | null;
+  selectedRel: Relationship | null;
+  selectedDoc: Document | null;
+  statusColor: string;
+  statusDot: string;
+  onSectionChange: (s: SectionId) => void;
+  onEntitySelect: (id: number | null) => void;
+  onRelSelect: (id: number | null) => void;
+  onDocSelect: (doc: Document | null) => void;
+  onEntityClose: () => void;
+  onRelClose: () => void;
+  onDocClose: () => void;
+}) {
+  const suggestedEdges = useMemo((): SuggestedEdge[] => {
+    if (approvedMentions.length < 2 || entities.length < 2) return [];
+
+    const byDoc: Record<number, string[]> = {};
+    approvedMentions.forEach((m) => {
+      if (!byDoc[m.documentId]) byDoc[m.documentId] = [];
+      if (!byDoc[m.documentId].includes(m.entityName)) {
+        byDoc[m.documentId].push(m.entityName);
+      }
+    });
+
+    const confirmedPairs = new Set(
+      relationships.map(
+        (r) => `${Math.min(r.entityAId, r.entityBId)}-${Math.max(r.entityAId, r.entityBId)}`
+      )
+    );
+
+    const suggestions: SuggestedEdge[] = [];
+    const seen = new Set<string>();
+
+    Object.entries(byDoc).forEach(([docIdStr, entityNames]) => {
+      const docId = parseInt(docIdStr);
+      const docTitle = documents.find((d) => d.id === docId)?.title;
+
+      const entityIds = entityNames
+        .map((name) =>
+          entities.find((e) => e.name.toLowerCase() === name.toLowerCase())?.id
+        )
+        .filter((id): id is number => id !== undefined);
+
+      for (let i = 0; i < entityIds.length; i++) {
+        for (let j = i + 1; j < entityIds.length; j++) {
+          const a = entityIds[i];
+          const b = entityIds[j];
+          const key = `${Math.min(a, b)}-${Math.max(a, b)}`;
+          if (!confirmedPairs.has(key) && !seen.has(key)) {
+            seen.add(key);
+            suggestions.push({ entityAId: a, entityBId: b, documentTitle: docTitle });
+          }
+        }
+      }
+    });
+
+    return suggestions;
+  }, [approvedMentions, relationships, entities, documents]);
+
+  return (
     <div className="flex h-full overflow-hidden">
       {/* ──────── LEFT RAIL ──────── */}
       <aside className="w-52 flex-shrink-0 flex flex-col bg-[#040507] border-r border-[#ffffff0d] overflow-hidden">
-        {/* Back */}
         <div className="px-3 py-2 border-b border-[#ffffff0d] flex-shrink-0">
           <Link href="/">
             <button className="flex items-center gap-1.5 text-[9px] font-mono text-neutral-700 hover:text-white uppercase tracking-widest transition-colors">
@@ -126,7 +273,6 @@ export default function CaseDetail() {
           </Link>
         </div>
 
-        {/* Case identity */}
         <div className="px-3 pt-4 pb-3 border-b border-[#ffffff0d] flex-shrink-0 space-y-1.5">
           <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
             CASE-{caseData.id.toString().padStart(6, "0")}
@@ -143,7 +289,6 @@ export default function CaseDetail() {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
           <div className="px-2 py-1 font-mono text-[8px] text-neutral-800 uppercase tracking-widest">
             NAVIGATION
@@ -152,11 +297,11 @@ export default function CaseDetail() {
             const Icon = s.icon;
             const isActive = activeSection === s.id;
             const hasBadge =
-              s.id === "documents" && (pendingMentions as number) > 0;
+              s.id === "documents" && (pendingMentions) > 0;
             return (
               <button
                 key={s.id}
-                onClick={() => handleSectionChange(s.id)}
+                onClick={() => onSectionChange(s.id)}
                 className={cn(
                   "w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-mono uppercase tracking-wider transition-all text-left border-l-2",
                   isActive
@@ -174,7 +319,6 @@ export default function CaseDetail() {
           })}
         </nav>
 
-        {/* Mini metrics */}
         <div className="px-3 py-3 border-t border-[#ffffff0d] flex-shrink-0 space-y-1">
           {[
             { label: "ENTITIES", val: entities.length },
@@ -184,8 +328,8 @@ export default function CaseDetail() {
             ...(moneyFlows.length > 0
               ? [{ label: "FLOWS", val: moneyFlows.length }]
               : []),
-            ...((pendingMentions as number) > 0
-              ? [{ label: "ATLAS PENDING", val: pendingMentions as number, warn: true }]
+            ...(pendingMentions > 0
+              ? [{ label: "ATLAS PENDING", val: pendingMentions, warn: true }]
               : []),
           ].map((m) => (
             <div key={m.label} className="flex justify-between items-center">
@@ -212,7 +356,6 @@ export default function CaseDetail() {
 
       {/* ──────── CENTER CANVAS ──────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#080a0d]">
-        {/* Center strip header */}
         <div className="nexus-header-strip flex-shrink-0">
           <span className="nexus-label">
             {SECTIONS.find((s) => s.id === activeSection)?.label}
@@ -220,11 +363,15 @@ export default function CaseDetail() {
           {activeSection === "graph" && (
             <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
               {entities.length} NODES&nbsp;·&nbsp;{relationships.length} EDGES
+              {suggestedEdges.length > 0 && (
+                <span className="text-cyan-800">
+                  &nbsp;·&nbsp;{suggestedEdges.length} SUGGESTED
+                </span>
+              )}
             </span>
           )}
         </div>
 
-        {/* Content area */}
         <div
           className={cn(
             "flex-1",
@@ -241,8 +388,10 @@ export default function CaseDetail() {
                 caseId={caseId}
                 selectedEntityId={selectedEntityId}
                 selectedRelId={selectedRelId}
-                onEntitySelect={handleEntitySelect}
-                onRelSelect={handleRelSelect}
+                onEntitySelect={onEntitySelect}
+                onRelSelect={onRelSelect}
+                suggestedEdges={suggestedEdges}
+                documentCount={documents.length}
               />
             </div>
           )}
@@ -269,7 +418,7 @@ export default function CaseDetail() {
                 caseId={caseId}
                 documents={documents}
                 selectedDocId={selectedDocId}
-                onDocumentSelect={(doc) => setSelectedDocId(doc ? doc.id : null)}
+                onDocumentSelect={onDocSelect}
               />
             </div>
           )}
@@ -298,21 +447,22 @@ export default function CaseDetail() {
           <LinkIntelPanel
             relationship={selectedRel}
             caseId={caseId}
-            onClose={() => setSelectedRelId(null)}
+            onClose={onRelClose}
           />
         )}
         {activeSection === "graph" && selectedEntity && !selectedRel && (
           <EntityIntelPanel
             entity={selectedEntity}
             relationships={relationships}
-            onClose={() => setSelectedEntityId(null)}
+            caseId={caseId}
+            onClose={onEntityClose}
           />
         )}
         {activeSection === "documents" && selectedDoc && (
           <DocumentInspector
             doc={selectedDoc}
             caseId={caseId}
-            onClose={() => setSelectedDocId(null)}
+            onClose={onDocClose}
           />
         )}
         {!(activeSection === "graph" && (selectedRel || selectedEntity)) &&
@@ -322,8 +472,8 @@ export default function CaseDetail() {
             entities={entities}
             documents={documents}
             notes={notes}
-            pendingMentions={pendingMentions as number}
-            onNavigate={handleSectionChange}
+            pendingMentions={pendingMentions}
+            onNavigate={onSectionChange}
           />
         )}
       </aside>
@@ -341,14 +491,13 @@ function OverviewPanel({
   moneyFlows,
 }: {
   caseData: { title: string; description?: string | null; tags?: string[] | null };
-  entities: { id: number; name: string; type: string }[];
-  documents: { id: number; title: string; uploadedAt: string }[];
-  timeline: { id: number; title: string; eventDate: string }[];
+  entities: Entity[];
+  documents: Document[];
+  timeline: TimelineEntry[];
   moneyFlows: MoneyFlow[];
 }) {
   return (
     <div className="p-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
-      {/* Entities */}
       <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
           <span className="nexus-label">ENTITY LIST ({entities.length})</span>
@@ -374,7 +523,6 @@ function OverviewPanel({
         </div>
       </div>
 
-      {/* Documents */}
       <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
           <span className="nexus-label">DOCUMENT VAULT ({documents.length})</span>
@@ -400,7 +548,6 @@ function OverviewPanel({
         </div>
       </div>
 
-      {/* Timeline */}
       <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
           <span className="nexus-label">TEMPORAL TRACE ({timeline.length})</span>
@@ -432,7 +579,6 @@ function OverviewPanel({
         </div>
       </div>
 
-      {/* Money flows if any */}
       {moneyFlows.length > 0 && (
         <div className="nexus-panel rounded-none lg:col-span-2">
           <div className="nexus-header-strip">
@@ -540,17 +686,13 @@ function DefaultInspector({
     tags?: string[] | null;
     status: string;
   };
-  entities: { id: number }[];
-  documents: { id: number }[];
-  notes: { id: number; content: string; createdAt: string }[];
+  entities: Entity[];
+  documents: Document[];
+  notes: Note[];
   pendingMentions: number;
   onNavigate: (s: SectionId) => void;
 }) {
-  const latestNote = notes.length > 0
-    ? [...notes].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )[0]
-    : null;
+  const showNextAction = entities.length === 0 && documents.length > 0 && pendingMentions === 0;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -559,7 +701,6 @@ function DefaultInspector({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        {/* Description */}
         {caseData.description && (
           <div className="space-y-1.5">
             <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
@@ -571,7 +712,6 @@ function DefaultInspector({
           </div>
         )}
 
-        {/* Tags */}
         {caseData.tags && caseData.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {caseData.tags.map((tag) => (
@@ -585,7 +725,6 @@ function DefaultInspector({
           </div>
         )}
 
-        {/* ATLAS alert */}
         {pendingMentions > 0 && (
           <div
             className="p-2.5 border border-amber-500/25 bg-amber-500/5 space-y-2 cursor-pointer hover:bg-amber-500/10 transition-colors"
@@ -609,7 +748,26 @@ function DefaultInspector({
           </div>
         )}
 
-        {/* Quick navigation */}
+        {showNextAction && (
+          <div
+            className="p-2.5 border border-cyan-500/20 bg-cyan-500/5 space-y-2 cursor-pointer hover:bg-cyan-500/8 transition-colors"
+            onClick={() => onNavigate("documents")}
+          >
+            <div className="flex items-center gap-2">
+              <ScanLine className="w-3.5 h-3.5 text-cyan-500" />
+              <span className="font-mono text-[9px] text-cyan-500 uppercase tracking-widest">
+                NEXT ACTION
+              </span>
+            </div>
+            <div className="font-mono text-[9px] text-cyan-700 uppercase tracking-wider leading-relaxed">
+              Analyze documents and approve entities to populate the investigation graph.
+            </div>
+            <div className="font-mono text-[9px] text-cyan-800 hover:text-cyan-600 transition-colors uppercase">
+              OPEN DOCUMENT VAULT →
+            </div>
+          </div>
+        )}
+
         <div className="space-y-1">
           <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest mb-2">
             QUICK ACCESS
@@ -625,39 +783,19 @@ function DefaultInspector({
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className="w-full flex justify-between items-center py-2 px-2.5 text-left hover:bg-[#ffffff04] border border-transparent hover:border-[#ffffff08] transition-all group"
+              className="w-full flex items-center justify-between px-2.5 py-2 border border-[#ffffff06] bg-[#0a0e14] hover:bg-[#0f1419] hover:border-[#ffffff10] transition-all text-left group"
             >
-              <span className="font-mono text-[10px] text-neutral-600 group-hover:text-neutral-300 uppercase tracking-wider transition-colors">
+              <span className="font-mono text-[10px] text-neutral-500 group-hover:text-white uppercase tracking-wider transition-colors">
                 {item.label}
               </span>
               {item.val !== null && (
-                <span className="font-mono text-xs font-bold text-neutral-500 group-hover:text-white tabular-nums transition-colors">
+                <span className="font-mono text-[11px] font-bold text-neutral-600 group-hover:text-neutral-300 tabular-nums transition-colors">
                   {item.val.toString().padStart(2, "0")}
                 </span>
               )}
             </button>
           ))}
         </div>
-
-        {/* Latest note */}
-        {latestNote && (
-          <div className="space-y-1.5">
-            <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-              LATEST LOG
-            </div>
-            <div
-              className="p-2.5 bg-[#0a0e14] border border-[#ffffff06] cursor-pointer hover:border-[#ffffff0d] transition-colors"
-              onClick={() => onNavigate("notes")}
-            >
-              <div className="font-mono text-[8px] text-neutral-700 mb-1.5">
-                {formatDate(latestNote.createdAt)}
-              </div>
-              <p className="text-xs text-neutral-400 line-clamp-4 leading-relaxed">
-                {latestNote.content}
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

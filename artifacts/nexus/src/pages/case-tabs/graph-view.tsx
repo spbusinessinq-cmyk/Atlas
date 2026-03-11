@@ -16,10 +16,11 @@ import {
   useCreateRelationshipEvidence,
   useDeleteRelationshipEvidence,
   useListDocuments,
+  useListEntityMentions,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { X, Plus, Trash2, FileText, Link2 } from "lucide-react";
+import { X, Plus, Trash2, FileText, Link2, ScanLine } from "lucide-react";
 
 export const TYPE_COLORS: Record<string, string> = {
   person: "#06b6d4",
@@ -31,6 +32,12 @@ export const TYPE_COLORS: Record<string, string> = {
   other: "#737373",
 };
 
+export interface SuggestedEdge {
+  entityAId: number;
+  entityBId: number;
+  documentTitle?: string;
+}
+
 interface GraphCanvasProps {
   entities: Entity[];
   relationships: Relationship[];
@@ -39,6 +46,8 @@ interface GraphCanvasProps {
   selectedRelId: number | null;
   onEntitySelect: (id: number | null) => void;
   onRelSelect: (id: number | null) => void;
+  suggestedEdges?: SuggestedEdge[];
+  documentCount?: number;
 }
 
 export default function GraphCanvas({
@@ -48,6 +57,8 @@ export default function GraphCanvas({
   selectedRelId,
   onEntitySelect,
   onRelSelect,
+  suggestedEdges = [],
+  documentCount = 0,
 }: GraphCanvasProps) {
   const nodes = useMemo(() => {
     const radius = 260;
@@ -77,14 +88,16 @@ export default function GraphCanvas({
           textTransform: "uppercase" as const,
           fontWeight: "bold",
           letterSpacing: "0.05em",
-          boxShadow: isSelected ? `0 0 16px ${color}40` : `0 0 4px ${color}15`,
+          boxShadow: isSelected
+            ? `0 0 18px ${color}50, 0 0 6px ${color}25`
+            : `0 0 6px ${color}18`,
         },
       };
     });
   }, [entities, selectedEntityId]);
 
   const edges = useMemo(() => {
-    return relationships.map((rel) => {
+    const confirmed = relationships.map((rel) => {
       const isSelected = rel.id === selectedRelId;
       return {
         id: `e${rel.id}`,
@@ -92,11 +105,11 @@ export default function GraphCanvas({
         target: rel.entityBId.toString(),
         label: rel.relationshipType.toUpperCase(),
         animated: isSelected,
-        data: { relId: rel.id },
+        data: { relId: rel.id, suggested: false },
         style: {
           stroke: isSelected ? "#f59e0b" : "#dc2626",
           strokeWidth: isSelected ? 2.5 : 1.5,
-          opacity: isSelected ? 1 : 0.6,
+          opacity: isSelected ? 1 : 0.65,
         },
         labelStyle: {
           fill: isSelected ? "#f59e0b" : "#ffffff",
@@ -114,10 +127,46 @@ export default function GraphCanvas({
         },
       };
     });
-  }, [relationships, selectedRelId]);
+
+    const confirmedPairs = new Set(
+      relationships.map(
+        (r) => `${Math.min(r.entityAId, r.entityBId)}-${Math.max(r.entityAId, r.entityBId)}`
+      )
+    );
+
+    const suggested = suggestedEdges
+      .filter((se) => {
+        const key = `${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`;
+        return !confirmedPairs.has(key);
+      })
+      .map((se) => ({
+        id: `suggested-${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`,
+        source: se.entityAId.toString(),
+        target: se.entityBId.toString(),
+        label: "CO-MENTION",
+        animated: false,
+        data: { suggested: true, documentTitle: se.documentTitle },
+        style: {
+          stroke: "#06b6d4",
+          strokeWidth: 1,
+          strokeDasharray: "5 4",
+          opacity: 0.35,
+        },
+        labelStyle: {
+          fill: "#06b6d4",
+          fontFamily: "monospace",
+          fontSize: 7,
+          opacity: 0.7,
+        },
+        labelBgStyle: { fill: "#000", fillOpacity: 0.9 },
+      }));
+
+    return [...confirmed, ...suggested];
+  }, [relationships, selectedRelId, suggestedEdges]);
 
   const onEdgeClick: EdgeMouseHandler = useCallback(
     (_evt, edge) => {
+      if ((edge.data as { suggested?: boolean })?.suggested) return;
       const relId = (edge.data as { relId: number })?.relId;
       onRelSelect(relId ?? null);
     },
@@ -137,6 +186,30 @@ export default function GraphCanvas({
   }, [onEntitySelect, onRelSelect]);
 
   if (entities.length === 0) {
+    if (documentCount > 0) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center bg-[#000] gap-5">
+          <div className="w-12 h-px bg-[#ffffff08]" />
+          <div className="text-center space-y-2">
+            <div className="font-mono text-xs text-neutral-600 uppercase tracking-widest">
+              NO ENTITIES IN THIS CASE
+            </div>
+            <div className="font-mono text-[10px] text-cyan-700 uppercase tracking-wider max-w-[280px] leading-relaxed">
+              Approve detected entities from the Document Vault
+              <br />
+              to begin link analysis.
+            </div>
+            <div className="flex items-center justify-center gap-1.5 mt-1">
+              <ScanLine className="w-3 h-3 text-neutral-800" />
+              <span className="font-mono text-[9px] text-neutral-800 uppercase tracking-widest">
+                Open DOCUMENT VAULT → run ANALYZE → INGEST entities
+              </span>
+            </div>
+          </div>
+          <div className="w-12 h-px bg-[#ffffff08]" />
+        </div>
+      );
+    }
     return (
       <div className="h-full flex flex-col items-center justify-center bg-[#000] gap-4">
         <div className="w-16 h-px bg-[#ffffff08]" />
@@ -181,6 +254,11 @@ export default function GraphCanvas({
       </ReactFlow>
       <div className="absolute bottom-3 left-3 z-10 font-mono text-[9px] text-neutral-800 uppercase tracking-widest pointer-events-none">
         CLICK EDGE → LINK INTELLIGENCE &nbsp;·&nbsp; CLICK NODE → ENTITY DOSSIER
+        {suggestedEdges.length > 0 && (
+          <span className="text-cyan-900">
+            &nbsp;·&nbsp; {suggestedEdges.length} SUGGESTED LINK{suggestedEdges.length !== 1 ? "S" : ""}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -361,16 +439,28 @@ export function LinkIntelPanel({
 export function EntityIntelPanel({
   entity,
   relationships,
+  caseId,
   onClose,
 }: {
   entity: Entity;
   relationships: Relationship[];
+  caseId: number;
   onClose: () => void;
 }) {
   const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
   const connectedRels = relationships.filter(
     (r) => r.entityAId === entity.id || r.entityBId === entity.id
   );
+
+  const { data: allApprovedMentions = [] } = useListEntityMentions({
+    caseId,
+    status: "approved",
+  });
+
+  const entityMentions = allApprovedMentions.filter(
+    (m) => m.entityName.toLowerCase() === entity.name.toLowerCase()
+  );
+  const linkedDocIds = [...new Set(entityMentions.map((m) => m.documentId))];
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -416,6 +506,50 @@ export function EntityIntelPanel({
             </div>
           )}
         </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="p-2 border border-[#ffffff06] bg-[#0a0e14] text-center">
+            <div className="font-mono text-[18px] font-bold tabular-nums" style={{ color }}>
+              {entityMentions.length.toString().padStart(2, "0")}
+            </div>
+            <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mt-0.5">
+              MENTIONS
+            </div>
+          </div>
+          <div className="p-2 border border-[#ffffff06] bg-[#0a0e14] text-center">
+            <div className="font-mono text-[18px] font-bold tabular-nums" style={{ color }}>
+              {linkedDocIds.length.toString().padStart(2, "0")}
+            </div>
+            <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mt-0.5">
+              DOCUMENTS
+            </div>
+          </div>
+        </div>
+
+        {linkedDocIds.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
+              LINKED DOCUMENTS ({linkedDocIds.length})
+            </div>
+            {linkedDocIds.map((docId) => {
+              const docMentions = entityMentions.filter((m) => m.documentId === docId);
+              return (
+                <div
+                  key={docId}
+                  className="flex items-center gap-2 p-2 border border-[#ffffff06] bg-[#0a0e14] text-[10px] font-mono"
+                >
+                  <FileText className="w-3 h-3 text-neutral-700 flex-shrink-0" />
+                  <span className="text-neutral-400 flex-1 truncate">
+                    DOC-{docId.toString().padStart(4, "0")}
+                  </span>
+                  <span className="text-cyan-700 text-[9px]">
+                    {docMentions.length}×
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">

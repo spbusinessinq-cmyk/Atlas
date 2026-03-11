@@ -1,0 +1,339 @@
+This is one combined ATLAS refinement + intelligence pass.
+
+Do NOT rebuild the app.
+Do NOT redesign from scratch.
+Do NOT introduce mock data.
+Preserve the existing backend and frontend structure as much as possible.
+
+This pass combines:
+- workspace polish
+- document vault usability fixes
+- ATLAS branding/icon refinement
+- “make it feel alive” improvements
+- approved entity -> graph population
+- basic dossier behavior
+- lightweight relationship suggestions
+
+SYSTEM NAME
+
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+==================================================
+PRIMARY GOAL
+==================================================
+
+Make ATLAS feel like a live investigative workspace.
+
+After this pass, the system should support this real workflow:
+
+1. Upload a document
+2. Open/select the document from Document Vault
+3. Run ANALYZE
+4. Review detections
+5. Approve detections into the Entity Registry
+6. Approved entities automatically appear in the Link Analysis graph
+7. Clicking a graph node shows a real dossier summary in the right panel
+8. ATLAS can suggest simple relationship links based on co-mentions in the same document
+
+==================================================
+RULES
+==================================================
+
+- no mock data
+- no placeholder entities
+- no fake links
+- no fake telemetry
+- no fake activity feeds
+- use only real backend data
+- keep the current ATLAS layout direction
+- preserve the graph-first case workspace
+- avoid clutter and overlapping panels
+
+==================================================
+1. TOP BAR ICON — RADAR STYLE
+==================================================
+
+Replace the current compass icon with a radar / scan style ATLAS icon.
+
+Requirements:
+- subtle intelligence-system radar symbol
+- circular outline
+- center point in red
+- one sweep arm / scan arc
+- thin white/gray lines
+- restrained teal/cyan detection accent
+- subtle glow only
+- 18px to 22px
+- system-like, not decorative
+
+Keep:
+RSR // ATLAS
+
+Do not reintroduce NEXUS anywhere.
+
+==================================================
+2. SECONDARY ATLAS COLOR ACCENT
+==================================================
+
+ATLAS needs a second accent distinct from red.
+
+Use a restrained cool teal/cyan accent for:
+- radar icon sweep
+- ANALYZE actions
+- scan/detection states
+- selected intelligence data states
+- subtle graph accents when appropriate
+
+Color logic:
+- red = active / critical / action
+- teal/cyan = scan / detection / analysis
+- amber = pending / triage
+- green = approved / confirmed
+
+Keep the black / white / red ATLAS foundation intact.
+Do not overuse teal.
+
+==================================================
+3. DOCUMENT VAULT — FIX INTERACTION + EVIDENCE BROWSER UX
+==================================================
+
+The Document Vault must behave like a clean evidence browser.
+
+Fix the current interaction bug completely:
+- clicking anywhere on a document row selects the document
+- selected row gets a visible active state
+- right panel updates to Document Inspector
+- Analyze button still works independently
+- Open/Download action still works independently
+- event propagation must be handled correctly
+
+Improve row design:
+- denser rows
+- stronger title typography
+- cleaner metadata alignment
+- source / ingest date / case id easier to read
+- actions aligned right
+- better hover and selected states
+
+Required row fields:
+- file icon
+- title
+- source
+- ingest date
+- case id
+- ANALYZE action
+- OPEN or DOWNLOAD action
+
+Do not expand documents inline inside the center panel.
+
+==================================================
+4. DOCUMENT INSPECTOR — RIGHT PANEL ONLY
+==================================================
+
+When a document is selected, the RIGHT PANEL should show a Document Inspector with:
+
+- document title
+- source
+- ingest date
+- case reference
+- Analyze button
+- Open/Download action
+- extracted detections
+- approved entities from this doc
+- pending detections from this doc
+- money references if available
+- empty state if not analyzed
+
+If not analyzed yet, show:
+NO DETECTIONS AVAILABLE
+Run ANALYZE to extract entities and references.
+
+Keep this inspector inside the right panel.
+Do not overlay the graph.
+
+==================================================
+5. MAKE THE CASE WORKSPACE FEEL ALIVE
+==================================================
+
+Add subtle life and responsiveness without clutter.
+
+Add:
+- subtle pulse on ATLAS CORE: ONLINE
+- very restrained radar sweep pulse on the icon
+- smooth transitions for row hover / selection
+- smooth right-panel transitions between overview / document / entity / relationship
+- stronger selected nav state
+- subtle graph node glow when nodes exist
+- improved empty state framing
+
+Do NOT add flashy motion.
+
+==================================================
+6. APPROVED ENTITIES -> GRAPH NODES
+==================================================
+
+This is the critical functional step.
+
+When document detections are approved into the Entity Registry, automatically render them as graph nodes in the Link Analysis view for that case.
+
+Requirements:
+- use real backend entities only
+- no placeholder nodes
+- nodes appear in the current case graph automatically after approval
+- case counts update immediately
+- entity registry count updates immediately
+- graph empty state disappears once entities exist
+
+Node types should support:
+- person
+- organization
+- government agency
+- company
+- nonprofit
+- location
+- program
+- facility
+- document if already supported
+
+Use type-based styling if already available.
+Keep graph centered and readable.
+
+==================================================
+7. ENTITY DOSSIER PANEL
+==================================================
+
+When a graph node is clicked, populate the RIGHT PANEL with a real dossier summary using backend data.
+
+Show:
+- entity name
+- entity type
+- aliases
+- mention count
+- linked documents
+- related entities if any
+- notes if any
+- case membership if relevant
+
+If some data is not available yet, show a clean empty state for that section.
+Do not fake values.
+
+==================================================
+8. SIMPLE RELATIONSHIP SUGGESTIONS
+==================================================
+
+Add lightweight relationship suggestions based on co-mentions in the same document.
+
+Logic:
+If two approved entities appear in the same analyzed document, create a suggested relationship candidate.
+
+Important:
+- mark these clearly as SUGGESTED, not confirmed
+- do not treat them as verified evidence
+- if possible, store them separately or visually distinguish them
+- support a basic relationship label such as:
+  co-mentioned
+  same-document
+  possible association
+
+If implementing persistence is too large for this pass, render these suggestions in the graph or right panel as clearly labeled temporary/suggested links using real analyzed document data.
+
+Goal:
+make the graph feel like it is starting to connect itself.
+
+==================================================
+9. GRAPH EMPTY STATE + NEXT ACTION GUIDANCE
+==================================================
+
+If:
+- documents > 0
+- entities = 0
+
+Then improve the graph empty state to guide the workflow.
+
+Show:
+
+NO ENTITIES IN THIS CASE
+Approve detected entities from the Document Vault to begin link analysis.
+
+Add a subtle next-step hint:
+Open DOCUMENT VAULT and run ANALYZE.
+
+In the default case overview/right panel also show:
+NEXT ACTION
+Analyze documents and approve entities to populate the investigation graph.
+
+If pending detections exist:
+- show an amber notice in the right panel
+- show an amber status dot on Document Vault nav
+
+==================================================
+10. CASE COUNTS / LIVE STATE
+==================================================
+
+Ensure these update from real backend data:
+- entity count
+- document count
+- link count
+- pending detections
+- telemetry strip counts
+
+No fake values.
+
+==================================================
+11. KEEP THE INVESTIGATION SPACE CLEAN
+==================================================
+
+Preserve the current 3-panel concept:
+- left case rail
+- center investigation canvas
+- right inspector
+
+Documents, entities, notes, and links should not overlap or fight for space.
+The graph remains the central investigation area.
+Document Vault remains an evidence browser, not a giant multi-panel workspace.
+
+==================================================
+12. SMALL FIXES / POLISH
+==================================================
+
+Fix rough edges:
+- selected row persistence
+- button hit areas
+- truncation issues
+- nav active state consistency
+- row hover clarity
+- inspector state switching
+- browser title remains ATLAS
+- no visible NEXUS text anywhere
+
+==================================================
+SUCCESS CONDITION
+==================================================
+
+After this pass, ATLAS should support:
+
+- document rows can be clicked reliably
+- selected documents open in the right inspector
+- ANALYZE works cleanly
+- approved detections become real entities
+- approved entities appear in the graph automatically
+- graph becomes the visual center of the case
+- clicking a node opens a dossier panel
+- ATLAS begins suggesting simple links from co-mentions
+- the radar icon + teal accent make the system feel more alive
+- no mock data is introduced
+
+==================================================
+FINAL SUMMARY
+==================================================
+
+At the end, summarize:
+1. document interaction fixes
+2. radar icon implementation
+3. color/accent updates
+4. approved entity -> graph behavior
+5. dossier panel behavior
+6. relationship suggestion behavior
+7. files modified
+8. anything still needed for the next alpha step

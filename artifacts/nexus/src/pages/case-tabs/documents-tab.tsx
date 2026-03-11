@@ -22,6 +22,7 @@ import {
   FileText,
   X,
   AlertCircle,
+  ScanLine,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -67,17 +68,25 @@ export default function DocumentsTab({
             </div>
           </div>
         ) : (
-          documents.map((doc) => (
-            <DocumentRow
-              key={doc.id}
-              doc={doc}
-              caseId={caseId}
-              isSelected={selectedDocId === doc.id}
-              onSelect={() =>
-                onDocumentSelect?.(selectedDocId === doc.id ? null : doc)
-              }
-            />
-          ))
+          <>
+            <div className="flex bg-[#ffffff04] border-b border-[#ffffff06] px-3 py-1.5 font-mono text-[9px] text-neutral-700 uppercase tracking-widest sticky top-0">
+              <div className="w-7 mr-3 flex-shrink-0" />
+              <div className="flex-1">TITLE / SOURCE</div>
+              <div className="w-28 text-right hidden sm:block">DATE / ID</div>
+              <div className="w-28 text-right">ACTIONS</div>
+            </div>
+            {documents.map((doc) => (
+              <DocumentRow
+                key={doc.id}
+                doc={doc}
+                caseId={caseId}
+                isSelected={selectedDocId === doc.id}
+                onSelect={() =>
+                  onDocumentSelect?.(selectedDocId === doc.id ? null : doc)
+                }
+              />
+            ))}
+          </>
         )}
       </div>
     </div>
@@ -110,34 +119,48 @@ function DocumentRow({
     <div
       onClick={onSelect}
       className={cn(
-        "flex items-center gap-3 px-3 py-2.5 border-b border-[#ffffff06] cursor-pointer transition-all",
+        "flex items-center gap-3 px-3 py-2.5 border-b border-[#ffffff06] cursor-pointer transition-all duration-150",
         isSelected
-          ? "bg-red-500/5 border-l-2 border-l-red-600 border-b-[#ffffff06]"
-          : "hover:bg-[#ffffff03] border-l-2 border-l-transparent"
+          ? "bg-red-500/5 border-l-2 border-l-red-600"
+          : "hover:bg-[#ffffff04] border-l-2 border-l-transparent"
       )}
     >
-      {/* File icon */}
       <div className="w-7 h-7 flex-shrink-0 bg-[#000] border border-[#ffffff0d] flex items-center justify-center">
-        <span className="text-[7px] font-mono text-red-600">DOC</span>
+        <span className={cn(
+          "text-[7px] font-mono",
+          isSelected ? "text-red-500" : "text-neutral-700"
+        )}>DOC</span>
       </div>
 
-      {/* Document info */}
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-white truncate uppercase" title={doc.title}>
+        <div
+          className={cn(
+            "text-sm font-semibold uppercase truncate transition-colors",
+            isSelected ? "text-white" : "text-neutral-300 group-hover:text-white"
+          )}
+          title={doc.title}
+        >
           {doc.title}
         </div>
-        <div className="flex items-center gap-2 text-[9px] font-mono text-neutral-600 mt-0.5 uppercase tracking-wider">
-          <span className="truncate max-w-[120px]">
+        <div className="flex items-center gap-2 text-[9px] font-mono mt-0.5 uppercase tracking-wider">
+          <span className={cn(
+            "truncate max-w-[120px]",
+            isSelected ? "text-neutral-500" : "text-neutral-700"
+          )}>
             {doc.source || "UNKNOWN SOURCE"}
           </span>
-          <span className="text-[#ffffff10]">·</span>
-          <span className="flex-shrink-0">{formatDate(doc.uploadedAt).split(",")[0]}</span>
-          <span className="text-[#ffffff10]">·</span>
-          <span className="flex-shrink-0 text-neutral-700">ID:{doc.id}</span>
         </div>
       </div>
 
-      {/* Actions */}
+      <div className="hidden sm:flex flex-col items-end flex-shrink-0 min-w-[88px]">
+        <span className="font-mono text-[9px] text-neutral-700">
+          {formatDate(doc.uploadedAt).split(",")[0]}
+        </span>
+        <span className="font-mono text-[8px] text-neutral-800 mt-0.5">
+          ID:{doc.id}
+        </span>
+      </div>
+
       <div
         className="flex items-center gap-1.5 flex-shrink-0"
         onClick={(e) => e.stopPropagation()}
@@ -160,7 +183,7 @@ function DocumentRow({
             "flex items-center gap-1 px-2 py-1 border font-mono text-[9px] uppercase tracking-widest transition-colors",
             analyzeMutation.isPending
               ? "border-neutral-700 text-neutral-600 cursor-not-allowed"
-              : "border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10"
+              : "border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 hover:border-cyan-500/70"
           )}
           title="Run entity extraction"
         >
@@ -185,9 +208,14 @@ export function DocumentInspector({
 }) {
   const queryClient = useQueryClient();
 
-  const { data: mentions = [] } = useListEntityMentions({
+  const { data: pendingMentions = [] } = useListEntityMentions({
     documentId: doc.id,
     status: "pending",
+  });
+
+  const { data: approvedMentions = [] } = useListEntityMentions({
+    documentId: doc.id,
+    status: "approved",
   });
 
   const analyzeMutation = useAnalyzeDocument({
@@ -216,6 +244,8 @@ export function DocumentInspector({
     },
   });
 
+  const hasAnyMentions = pendingMentions.length > 0 || approvedMentions.length > 0;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="nexus-header-strip flex-shrink-0">
@@ -232,7 +262,6 @@ export function DocumentInspector({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        {/* Document metadata */}
         <div className="p-2.5 border border-[#ffffff08] bg-[#0a0e14] space-y-2">
           <div className="text-base font-bold text-white uppercase leading-tight tracking-tight">
             {doc.title}
@@ -257,12 +286,11 @@ export function DocumentInspector({
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => analyzeMutation.mutate({ id: doc.id })}
+            onClick={(e) => { e.stopPropagation(); analyzeMutation.mutate({ id: doc.id }); }}
             disabled={analyzeMutation.isPending}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 hover:border-cyan-500/60 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
           >
             <Cpu className="w-3 h-3" />
             {analyzeMutation.isPending ? "SCANNING..." : "ANALYZE"}
@@ -280,7 +308,6 @@ export function DocumentInspector({
           )}
         </div>
 
-        {/* Analysis result */}
         {analyzeMutation.isSuccess && analyzeMutation.data && (
           <div className="p-2 border border-cyan-500/20 bg-cyan-500/5 font-mono text-[9px] text-cyan-400 flex items-center gap-2">
             <Cpu className="w-3 h-3 flex-shrink-0" />
@@ -295,18 +322,26 @@ export function DocumentInspector({
           </div>
         )}
 
-        {/* Pending detections */}
-        <div className="space-y-2">
-          <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-            ATLAS DETECTIONS — {mentions.length} PENDING
-          </div>
-          {mentions.length === 0 ? (
-            <div className="py-3 text-center font-mono text-[9px] text-neutral-800 border border-dashed border-[#ffffff06]">
-              NO PENDING — RUN ANALYZE TO DETECT
+        {!hasAnyMentions && (
+          <div className="py-5 text-center space-y-2 border border-dashed border-[#ffffff06]">
+            <ScanLine className="w-4 h-4 text-neutral-800 mx-auto" />
+            <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
+              NO DETECTIONS AVAILABLE
             </div>
-          ) : (
+            <div className="font-mono text-[9px] text-neutral-800 uppercase tracking-wider">
+              Run ANALYZE to extract entities and references.
+            </div>
+          </div>
+        )}
+
+        {pendingMentions.length > 0 && (
+          <div className="space-y-2">
+            <div className="font-mono text-[9px] text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-amber-500 inline-block" />
+              PENDING TRIAGE — {pendingMentions.length}
+            </div>
             <div className="space-y-1">
-              {mentions.map((m) => (
+              {pendingMentions.map((m) => (
                 <MentionCard
                   key={m.id}
                   mention={m}
@@ -326,8 +361,36 @@ export function DocumentInspector({
                 />
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {approvedMentions.length > 0 && (
+          <div className="space-y-2">
+            <div className="font-mono text-[9px] text-green-700 uppercase tracking-widest flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-green-600 inline-block" />
+              INGESTED TO REGISTRY — {approvedMentions.length}
+            </div>
+            <div className="space-y-1">
+              {approvedMentions.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 px-2 py-1.5 border border-[#ffffff05] bg-[#070b10]"
+                >
+                  <CheckCircle2 className="w-3 h-3 text-green-700 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-400 uppercase truncate">
+                    {m.entityName}
+                  </span>
+                  <span className={cn(
+                    "ml-auto text-[8px] font-mono px-1 py-0.5 border uppercase",
+                    ENTITY_TYPE_COLORS[m.entityType] || "text-neutral-500 border-neutral-500/30"
+                  )}>
+                    {m.entityType.replace(/_/g, " ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,15 +13,41 @@ import {
 import { cn } from "@/lib/utils";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
 
-function AtlasCompass() {
+function AtlasRadar() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <line x1="10" y1="2" x2="10" y2="7.5" stroke="white" strokeWidth="0.75" opacity="0.45" />
-      <line x1="10" y1="12.5" x2="10" y2="18" stroke="white" strokeWidth="0.75" opacity="0.45" />
-      <line x1="2" y1="10" x2="7.5" y2="10" stroke="white" strokeWidth="0.75" opacity="0.45" />
-      <line x1="12.5" y1="10" x2="18" y2="10" stroke="white" strokeWidth="0.75" opacity="0.45" />
-      <circle cx="10" cy="10" r="7.5" stroke="white" strokeWidth="0.5" opacity="0.12" />
-      <circle cx="10" cy="10" r="2" fill="#dc2626" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle cx="10" cy="10" r="8.5" stroke="white" strokeWidth="0.5" opacity="0.18" />
+      <circle cx="10" cy="10" r="4.5" stroke="white" strokeWidth="0.4" opacity="0.10" />
+      <line x1="10" y1="1" x2="10" y2="3" stroke="white" strokeWidth="0.6" opacity="0.22" />
+      <line x1="10" y1="17" x2="10" y2="19" stroke="white" strokeWidth="0.6" opacity="0.22" />
+      <line x1="1" y1="10" x2="3" y2="10" stroke="white" strokeWidth="0.6" opacity="0.22" />
+      <line x1="17" y1="10" x2="19" y2="10" stroke="white" strokeWidth="0.6" opacity="0.22" />
+      <line
+        x1="10"
+        y1="10"
+        x2="16.5"
+        y2="3.5"
+        stroke="#06b6d4"
+        strokeWidth="0.8"
+        opacity="0.7"
+        className="atlas-radar-sweep"
+      />
+      <path
+        d="M 10 1.5 A 8.5 8.5 0 0 1 17.1 7.1"
+        stroke="#06b6d4"
+        strokeWidth="0.6"
+        opacity="0.28"
+        fill="none"
+        className="atlas-radar-sweep"
+      />
+      <circle cx="10" cy="10" r="1.5" fill="#dc2626" />
     </svg>
   );
 }
@@ -53,7 +79,6 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="flex h-screen w-full bg-[#080a0d] text-foreground overflow-hidden font-sans">
-      {/* Sidebar */}
       <aside
         className={cn(
           "flex-shrink-0 border-r border-[#ffffff0d] bg-[#040507] flex flex-col justify-between z-20 transition-all duration-300",
@@ -113,12 +138,10 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 bg-[#080a0d] relative">
-        {/* TOP BAR */}
         <header className="h-7 flex-shrink-0 border-b border-[#ffffff0d] flex items-center justify-between px-3 bg-[#040507] z-10 w-full">
           <div className="flex items-center gap-2">
-            <AtlasCompass />
+            <AtlasRadar />
             <span className="font-bold text-white tracking-widest text-[11px] font-mono">
               RSR // ATLAS
             </span>
@@ -127,7 +150,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-3 text-[9px] font-mono uppercase text-neutral-600 hidden md:flex tracking-widest">
             <div className="flex items-center gap-1.5">
               <span className="text-neutral-500">[ ATLAS CORE: ONLINE ]</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
             </div>
             <span className="w-px h-3 bg-[#ffffff08]" />
             <span>
