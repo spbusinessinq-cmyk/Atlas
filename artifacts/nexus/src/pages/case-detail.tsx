@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   Upload,
   ChevronRight,
+  Search,
+  Globe,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -33,12 +35,14 @@ import EntitiesTab from "./case-tabs/entities-tab";
 import DocumentsTab, { DocumentInspector, DocumentViewer } from "./case-tabs/documents-tab";
 import TimelineTab from "./case-tabs/timeline-tab";
 import NotesTab from "./case-tabs/notes-tab";
+import WebIngestTab from "./case-tabs/web-ingest-tab";
 
 const SECTIONS = [
   { id: "overview", label: "OVERVIEW", icon: LayoutGrid },
   { id: "graph", label: "LINK ANALYSIS", icon: GitBranch },
   { id: "entities", label: "ENTITY REGISTRY", icon: Database },
   { id: "documents", label: "DOCUMENT VAULT", icon: Files },
+  { id: "web-ingest", label: "WEB INGEST", icon: Globe },
   { id: "timeline", label: "TEMPORAL TRACE", icon: Clock },
   { id: "flows", label: "FLOW TRACE", icon: TrendingUp },
   { id: "notes", label: "ANALYST", icon: Terminal },
@@ -348,11 +352,11 @@ function CaseDetailInner({
   const nextAction = useMemo(() => {
     if (documents.length === 0) {
       return {
-        message: "Ingest source material to begin the investigation.",
-        cta: "INGEST DOCUMENT",
-        navigate: "documents" as SectionId,
-        icon: Upload,
-        color: "border-red-500/25 bg-red-500/5 text-red-400",
+        message: "Search the web or upload source documents to begin the investigation.",
+        cta: "SEARCH THE WEB",
+        navigate: "web-ingest" as SectionId,
+        icon: Search,
+        color: "border-cyan-500/20 bg-cyan-500/5 text-cyan-400",
       };
     }
     if (pendingMentions > 0) {
@@ -554,6 +558,12 @@ function CaseDetailInner({
                   onViewDocument={onViewDoc}
                 />
               )}
+            </div>
+          )}
+
+          {activeSection === "web-ingest" && (
+            <div className="h-full">
+              <WebIngestTab caseId={caseId} />
             </div>
           )}
 

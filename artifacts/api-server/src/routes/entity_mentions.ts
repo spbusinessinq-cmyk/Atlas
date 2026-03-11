@@ -17,17 +17,22 @@ router.post("/documents/:id/analyze", async (req, res) => {
   if (!docRows.length) return res.status(404).json({ error: "Document not found" });
 
   const doc = docRows[0];
-  if (!doc.filePath) {
-    return res.status(422).json({ error: "No file attached to this document" });
-  }
 
   let text = "";
   let extractionMethod = "text";
-  try {
-    text = await extractTextFromFile(doc.filePath);
-    if (doc.filePath.toLowerCase().endsWith(".pdf")) extractionMethod = "pdf-parse";
-  } catch (err) {
-    console.error("Text extraction error:", err);
+
+  // Web-ingested documents: use stored rawText
+  if (doc.ingestMethod === "web" && doc.rawText && doc.rawText.trim().length > 10) {
+    text = doc.rawText;
+    extractionMethod = "raw-text";
+  } else if (doc.filePath) {
+    // File-backed document: extract from file
+    try {
+      text = await extractTextFromFile(doc.filePath);
+      if (doc.filePath.toLowerCase().endsWith(".pdf")) extractionMethod = "pdf-parse";
+    } catch (err) {
+      console.error("Text extraction error:", err);
+    }
   }
 
   // If no text could be extracted, use title + source as fallback

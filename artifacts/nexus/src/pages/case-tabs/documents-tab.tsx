@@ -8,6 +8,16 @@ import {
   Document,
   EntityMention,
 } from "@workspace/api-client-react";
+
+// Extended type for web-ingested documents — these fields are returned by
+// the API at runtime but not part of the generated TypeScript type yet.
+type ExtendedDoc = Document & {
+  sourceUrl?: string | null;
+  sourceDomain?: string | null;
+  ingestMethod?: string | null;
+  rawText?: string | null;
+  previewType?: string | null;
+};
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +36,7 @@ import {
   Eye,
   ExternalLink,
   ArrowLeft,
+  Globe,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -114,6 +125,8 @@ function DocumentRow({
   onSelect: () => void;
   onView: () => void;
 }) {
+  const extDoc = doc as ExtendedDoc;
+  const isWeb = extDoc.ingestMethod === "web";
   const queryClient = useQueryClient();
   const analyzeMutation = useAnalyzeDocument({
     mutation: {
@@ -145,18 +158,22 @@ function DocumentRow({
           className={cn(
             "w-8 h-8 flex-shrink-0 border flex items-center justify-center",
             isSelected
-              ? "bg-red-500/10 border-red-500/30"
+              ? isWeb ? "bg-cyan-500/10 border-cyan-500/30" : "bg-red-500/10 border-red-500/30"
               : "bg-[#000] border-[#ffffff0d]"
           )}
         >
-          <span
-            className={cn(
-              "text-[7px] font-mono",
-              isSelected ? "text-red-400" : "text-neutral-700"
-            )}
-          >
-            DOC
-          </span>
+          {isWeb ? (
+            <Globe className={cn("w-3.5 h-3.5", isSelected ? "text-cyan-500" : "text-neutral-700")} />
+          ) : (
+            <span
+              className={cn(
+                "text-[7px] font-mono",
+                isSelected ? "text-red-400" : "text-neutral-700"
+              )}
+            >
+              DOC
+            </span>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -232,6 +249,9 @@ export function DocumentViewer({
   doc: Document;
   onBack: () => void;
 }) {
+  const extDoc = doc as ExtendedDoc;
+  const isWeb = extDoc.ingestMethod === "web";
+  const isWebArticle = extDoc.previewType === "web-article" || (isWeb && !doc.filePath);
   const ext = doc.filePath
     ? doc.filePath.split(".").pop()?.toLowerCase()
     : undefined;
@@ -254,27 +274,48 @@ export function DocumentViewer({
           <span className="font-mono text-[10px] text-neutral-400 uppercase truncate">
             {doc.title}
           </span>
-          {ext && (
+          {isWeb && (
+            <span className="font-mono text-[8px] text-cyan-700 border border-cyan-700/40 px-1.5 py-0.5 uppercase flex-shrink-0 flex items-center gap-1">
+              <Globe className="w-2.5 h-2.5" />
+              WEB
+            </span>
+          )}
+          {ext && !isWeb && (
             <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff0d] px-1 py-0.5 uppercase flex-shrink-0">
               {ext}
             </span>
           )}
         </div>
-        {doc.filePath && (
-          <a
-            href={`/api/documents/${doc.id}/file`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 font-mono text-[9px] text-neutral-600 hover:text-white uppercase transition-colors flex-shrink-0"
-          >
-            <ExternalLink className="w-3 h-3" />
-            OPEN IN TAB
-          </a>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isWeb && extDoc.sourceUrl && (
+            <a
+              href={extDoc.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 font-mono text-[9px] text-cyan-700 hover:text-cyan-400 uppercase transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              OPEN SOURCE
+            </a>
+          )}
+          {doc.filePath && (
+            <a
+              href={`/api/documents/${doc.id}/file`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 font-mono text-[9px] text-neutral-600 hover:text-white uppercase transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              OPEN IN TAB
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {!hasFile ? (
+        {isWebArticle ? (
+          <WebArticleViewer doc={extDoc} />
+        ) : !hasFile ? (
           <div className="h-full flex flex-col items-center justify-center gap-4">
             <FileText className="w-8 h-8 text-neutral-800" />
             <div className="text-center space-y-1">
@@ -327,6 +368,81 @@ export function DocumentViewer({
   );
 }
 
+// ─── Web Article Viewer ────────────────────────────────────────────────────────
+
+function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
+  const hasText = doc.rawText && doc.rawText.trim().length > 20;
+
+  return (
+    <div className="h-full overflow-auto bg-[#050709]">
+      {/* Source metadata bar */}
+      <div className="border-b border-[#ffffff06] px-6 py-3 flex items-center gap-4 bg-[#000]">
+        <Globe className="w-3.5 h-3.5 text-cyan-700 flex-shrink-0" />
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="font-mono text-[9px] text-cyan-700 uppercase tracking-wider truncate">
+            {doc.sourceDomain || "UNKNOWN SOURCE"}
+          </div>
+          {doc.publishDate && (
+            <div className="font-mono text-[8px] text-neutral-700 uppercase">
+              PUBLISHED: {doc.publishDate}
+            </div>
+          )}
+        </div>
+        {doc.sourceUrl && (
+          <a
+            href={doc.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-cyan-500/30 text-cyan-600 hover:bg-cyan-500/10 font-mono text-[9px] uppercase tracking-widest transition-colors flex-shrink-0"
+          >
+            <ExternalLink className="w-3 h-3" />
+            OPEN ORIGINAL
+          </a>
+        )}
+      </div>
+
+      {/* Article title */}
+      <div className="px-6 pt-6 pb-4 border-b border-[#ffffff06]">
+        <h1 className="text-lg font-bold text-white uppercase tracking-tight leading-tight">
+          {doc.title}
+        </h1>
+      </div>
+
+      {/* Article body */}
+      <div className="px-6 py-5">
+        {hasText ? (
+          <div className="font-mono text-[11px] text-neutral-400 leading-relaxed whitespace-pre-wrap max-w-2xl">
+            {doc.rawText}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <Globe className="w-6 h-6 text-neutral-800" />
+            <div className="text-center space-y-1">
+              <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
+                NO CONTENT SNAPSHOT
+              </div>
+              <div className="font-mono text-[9px] text-neutral-800 uppercase tracking-wider">
+                Article content could not be retrieved. Open the original source.
+              </div>
+            </div>
+            {doc.sourceUrl && (
+              <a
+                href={doc.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-cyan-500/40 text-cyan-500 hover:bg-cyan-500/10 font-mono text-[9px] uppercase tracking-widest transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                OPEN ORIGINAL SOURCE
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Document Inspector (right panel) ─────────────────────────────────────────
 
 export function DocumentInspector({
@@ -341,6 +457,8 @@ export function DocumentInspector({
   onView?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const extDoc = doc as ExtendedDoc;
+  const isWeb = extDoc.ingestMethod === "web";
 
   const { data: pendingMentions = [] } = useListEntityMentions({
     documentId: doc.id,
@@ -387,8 +505,8 @@ export function DocumentInspector({
     <div className="flex flex-col h-full overflow-hidden">
       <div className="nexus-header-strip flex-shrink-0">
         <span className="nexus-label flex items-center gap-1.5">
-          <FileText className="w-3 h-3 text-neutral-500" />
-          DOCUMENT INSPECTOR
+          {isWeb ? <Globe className="w-3 h-3 text-cyan-700" /> : <FileText className="w-3 h-3 text-neutral-500" />}
+          {isWeb ? "WEB SOURCE" : "DOCUMENT INSPECTOR"}
         </span>
         <button
           onClick={onClose}
@@ -403,20 +521,48 @@ export function DocumentInspector({
           <div className="text-sm font-bold text-white uppercase leading-tight tracking-tight">
             {doc.title}
           </div>
-          {ext && (
-            <span className="inline-block font-mono text-[8px] text-neutral-600 border border-[#ffffff0d] px-1.5 py-0.5 uppercase">
-              {ext.toUpperCase()} FILE
-            </span>
-          )}
+          <div className="flex flex-wrap gap-1.5">
+            {isWeb && (
+              <span className="inline-flex items-center gap-1 font-mono text-[8px] text-cyan-700 border border-cyan-700/40 px-1.5 py-0.5 uppercase">
+                <Globe className="w-2.5 h-2.5" />
+                WEB INGEST
+              </span>
+            )}
+            {ext && !isWeb && (
+              <span className="inline-block font-mono text-[8px] text-neutral-600 border border-[#ffffff0d] px-1.5 py-0.5 uppercase">
+                {ext.toUpperCase()} FILE
+              </span>
+            )}
+          </div>
           <div className="space-y-0.5 font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
+            {isWeb && extDoc.sourceDomain && (
+              <div>
+                DOMAIN:{" "}
+                <span className="text-cyan-700">{extDoc.sourceDomain}</span>
+              </div>
+            )}
+            {!isWeb && (
+              <div>
+                SOURCE:{" "}
+                <span className="text-neutral-400">{doc.source || "UNKNOWN"}</span>
+              </div>
+            )}
+            {doc.publishDate && (
+              <div>
+                PUBLISHED:{" "}
+                <span className="text-neutral-400">{doc.publishDate}</span>
+              </div>
+            )}
             <div>
-              SOURCE:{" "}
-              <span className="text-neutral-400">{doc.source || "UNKNOWN"}</span>
-            </div>
-            <div>
-              INGEST:{" "}
+              INGESTED:{" "}
               <span className="text-neutral-400">
                 {formatDate(doc.uploadedAt).split(",")[0]}
+              </span>
+            </div>
+            <div>
+              METHOD:{" "}
+              <span className={isWeb ? "text-cyan-700" : "text-neutral-400"}>
+                {isWeb ? "WEB" : "UPLOAD"}
               </span>
             </div>
             <div>
@@ -447,8 +593,20 @@ export function DocumentInspector({
               className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
             >
               <Eye className="w-3 h-3" />
-              VIEW DOCUMENT
+              {isWeb ? "VIEW ARTICLE" : "VIEW DOCUMENT"}
             </button>
+          )}
+
+          {isWeb && extDoc.sourceUrl && (
+            <a
+              href={extDoc.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-cyan-500/20 text-cyan-700 hover:border-cyan-500/40 hover:text-cyan-400 font-mono text-[9px] uppercase transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              OPEN ORIGINAL URL
+            </a>
           )}
 
           {doc.filePath && (

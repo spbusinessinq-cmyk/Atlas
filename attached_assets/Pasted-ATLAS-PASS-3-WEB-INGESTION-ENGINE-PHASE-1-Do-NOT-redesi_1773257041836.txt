@@ -1,0 +1,315 @@
+ATLAS PASS 3 — WEB INGESTION ENGINE (PHASE 1)
+
+Do NOT redesign the UI.
+Do NOT rebuild the app.
+Do NOT introduce mock data.
+Preserve the current ATLAS case workspace and document pipeline.
+
+This pass adds the first real web-ingestion workflow to RSR // ATLAS.
+
+SYSTEM NAME
+
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+==================================================
+PRIMARY GOAL
+==================================================
+
+Allow ATLAS to search public web sources for an entity, organization, location, or topic, then ingest selected results into the Document Vault and run them through the existing analysis pipeline.
+
+After this pass, the user should be able to:
+
+1. open a case
+2. search the web for a target like:
+   Highland Gardens Hotel
+   LAHSA
+   Project Homekey
+3. see a list of public web results
+4. ingest a selected result into the case
+5. store the result as a document/article record in Document Vault
+6. run or auto-run analysis on the ingested source
+7. use the existing ATLAS workflow to approve entities and grow the graph
+
+==================================================
+SCOPE RULES
+==================================================
+
+Build only Phase 1 of web ingestion.
+
+Do NOT build:
+- crawling the whole web
+- recursive search expansion
+- automatic endless searching
+- auto-created case seeds
+- advanced money-flow detection
+- advanced timeline generation
+- cross-case intelligence
+
+This pass should only build:
+- web search UI
+- result list
+- manual ingest into a case
+- integration into Document Vault
+- optional auto-analysis after ingest
+
+==================================================
+1. WEB SEARCH PANEL
+==================================================
+
+Add a new case section or tool entry called:
+
+WEB INGEST
+or
+SOURCE SEARCH
+
+Best placement:
+Inside the case workspace left rail as a section near Document Vault.
+
+This section should open in the CENTER PANEL and provide:
+
+- search input
+- optional query helper text
+- result list
+- ingest action for each result
+
+Searches should support:
+- entity names
+- organizations
+- properties
+- locations
+- program names
+- general investigation queries
+
+Examples:
+Highland Gardens Hotel
+LAHSA hotel contracts
+Project Homekey Los Angeles
+Los Angeles homeless budget hotel contract
+
+==================================================
+2. SEARCH SOURCE PROVIDER
+==================================================
+
+Implement a simple, reliable public web search ingestion layer.
+
+Use one controlled search source or API if already available in the environment.
+If no search API is available, implement this in a modular way so a search provider can be swapped in later.
+
+Each result should capture:
+
+- title
+- URL
+- source/domain
+- snippet/summary
+- content type if known
+- publish date if available
+
+Do NOT fabricate results.
+Only show real returned data.
+
+==================================================
+3. RESULT LIST UX
+==================================================
+
+Search results must be clean and investigator-friendly.
+
+Each result row/card should show:
+
+- title
+- domain/source
+- snippet
+- publish date if available
+- content type badge (article, PDF, report, webpage)
+- INGEST button
+- OPEN SOURCE button
+
+Optional:
+- PREVIEW SOURCE in new tab
+
+Keep rows dense and readable.
+No giant cards.
+No fake thumbnails.
+
+==================================================
+4. INGEST INTO DOCUMENT VAULT
+==================================================
+
+When user clicks INGEST on a result:
+
+ATLAS should create a real document/source record attached to the current case.
+
+Store at minimum:
+
+- title
+- source URL
+- source/domain
+- content type
+- publish date if available
+- retrieval date
+- case_id
+- ingest method = web
+
+If the source is a PDF:
+- download the PDF if feasible
+- store it as a file-backed document
+- make it available through the existing VIEW / DOWNLOAD flow
+
+If the source is an HTML/article page:
+Preferred:
+- fetch and store a text snapshot / extracted article content
+- create a document-style record in the vault
+Fallback:
+- store it as a web-source record with URL + extracted summary/snippet
+
+Important:
+Ingested sources must appear in Document Vault as real records.
+
+==================================================
+5. AUTO-ANALYSIS AFTER INGEST
+==================================================
+
+After a web result is ingested, ATLAS should either:
+
+Preferred:
+- automatically run the existing analysis pipeline
+
+Fallback:
+- mark the source as ready for analysis and show an ANALYZE action in Document Vault
+
+If auto-analysis runs, detected entities should appear in the same way as uploaded documents.
+
+==================================================
+6. DOCUMENT VAULT COMPATIBILITY
+==================================================
+
+Web-ingested sources must work inside the existing Document Vault system.
+
+Requirements:
+- appear in vault immediately
+- selectable in right-side Document Inspector
+- VIEW works
+- DOWNLOAD works for file-backed sources like PDFs
+- if non-file web article, VIEW should show:
+  - stored text snapshot if available
+  - otherwise a source preview / source URL panel
+
+Do not break the current uploaded-document workflow.
+
+==================================================
+7. DOCUMENT INSPECTOR SUPPORT FOR WEB SOURCES
+==================================================
+
+When a web-ingested source is selected, Document Inspector should show:
+
+- title
+- source domain
+- original URL
+- publish date if available
+- ingest date
+- ingest method = web
+- content type
+- analyze status
+- VIEW SOURCE button
+- OPEN ORIGINAL URL button
+
+If it has detections:
+- show extracted entities and triage just like uploaded docs
+
+==================================================
+8. DATA MODEL / BACKEND SUPPORT
+==================================================
+
+Extend the backend carefully to support web-ingested sources.
+
+If needed, add fields such as:
+
+- source_url
+- source_domain
+- ingest_method
+- raw_html or extracted_text
+- retrieval_date
+- preview_type
+- publish_date
+
+Do not break existing uploaded file documents.
+
+Keep uploaded files and web sources compatible under one document model if possible.
+
+==================================================
+9. CLEAN WORKFLOW GUIDANCE
+==================================================
+
+If a case has no documents, the Next Action panel may suggest:
+SEARCH THE WEB
+Find public sources to begin investigation.
+
+If a web search has results, make INGEST the primary action.
+
+If ingested sources exist but no entities yet:
+ANALYZE SOURCES
+Extract entities to populate the investigation graph.
+
+==================================================
+10. UI / LAYOUT RULES
+==================================================
+
+Keep current ATLAS visual system:
+- black / charcoal base
+- white text
+- cyan/teal scan accent
+- red action accent
+- amber pending
+- green approved
+
+Do NOT add clutter.
+Do NOT add multiple overlapping panels.
+Use:
+- center panel for search/results
+- right panel for inspector
+- existing vault for ingested records
+
+==================================================
+11. TESTING CHECKLIST
+==================================================
+
+After implementation verify this flow:
+
+1. Create or open a real case
+2. Open WEB INGEST / SOURCE SEARCH
+3. Search for a real public target
+4. Results appear with real URLs and snippets
+5. Click INGEST on one result
+6. Result appears in Document Vault
+7. Select it from Document Vault
+8. Inspector shows correct metadata
+9. VIEW works
+10. If PDF, DOWNLOAD works
+11. ANALYZE or auto-analysis works
+12. Extracted entities can flow into registry/graph through the existing pipeline
+
+==================================================
+12. IMPORTANT CONSTRAINT
+==================================================
+
+Do not attempt the full “digital investigator expansion engine” yet.
+
+This pass is only:
+search -> ingest -> analyze
+
+Not:
+search -> expand endlessly -> auto-build entire case
+
+We will do that in the next phase.
+
+==================================================
+FINAL SUMMARY
+==================================================
+
+At the end, summarize:
+1. how search is implemented
+2. what kinds of sources can be ingested
+3. how PDFs vs web pages are handled
+4. whether ingest auto-runs analysis
+5. files modified
+6. what remains for the next expansion phase

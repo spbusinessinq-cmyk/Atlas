@@ -59,10 +59,34 @@ NEXUS is a hybrid investigative journalism / OSINT / intelligence analysis platf
 
 The ATLAS subsystem provides automated entity extraction from uploaded documents:
 
-1. **Analyze endpoint** — `POST /documents/:id/analyze` — runs NER pipeline using `pdf-parse` (PDFs) + `compromise.js` (NLP) to extract people, organizations, locations, government agencies
+1. **Analyze endpoint** — `POST /documents/:id/analyze` — runs NER pipeline using `pdf-parse` (PDFs) + `compromise.js` (NLP) to extract people, organizations, locations, government agencies. For web-ingested documents, uses stored `rawText` instead of a file.
 2. **Entity Detection Approval** — extracted mentions go to `pending` status; analysts INGEST (creates entity) or REJECT each detection via the Documents tab UI
 3. **Link Intelligence** — clicking any edge in the relationship graph opens a side panel showing evidence chain, allows linking documents to relationships with optional excerpts
 4. **Entity Profile** — clicking nodes in graph shows entity profile panel with connections list
+
+### Web Ingestion Engine (PASS 3)
+
+ATLAS can search the public web and ingest results directly into the Document Vault.
+
+**Search provider**: Google News RSS (`news.google.com/rss/search`) — free, no API key, returns real articles.
+
+**Flow**: WEB INGEST (nav) → enter query → results list → INGEST → document created in vault → entity analysis auto-runs on article text.
+
+**Routes**:
+- `POST /web-search` — query `{ query }`, returns `{ results[], provider, count }`. Each result: `{ title, url, sourceDomain, snippet, publishDate, contentType }`
+- `POST /web-ingest` — query `{ title, url, sourceDomain, snippet, publishDate, caseId }`. Tries to fetch full article HTML (extracts text with `node-html-parser`). If URL is a PDF, downloads and saves as a file. Auto-runs entity analysis on retrieved text. Returns `{ document, mentionsCreated, analysisRan }`.
+
+**Document fields added (web sources)**:
+- `sourceUrl` — original URL (Google News redirect or direct)
+- `sourceDomain` — publisher domain name
+- `ingestMethod` — `"upload"` (default) or `"web"`
+- `rawText` — extracted article text (web) or null (file upload)
+- `previewType` — `"file"` (default, for uploads) or `"web-article"` (for web ingestion)
+
+**Document Vault behavior for web sources**:
+- Document row shows a Globe icon instead of "DOC" text
+- DocumentViewer detects `previewType === "web-article"` and shows article viewer with source metadata bar, article body (rawText), and OPEN ORIGINAL button
+- DocumentInspector header shows "WEB SOURCE" with globe icon, WEB INGEST badge, DOMAIN, METHOD: WEB, and OPEN ORIGINAL URL button
 
 ### Key Frontend Features
 
@@ -100,6 +124,8 @@ All routes live under `/api`:
 - `GET /entity-mentions` — list extracted entity detections (filter by documentId, caseId, status)
 - `POST /entity-mentions/:id/approve` — approve detection → creates entity in registry
 - `POST /entity-mentions/:id/reject` — reject detection
+- `POST /web-search` — search Google News RSS, returns `{ results[], provider, count }`
+- `POST /web-ingest` — fetch and ingest a web source into the Document Vault (auto-analyzes)
 
 ### File Uploads
 

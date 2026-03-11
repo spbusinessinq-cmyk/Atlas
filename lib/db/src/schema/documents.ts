@@ -10,6 +10,11 @@ export const documentsTable = pgTable("documents", {
   publishDate: text("publish_date"),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   caseId: integer("case_id"),
+  sourceUrl: text("source_url"),
+  sourceDomain: text("source_domain"),
+  ingestMethod: text("ingest_method").default("upload"),
+  rawText: text("raw_text"),
+  previewType: text("preview_type").default("file"),
 });
 
 export const insertDocumentSchema = createInsertSchema(documentsTable).omit({

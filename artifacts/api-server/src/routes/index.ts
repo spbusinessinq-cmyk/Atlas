@@ -10,6 +10,7 @@ import notesRouter from "./notes";
 import moneyFlowsRouter from "./money_flows";
 import entityMentionsRouter from "./entity_mentions";
 import relationshipEvidenceRouter from "./relationship_evidence";
+import webIngestRouter from "./web_ingest";
 
 const router: IRouter = Router();
 
@@ -18,6 +19,7 @@ router.use(casesRouter);
 router.use(entitiesRouter);
 router.use(entityMentionsRouter);
 router.use(documentsRouter);
+router.use(webIngestRouter);
 router.use(relationshipsRouter);
 router.use(relationshipEvidenceRouter);
 router.use(timelineRouter);

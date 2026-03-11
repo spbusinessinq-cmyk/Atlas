@@ -152,11 +152,16 @@ function formatDocument(d: typeof documentsTable.$inferSelect) {
   return {
     id: d.id,
     title: d.title,
-    filePath: d.filePath,
-    source: d.source,
-    publishDate: d.publishDate,
+    filePath: d.filePath ?? null,
+    source: d.source ?? null,
+    publishDate: d.publishDate ?? null,
     uploadedAt: d.uploadedAt.toISOString(),
-    caseId: d.caseId,
+    caseId: d.caseId ?? null,
+    sourceUrl: d.sourceUrl ?? null,
+    sourceDomain: d.sourceDomain ?? null,
+    ingestMethod: d.ingestMethod ?? "upload",
+    rawText: d.rawText ?? null,
+    previewType: d.previewType ?? "file",
   };
 }
 
