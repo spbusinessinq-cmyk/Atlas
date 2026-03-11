@@ -1,16 +1,35 @@
 import React from "react";
 import { useListDocuments } from "@workspace/api-client-react";
-import { Search, FileText } from "lucide-react";
+import { useLocation } from "wouter";
+import { Search, FileText, Globe, ArrowRight } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+
+type ExtendedDoc = {
+  id: number;
+  title: string;
+  source?: string | null;
+  caseId?: number | null;
+  uploadedAt: string;
+  ingestMethod?: string | null;
+};
 
 export default function DocumentLibrary() {
   const { data: documents, isLoading } = useListDocuments();
   const [search, setSearch] = React.useState("");
+  const [, navigate] = useLocation();
 
   const filtered =
-    documents?.filter((d) =>
+    (documents as ExtendedDoc[] | undefined)?.filter((d) =>
       d.title.toLowerCase().includes(search.toLowerCase())
     ) || [];
+
+  function handleDocClick(doc: ExtendedDoc) {
+    if (doc.caseId) {
+      sessionStorage.setItem("atlas_pending_doc", String(doc.id));
+      navigate(`/cases/${doc.caseId}`);
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-3">
@@ -48,6 +67,7 @@ export default function DocumentLibrary() {
           <div className="w-44 hidden md:block">SOURCE</div>
           <div className="w-28 hidden sm:block text-right pr-4">CASE</div>
           <div className="w-28 text-right">INGEST DATE</div>
+          <div className="w-8" />
         </div>
 
         <div className="divide-y divide-[#ffffff04]">
@@ -68,32 +88,59 @@ export default function DocumentLibrary() {
               )}
             </div>
           ) : (
-            filtered.map((doc) => (
-              <div
-                key={doc.id}
-                className="flex px-4 py-2 items-center hover:bg-[#ffffff03] transition-colors group"
-              >
-                <div className="w-8 flex items-center">
-                  <div className="w-5 h-5 border border-red-500/20 bg-red-500/5 flex items-center justify-center text-[7px] font-mono text-red-600">
-                    DOC
+            filtered.map((doc) => {
+              const isWeb = doc.ingestMethod === "web";
+              const isClickable = !!doc.caseId;
+              return (
+                <div
+                  key={doc.id}
+                  onClick={() => isClickable && handleDocClick(doc)}
+                  className={cn(
+                    "flex px-4 py-2.5 items-center transition-all group",
+                    isClickable
+                      ? "cursor-pointer hover:bg-[#ffffff05] hover:border-l-2 hover:border-l-red-600"
+                      : "cursor-default opacity-60"
+                  )}
+                  title={isClickable ? "Click to open document viewer" : "Unlinked document"}
+                >
+                  <div className="w-8 flex items-center flex-shrink-0">
+                    <div
+                      className={cn(
+                        "w-5 h-5 border flex items-center justify-center",
+                        isWeb
+                          ? "border-cyan-500/30 bg-cyan-500/5"
+                          : "border-red-500/20 bg-red-500/5"
+                      )}
+                    >
+                      {isWeb ? (
+                        <Globe className="w-3 h-3 text-cyan-600" />
+                      ) : (
+                        <span className="text-[7px] font-mono text-red-600">DOC</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 font-medium text-xs text-white px-2 truncate uppercase group-hover:text-red-100 transition-colors">
+                    {doc.title}
+                  </div>
+                  <div className="w-44 hidden md:block font-mono text-[9px] text-neutral-600 truncate pr-4">
+                    {doc.source || "UNKNOWN SOURCE"}
+                  </div>
+                  <div className="w-28 hidden sm:block font-mono text-[9px] text-neutral-600 text-right pr-4">
+                    {doc.caseId
+                      ? `CASE-${doc.caseId.toString().padStart(4, "0")}`
+                      : "UNLINKED"}
+                  </div>
+                  <div className="w-28 font-mono text-[9px] text-neutral-600 text-right">
+                    {formatDate(doc.uploadedAt).split(",")[0]}
+                  </div>
+                  <div className="w-8 flex justify-end">
+                    {isClickable && (
+                      <ArrowRight className="w-3 h-3 text-neutral-800 group-hover:text-neutral-400 transition-colors" />
+                    )}
                   </div>
                 </div>
-                <div className="flex-1 font-medium text-xs text-white px-2 truncate uppercase">
-                  {doc.title}
-                </div>
-                <div className="w-44 hidden md:block font-mono text-[9px] text-neutral-600 truncate pr-4">
-                  {doc.source || "UNKNOWN SOURCE"}
-                </div>
-                <div className="w-28 hidden sm:block font-mono text-[9px] text-neutral-600 text-right pr-4">
-                  {doc.caseId
-                    ? `CASE-${doc.caseId.toString().padStart(4, "0")}`
-                    : "UNLINKED"}
-                </div>
-                <div className="w-28 font-mono text-[9px] text-neutral-600 text-right">
-                  {formatDate(doc.uploadedAt).split(",")[0]}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

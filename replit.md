@@ -125,6 +125,46 @@ ATLAS can search the public web and ingest results directly into the Document Va
 - `artifacts/api-server/src/lib/log-event.ts` — shared logEvent() helper
 - `artifacts/api-server/src/routes/system_log.ts` — GET /system-log route
 
+### PASS 4.5 — Extraction Validation + Navigation Fixes
+
+**Document Vault Navigation Fix**:
+- Global `/documents` page: each document row now has an `onClick` handler that stores the docId in `sessionStorage.setItem("atlas_pending_doc", docId)` then navigates to `/cases/:caseId`
+- `CaseDetail` component: `useEffect` fires when `summary` loads, reads `atlas_pending_doc` from sessionStorage, clears it, then auto-switches to `"documents"` section and opens the document viewer
+- Case Detail Overview panel: document rows are now clickable — `onViewDocument` callback switches to documents section + opens viewer
+
+**EXTRACTION_INCOMPLETE Flag**:
+- `web_ingest.ts`: when extracted body < 300 chars, rawText is prefixed with `[EXTRACTION_INCOMPLETE]\n`
+- `WebArticleViewer`: detects prefix, shows amber AlertTriangle warning banner "EXTRACTION INCOMPLETE — Full article body could not be retrieved"
+- Still shows whatever partial content was saved; strips prefix before display
+
+**Detection Visibility (DocumentInspector)**:
+- Added `useListEntityMentions({ documentId, status: "rejected" })` query
+- Detection summary grid at top: TOTAL | PENDING | APPROVED | REJECTED (4-cell with colored counts)
+- Empty state message changed from "NO DETECTIONS AVAILABLE" to "NO USEFUL DETECTIONS FOUND"
+- New REJECTED section with strikethrough entity names and red XCircle icons
+
+**Entity Extraction Quality Improvements** (`entity-extractor.ts`):
+- Multi-word title-case phrase detection (2–5 capitalized words): detects "Highland Gardens Hotel", "City Administrative Officer", etc.
+- Org suffix detection (each word must start with capital letter to avoid false positives): Hotel, Authority, Department, Office, Program, Shelter, Housing, Foundation, Commission, Bureau, etc.
+- Prefix-based org detection: "Project Homekey", "Operation X", "Program Y"
+- Gov patterns: "Department of X", "Office of X", "Bureau of X", "City of X"
+- All multi-word patterns require `[A-Z][a-zA-Z]+` per word (no lowercase fragments)
+- Cap increased from 50 to 60 entities per document
+
+**Web Search Relevance Scoring** (`web_ingest.ts`):
+- Results sorted by relevance score after parsing RSS
+- Exact query phrase in title: +6 pts
+- Query words in title: +2/word, in snippet: +1/word
+- Investigative keywords (contract, funding, homeless, hotel, program, fraud, etc.): +1.5/title, +0.5/snippet
+- Lifestyle/entertainment domains (tmz, buzzfeed, entertainment, celebrity, etc.): −8 pts
+- PDF sources: +1 (tend to be primary source documents)
+
+**Article Body Extraction Improvements** (`web_ingest.ts`):
+- Added 9 more CSS selectors (`.article__body`, `.story-text`, `[itemprop=articleBody]`, `[data-component=article-body]`, etc.)
+- Paragraph aggregation fallback: if no selector matches, collect all `<p>` tags > 40 chars and join
+- Added more noise element removal (`.social-share`, `.newsletter`, `.widget`, `.popup`, `.sidebar`)
+- `extractArticleText` now returns `{ text, status: "ok" | "incomplete" }` for EXTRACTION_INCOMPLETE flag
+
 ### Key Frontend Features
 
 1. Case Dashboard — grid/list view of all cases

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useParams, Link } from "wouter";
 import {
   useGetCaseSummary,
@@ -99,6 +99,22 @@ export default function CaseDetail() {
     setSelectedRelId(id);
     setSelectedEntityId(null);
   }, []);
+
+  // Auto-open a document that was requested via sessionStorage (e.g. from global vault page)
+  useEffect(() => {
+    if (!summary) return;
+    const pending = sessionStorage.getItem("atlas_pending_doc");
+    if (!pending) return;
+    const docId = parseInt(pending, 10);
+    if (!docId) return;
+    sessionStorage.removeItem("atlas_pending_doc");
+    const doc = summary.documents.find((d) => d.id === docId);
+    if (doc) {
+      setActiveSection("documents");
+      setViewingDocId(docId);
+      setSelectedDocId(docId);
+    }
+  }, [summary]);
 
   if (isLoading)
     return (
@@ -556,6 +572,10 @@ function CaseDetailInner({
               documents={documents}
               timeline={timeline}
               moneyFlows={moneyFlows}
+              onViewDocument={(doc) => {
+                onSectionChange("documents");
+                onViewDoc(doc);
+              }}
             />
           )}
 
@@ -658,12 +678,14 @@ function OverviewPanel({
   documents,
   timeline,
   moneyFlows,
+  onViewDocument,
 }: {
   caseData: { title: string; description?: string | null; tags?: string[] | null };
   entities: Entity[];
   documents: Document[];
   timeline: TimelineEntry[];
   moneyFlows: MoneyFlow[];
+  onViewDocument?: (doc: Document) => void;
 }) {
   return (
     <div className="p-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
@@ -705,9 +727,17 @@ function OverviewPanel({
             documents.slice(0, 8).map((d) => (
               <div
                 key={d.id}
-                className="px-3 py-2 border-b border-[#ffffff04] flex flex-col"
+                onClick={() => onViewDocument?.(d)}
+                className={cn(
+                  "px-3 py-2 border-b border-[#ffffff04] flex flex-col transition-colors",
+                  onViewDocument
+                    ? "cursor-pointer hover:bg-[#ffffff05] group"
+                    : ""
+                )}
               >
-                <span className="text-sm text-white truncate">{d.title}</span>
+                <span className="text-sm text-white truncate group-hover:text-red-200 transition-colors">
+                  {d.title}
+                </span>
                 <span className="text-[9px] font-mono text-neutral-600 mt-0.5">
                   {formatDate(d.uploadedAt).split(",")[0]}
                 </span>

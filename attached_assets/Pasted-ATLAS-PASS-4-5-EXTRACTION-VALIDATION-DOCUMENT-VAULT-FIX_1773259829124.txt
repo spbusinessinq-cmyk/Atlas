@@ -1,0 +1,246 @@
+ATLAS PASS 4.5 — EXTRACTION VALIDATION + DOCUMENT VAULT FIX
+
+System: RSR // ATLAS (Advanced Tracking & Link Analysis System)
+
+Do NOT redesign the UI.
+Do NOT rebuild the architecture.
+Do NOT add mock data.
+
+Goal of this pass:
+1. Validate the full investigation pipeline
+2. Improve entity extraction reliability
+3. Improve web search relevance
+4. Fix article body ingestion
+5. Fix the DOCUMENT VAULT navigation bug
+
+--------------------------------------------------
+
+1. DOCUMENT VAULT NAVIGATION BUG (CRITICAL FIX)
+
+In the left collapsed navigation panel under:
+
+Document Vault
+
+documents are listed but cannot be opened when clicked.
+
+Fix this so every document row is clickable and loads the document viewer.
+
+Expected behavior:
+
+Click document →
+• opens document viewer
+• loads inspector panel
+• loads document metadata
+• loads analyze/view actions
+• updates URL route correctly
+
+Verify this works in BOTH places:
+
+A) Document Vault page  
+B) Case Detail → Document Vault tab
+
+Ensure the router navigation works correctly.
+
+Likely fix areas:
+
+frontend:
+- documents-tab.tsx
+- case-detail.tsx
+- document viewer routing
+- router.push or navigate usage
+
+The click event must route to:
+
+/documents/:id
+or
+/cases/:caseId/documents/:docId
+
+depending on existing architecture.
+
+Confirm document viewer loads correctly afterward.
+
+--------------------------------------------------
+
+2. WEB SEARCH RELEVANCE
+
+Current search results include irrelevant lifestyle/entertainment content.
+
+Improve ranking for investigative queries.
+
+Prioritize results when titles/snippets contain:
+
+• exact query phrase
+• location match
+• investigation keywords
+
+keywords:
+contract
+budget
+housing
+hotel
+shelter
+program
+authority
+department
+homeless
+funding
+
+Demote irrelevant domains such as lifestyle blogs or unrelated entertainment articles.
+
+Do NOT fabricate ranking — just improve relevance filtering.
+
+--------------------------------------------------
+
+3. ARTICLE BODY EXTRACTION
+
+Some web articles are saving broken or empty body text.
+
+Improve ingestion pipeline:
+
+When ingesting web articles:
+
+• extract real article body
+• validate body length
+• avoid saving generic error pages
+
+If extraction fails:
+
+store:
+• title
+• snippet
+• source
+• original URL
+
+Mark record as:
+
+EXTRACTION_INCOMPLETE
+
+Viewer should display a warning instead of junk text.
+
+--------------------------------------------------
+
+4. ENTITY EXTRACTION QUALITY
+
+Improve entity detection for investigative content.
+
+ATLAS must detect more than standard NER types.
+
+Add support for detecting:
+
+• organizations
+• government agencies
+• hotels / facilities
+• programs
+• nonprofits
+• companies
+• locations
+• people
+
+Example entities ATLAS should catch:
+
+Highland Gardens Hotel  
+LAHSA  
+Project Homekey  
+Los Angeles  
+City Administrative Officer
+
+If needed add rule-based detection for:
+
+• multi-word title case phrases
+• common organization suffixes:
+  Hotel
+  Authority
+  Department
+  Office
+  Program
+  Shelter
+  Housing
+
+Do NOT generate excessive false positives.
+
+Keep confidence scoring.
+
+--------------------------------------------------
+
+5. DETECTION VISIBILITY
+
+When a document has detections:
+
+Document Inspector must show:
+
+• total detections
+• pending detections
+• approved detections
+• rejected detections
+
+Each detection must show:
+
+entity text  
+entity type  
+confidence  
+context snippet  
+
+Approve / Reject buttons
+
+If no detections:
+
+display message:
+
+NO USEFUL DETECTIONS FOUND
+
+--------------------------------------------------
+
+6. END-TO-END VALIDATION
+
+Confirm this full pipeline works:
+
+Ingest source
+→ Analyze document
+→ Detections appear
+→ Approve entity
+→ Entity Registry updates
+→ Graph updates
+→ Dossier panel shows data
+
+Graph must refresh automatically.
+
+--------------------------------------------------
+
+7. SYSTEM LOG EVENTS
+
+Add real log entries for:
+
+document analyzed  
+entity detections generated  
+entity approved  
+entity rejected  
+graph updated  
+
+Do not fabricate logs.
+
+--------------------------------------------------
+
+8. TEST CHECKLIST
+
+Verify:
+
+1. Web search returns improved results
+2. Ingest article
+3. Article viewer loads correctly
+4. Analyze document produces detections
+5. Approve entity
+6. Entity appears in Entity Registry
+7. Node appears in graph
+8. Document Vault links open correctly
+
+--------------------------------------------------
+
+OUTPUT SUMMARY
+
+Report:
+
+• Document Vault navigation fix
+• search relevance improvements
+• article extraction improvements
+• entity detection improvements
+• confirmation of one successful end-to-end test

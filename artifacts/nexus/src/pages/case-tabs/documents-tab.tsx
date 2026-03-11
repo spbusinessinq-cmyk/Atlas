@@ -37,6 +37,7 @@ import {
   ExternalLink,
   ArrowLeft,
   Globe,
+  AlertTriangle,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -371,7 +372,12 @@ export function DocumentViewer({
 // ─── Web Article Viewer ────────────────────────────────────────────────────────
 
 function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
-  const hasText = doc.rawText && doc.rawText.trim().length > 20;
+  const rawText = doc.rawText || "";
+  const isIncomplete = rawText.startsWith("[EXTRACTION_INCOMPLETE]");
+  const displayText = isIncomplete
+    ? rawText.replace("[EXTRACTION_INCOMPLETE]\n", "").replace("[EXTRACTION_INCOMPLETE]", "").trim()
+    : rawText.trim();
+  const hasText = displayText.length > 20;
 
   return (
     <div className="h-full overflow-auto bg-[#050709]">
@@ -408,11 +414,27 @@ function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
         </h1>
       </div>
 
+      {/* Extraction incomplete warning */}
+      {isIncomplete && (
+        <div className="mx-6 mt-4 p-3 border border-amber-500/30 bg-amber-500/5 flex items-start gap-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <div className="font-mono text-[9px] text-amber-500 uppercase tracking-widest">
+              EXTRACTION INCOMPLETE
+            </div>
+            <div className="font-mono text-[8px] text-amber-700 uppercase">
+              Full article body could not be retrieved. Content below is a partial snapshot.
+              Open the original source to read the complete article.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Article body */}
       <div className="px-6 py-5">
         {hasText ? (
           <div className="font-mono text-[11px] text-neutral-400 leading-relaxed whitespace-pre-wrap max-w-2xl">
-            {doc.rawText}
+            {displayText}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -470,6 +492,11 @@ export function DocumentInspector({
     status: "approved",
   });
 
+  const { data: rejectedMentions = [] } = useListEntityMentions({
+    documentId: doc.id,
+    status: "rejected",
+  });
+
   const analyzeMutation = useAnalyzeDocument({
     mutation: {
       onSuccess: () => {
@@ -496,7 +523,8 @@ export function DocumentInspector({
     },
   });
 
-  const hasAnyMentions = pendingMentions.length > 0 || approvedMentions.length > 0;
+  const hasAnyMentions = pendingMentions.length > 0 || approvedMentions.length > 0 || rejectedMentions.length > 0;
+  const totalDetections = pendingMentions.length + approvedMentions.length + rejectedMentions.length;
   const ext = doc.filePath
     ? doc.filePath.split(".").pop()?.toLowerCase()
     : undefined;
@@ -634,11 +662,32 @@ export function DocumentInspector({
           </div>
         )}
 
+        {/* Detection Summary */}
+        {hasAnyMentions && (
+          <div className="grid grid-cols-4 gap-1 p-2 border border-[#ffffff06] bg-[#08090d]">
+            {[
+              { label: "TOTAL", val: totalDetections, color: "text-neutral-400" },
+              { label: "PENDING", val: pendingMentions.length, color: "text-amber-400" },
+              { label: "APPROVED", val: approvedMentions.length, color: "text-green-500" },
+              { label: "REJECTED", val: rejectedMentions.length, color: "text-red-500" },
+            ].map((s) => (
+              <div key={s.label} className="flex flex-col items-center gap-0.5">
+                <span className={cn("font-mono text-[14px] font-bold tabular-nums", s.color)}>
+                  {s.val.toString().padStart(2, "0")}
+                </span>
+                <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">
+                  {s.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {!hasAnyMentions && (
           <div className="py-5 text-center space-y-2 border border-dashed border-[#ffffff06]">
             <ScanLine className="w-4 h-4 text-neutral-800 mx-auto" />
             <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
-              NO DETECTIONS AVAILABLE
+              NO USEFUL DETECTIONS FOUND
             </div>
             <div className="font-mono text-[9px] text-neutral-800 uppercase tracking-wider">
               Run ANALYZE to extract entities and references.
@@ -698,6 +747,33 @@ export function DocumentInspector({
                       ENTITY_TYPE_COLORS[m.entityType] ||
                         "text-neutral-500 border-neutral-500/30"
                     )}
+                  >
+                    {m.entityType.replace(/_/g, " ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {rejectedMentions.length > 0 && (
+          <div className="space-y-2">
+            <div className="font-mono text-[9px] text-red-800 uppercase tracking-widest flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-red-700 inline-block" />
+              REJECTED — {rejectedMentions.length}
+            </div>
+            <div className="space-y-1">
+              {rejectedMentions.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 px-2 py-1.5 border border-red-900/20 bg-[#070b10] opacity-60"
+                >
+                  <XCircle className="w-3 h-3 text-red-800 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-600 uppercase truncate line-through">
+                    {m.entityName}
+                  </span>
+                  <span
+                    className="ml-auto text-[8px] font-mono px-1 py-0.5 border uppercase text-neutral-700 border-neutral-800/40"
                   >
                     {m.entityType.replace(/_/g, " ")}
                   </span>

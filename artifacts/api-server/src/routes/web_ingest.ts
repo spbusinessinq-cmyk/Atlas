@@ -47,7 +47,70 @@ function decodeEntities(s: string): string {
     .replace(/&\w+;/g, " ");
 }
 
-function parseRssItems(xml: string): WebSearchResult[] {
+// ── Relevance scoring for investigative queries ───────────────────────────────
+
+const INVESTIGATIVE_KEYWORDS = [
+  "contract", "contracts",
+  "budget", "budgets",
+  "housing", "hotel", "hotels", "shelter", "shelters",
+  "program", "programs",
+  "authority", "department", "departments",
+  "homeless", "homelessness",
+  "funding", "fund", "funds",
+  "fraud", "embezzle", "misuse", "corruption",
+  "investigation", "audit", "probe",
+  "lawsuit", "legal", "court", "charges",
+  "nonprofit", "charity", "grant",
+  "city", "county", "government", "agency",
+];
+
+const LIFESTYLE_DOMAINS = [
+  "tmz.com", "buzzfeed.com", "people.com", "eonline.com", "usmagazine.com",
+  "entertainment", "celebrity", "gossip", "fashion", "lifestyle", "travel",
+  "food", "recipe", "wellness", "beauty", "fitness", "sports", "nfl", "nba",
+];
+
+function scoreResult(result: WebSearchResult, query: string): number {
+  let score = 0;
+  const titleLower = result.title.toLowerCase();
+  const snippetLower = result.snippet.toLowerCase();
+  const domainLower = result.sourceDomain.toLowerCase();
+  const queryLower = query.toLowerCase();
+
+  // Exact query phrase in title → big boost
+  if (titleLower.includes(queryLower)) score += 6;
+
+  // Query words in title
+  const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 3);
+  for (const word of queryWords) {
+    if (titleLower.includes(word)) score += 2;
+    if (snippetLower.includes(word)) score += 1;
+  }
+
+  // Investigative keywords in title or snippet
+  for (const kw of INVESTIGATIVE_KEYWORDS) {
+    if (titleLower.includes(kw)) score += 1.5;
+    else if (snippetLower.includes(kw)) score += 0.5;
+  }
+
+  // PDF sources often have primary documents
+  if (result.contentType === "pdf") score += 1;
+
+  // Penalise lifestyle/entertainment domains and keywords
+  for (const bad of LIFESTYLE_DOMAINS) {
+    if (domainLower.includes(bad) || titleLower.includes(bad)) {
+      score -= 8;
+      break;
+    }
+  }
+
+  // Prefer longer, more substantive snippets
+  if (result.snippet.length > 150) score += 0.5;
+
+  return score;
+}
+
+function parseRssItems(xml: string, query = ""): WebSearchResult[] {
   const results: WebSearchResult[] = [];
   const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
 
@@ -55,7 +118,6 @@ function parseRssItems(xml: string): WebSearchResult[] {
     const item = match[1];
 
     let title = decodeEntities(stripHtml(extractTag(item, "title")));
-    // Google News titles often end with " - Source Name" — strip the suffix
     const dashIdx = title.lastIndexOf(" - ");
     if (dashIdx > 10) title = title.substring(0, dashIdx);
 
@@ -64,7 +126,6 @@ function parseRssItems(xml: string): WebSearchResult[] {
     const rawDesc = extractTag(item, "description");
     const snippet = stripHtml(decodeEntities(rawDesc)).slice(0, 280);
 
-    // <source url="https://example.com">Source Name</source>
     const srcMatch = item.match(/<source\s+url="([^"]+)"[^>]*>([^<]*)<\/source>/);
     const sourceDomain = srcMatch
       ? srcMatch[2].trim()
@@ -81,6 +142,11 @@ function parseRssItems(xml: string): WebSearchResult[] {
     }
   }
 
+  // Score and sort if we have a query
+  if (query) {
+    results.sort((a, b) => scoreResult(b, query) - scoreResult(a, query));
+  }
+
   return results.slice(0, 20);
 }
 
@@ -94,45 +160,82 @@ function tryHostname(url: string): string {
 
 // ── Article text extraction ────────────────────────────────────────────────────
 
-function extractArticleText(html: string, fallback: string): string {
+const ARTICLE_SELECTORS = [
+  "article",
+  "main",
+  "[role=main]",
+  ".article-body",
+  ".post-content",
+  ".entry-content",
+  ".story-body",
+  ".article-content",
+  ".content-body",
+  ".post-body",
+  "#article",
+  "#main",
+  ".article__body",
+  ".article-text",
+  ".news-article",
+  ".newsArticle",
+  ".body-content",
+  ".article_body",
+  ".story-content",
+  ".story-text",
+  ".article-copy",
+  "[itemprop=articleBody]",
+  "[data-component=article-body]",
+];
+
+function extractArticleText(html: string, fallback: string): { text: string; status: "ok" | "incomplete" } {
   try {
     const root = parseHtml(html);
+
     // Strip non-content elements
     for (const sel of [
       "script", "style", "nav", "header", "footer",
       "aside", "noscript", "iframe", ".ad", ".advertisement",
+      ".social-share", ".share-buttons", ".related-articles",
+      ".newsletter", ".sidebar", ".widget", ".popup",
     ]) {
       root.querySelectorAll(sel).forEach((el) => el.remove());
     }
-    // Try article body selectors in priority order
-    const selectors = [
-      "article",
-      "main",
-      "[role=main]",
-      ".article-body",
-      ".post-content",
-      ".entry-content",
-      ".story-body",
-      ".article-content",
-      ".content-body",
-      ".post-body",
-      "#article",
-      "#main",
-    ];
+
     let text = "";
-    for (const sel of selectors) {
+
+    // Try article body selectors in priority order
+    for (const sel of ARTICLE_SELECTORS) {
       const el = root.querySelector(sel);
       if (el) {
-        text = el.text.replace(/\s+/g, " ").trim();
-        if (text.length > 200) break;
+        const t = el.text.replace(/\s+/g, " ").trim();
+        if (t.length > text.length && t.length > 200) {
+          text = t;
+          if (text.length > 1000) break;
+        }
       }
     }
-    if (!text || text.length < 100) {
+
+    // Paragraph aggregation fallback — collect all <p> tags
+    if (text.length < 200) {
+      const paragraphs = root.querySelectorAll("p");
+      const paraTexts = paragraphs
+        .map((p) => p.text.replace(/\s+/g, " ").trim())
+        .filter((t) => t.length > 40);
+      if (paraTexts.length > 0) {
+        const aggregated = paraTexts.join("\n\n");
+        if (aggregated.length > text.length) text = aggregated;
+      }
+    }
+
+    // Last resort: body text
+    if (text.length < 100) {
       text = root.text.replace(/\s+/g, " ").trim();
     }
-    return text.slice(0, 15000);
+
+    const truncated = text.slice(0, 15000);
+    const status = truncated.length < 300 ? "incomplete" : "ok";
+    return { text: truncated, status };
   } catch {
-    return fallback;
+    return { text: fallback, status: "incomplete" };
   }
 }
 
@@ -176,7 +279,7 @@ router.post("/web-search", async (req, res) => {
     if (!resp.ok) throw new Error(`RSS feed returned HTTP ${resp.status}`);
 
     const xml = await resp.text();
-    const results = parseRssItems(xml);
+    const results = parseRssItems(xml, query.trim());
 
     res.json({ query: query.trim(), results, provider: "google-news-rss", count: results.length });
   } catch (err) {
@@ -204,7 +307,8 @@ router.post("/web-ingest", async (req, res) => {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/pdf,*/*",
+        "Accept": "text/html,application/xhtml+xml,application/pdf,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
       },
       redirect: "follow",
       signal: AbortSignal.timeout(14000),
@@ -213,7 +317,6 @@ router.post("/web-ingest", async (req, res) => {
     const ct = articleResp.headers.get("content-type") || "";
 
     if (ct.includes("application/pdf")) {
-      // Download PDF and save to uploads
       const buffer = await articleResp.arrayBuffer();
       const uploadDir = process.env.UPLOAD_DIR || "./uploads";
       if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -224,11 +327,19 @@ router.post("/web-ingest", async (req, res) => {
       previewType = "file";
     } else if (ct.includes("text/html") || ct.includes("text/plain")) {
       const html = await articleResp.text();
-      rawText = extractArticleText(html, snippet || title);
+      const extracted = extractArticleText(html, snippet || title);
+
+      if (extracted.status === "incomplete") {
+        // Prefix with EXTRACTION_INCOMPLETE so the viewer can show the warning
+        rawText = `[EXTRACTION_INCOMPLETE]\n${extracted.text || snippet || title}`;
+      } else {
+        rawText = extracted.text;
+      }
     }
   } catch (fetchErr) {
-    // Non-fatal — fall back to snippet/title for analysis
+    // Non-fatal — mark as incomplete and fall back to snippet
     console.warn("Article fetch failed, using snippet:", String(fetchErr).substring(0, 120));
+    rawText = `[EXTRACTION_INCOMPLETE]\n${snippet || title}`;
   }
 
   // Create document record in vault
@@ -257,7 +368,7 @@ router.post("/web-ingest", async (req, res) => {
   );
 
   // Auto-run entity analysis on whatever text we have
-  const textForAnalysis = rawText || `${title} ${sourceDomain || ""}`;
+  const textForAnalysis = (rawText || `${title} ${sourceDomain || ""}`).replace(/^\[EXTRACTION_INCOMPLETE\]\n/, "");
   const extracted = extractEntities(textForAnalysis);
   let mentionsCreated = 0;
 
@@ -278,6 +389,14 @@ router.post("/web-ingest", async (req, res) => {
     } catch {
       // Skip duplicate/constraint errors
     }
+  }
+
+  if (mentionsCreated > 0) {
+    await logEvent(
+      "analysis_completed",
+      `Auto-analysis on "${title}": ${mentionsCreated} entity detection${mentionsCreated !== 1 ? "s" : ""} generated`,
+      { caseId: doc.caseId, documentId: doc.id }
+    );
   }
 
   res.status(201).json({
