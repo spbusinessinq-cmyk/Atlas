@@ -1,0 +1,269 @@
+ATLAS STABILITY & WORKFLOW PASS
+
+You are improving the RSR ATLAS investigation platform. Do NOT redesign the UI. This pass focuses only on stability, fixing broken behavior, and making the investigation workflow usable.
+
+The current system mostly works but several issues exist with document handling, upload pipeline, layout clutter, and workflow clarity.
+
+Implement the following fixes carefully.
+
+--------------------------------------------------
+
+1. FIX DOCUMENT SYSTEM (CRITICAL)
+
+Documents must support three separate actions.
+
+SELECT
+Clicking the document title or row should:
+- highlight the row
+- open the Document Inspector in the right panel
+- populate inspector with:
+  title
+  source
+  ingest date
+  case reference
+  file type
+  analysis status
+
+SELECT should NOT attempt to load the file.
+
+VIEW
+The VIEW button must:
+- open the document in the center panel preview
+- if file type = PDF → render using embedded PDF viewer
+- if file type = text → render formatted text
+- if unsupported → show download option
+
+The preview replaces the center workspace temporarily.
+
+Add:
+Close Preview
+Return to Case Workspace
+
+DOWNLOAD
+The DOWNLOAD button must bypass the frontend router.
+
+Currently downloads lead to:
+Restricted_Area / 404
+
+Fix by:
+- returning the direct file URL
+- triggering a normal browser download
+- do NOT route through the app.
+
+--------------------------------------------------
+
+2. FIX UPLOAD PIPELINE
+
+Verify and correct document ingestion flow.
+
+Upload → Save file → Save metadata → Attach to case.
+
+Ensure these fields store correctly:
+
+file_path
+file_name
+file_type
+case_id
+ingest_date
+source
+
+After upload:
+- document appears immediately in Document Vault
+- row is clickable
+- analyze button works.
+
+--------------------------------------------------
+
+3. VERIFY ANALYSIS PIPELINE
+
+When Analyze Document runs:
+
+System must:
+1. Extract entities from text
+2. Create detections
+3. Show them in Document Inspector
+
+Each detection must include:
+
+entity_text
+entity_type
+confidence
+document_snippet
+
+Inspector must display:
+Approve / Reject buttons.
+
+--------------------------------------------------
+
+4. ENTITY APPROVAL PIPELINE
+
+When user presses Approve Entity:
+
+System should:
+- save entity to database
+- associate entity with case
+- link entity to document
+
+Entity must appear in:
+Entity Registry
+Graph Workspace
+
+Graph should refresh automatically.
+
+--------------------------------------------------
+
+5. GRAPH POPULATION
+
+When approved entities exist:
+
+- graph center canvas must populate nodes
+- nodes should glow slightly
+- edges appear when entities co-occur in a document
+
+Graph must support:
+
+pan
+zoom
+fit view
+node selection
+
+Selecting a node opens the Entity Dossier in the right panel.
+
+--------------------------------------------------
+
+6. REMOVE LAYOUT CLUTTER
+
+Remove the Quick Access panel in the right inspector.
+
+It duplicates navigation and wastes space.
+
+Right panel should only contain:
+
+Case Overview (default)
+Next Action
+Selected Entity Dossier
+Selected Document Inspector
+Selected Relationship
+
+--------------------------------------------------
+
+7. FIX BLUE HOVER BOX BUG
+
+There is a blue box appearing when hovering near the left navigation panel.
+
+Likely caused by:
+focus outline
+debug styling
+hover container artifact
+
+Remove or restyle it.
+
+Focus states must use a subtle glow or thin outline.
+
+--------------------------------------------------
+
+8. WORKFLOW PIPELINE STRIP
+
+Keep the workflow pipeline visible in the case workspace:
+
+INGEST → ANALYZE → APPROVE → MAP → REVIEW
+
+Statuses:
+
+✓ completed
+● active
+○ pending
+
+Status must be computed dynamically from database state.
+
+--------------------------------------------------
+
+9. CLEAN SYSTEM LOG
+
+System Log should only show real events:
+
+document uploaded
+analysis run
+entity approved
+entity rejected
+entity linked
+
+Remove seeded or fake entries.
+
+--------------------------------------------------
+
+10. DATABASE CLEANUP
+
+Ensure system does NOT seed fake cases or documents.
+
+The app must start clean unless the user creates a case.
+
+--------------------------------------------------
+
+11. UI BEHAVIOR RULES
+
+Selection rules must be strict.
+
+Changing tabs must clear incompatible selections.
+
+Examples:
+
+Leaving Document Vault clears selected document.
+Leaving Graph clears selected node.
+
+Panels must never overlap contexts.
+
+--------------------------------------------------
+
+12. TESTING CHECKLIST
+
+After implementing changes verify:
+
+1. Upload a PDF
+2. Document appears in vault
+3. SELECT opens inspector
+4. VIEW opens preview
+5. DOWNLOAD works
+6. ANALYZE extracts entities
+7. Approving entity populates registry
+8. Graph node appears
+9. Graph interaction works
+
+No fake cases should appear.
+
+--------------------------------------------------
+
+DESIGN CONSTRAINTS
+
+Do not change color system.
+
+Keep existing palette:
+
+black / charcoal base
+cyan system glow
+red alert accents
+white typography
+
+Radar/compass logo remains unchanged.
+
+--------------------------------------------------
+
+GOAL OF THIS PASS
+
+Make ATLAS function like a real investigation workstation.
+
+User must be able to:
+
+upload evidence
+analyze documents
+approve entities
+see relationships
+build a case graph
+
+without broken routes or UI confusion.
+
+--------------------------------------------------
+
+DO NOT ADD NEW FEATURES YET.
+
+Focus only on stability and correctness.
