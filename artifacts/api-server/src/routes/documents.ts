@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
 
@@ -108,6 +109,7 @@ router.post("/documents/upload", upload.single("file"), async (req, res) => {
 
   const filePath = `/uploads/${file.filename}`;
   const docTitle = title || file.originalname;
+  const parsedCaseId = caseId ? parseInt(caseId) : undefined;
 
   const rows = await db
     .insert(documentsTable)
@@ -116,10 +118,18 @@ router.post("/documents/upload", upload.single("file"), async (req, res) => {
       filePath,
       source,
       publishDate,
-      caseId: caseId ? parseInt(caseId) : undefined,
+      caseId: parsedCaseId,
     })
     .returning();
-  res.status(201).json(formatDoc(rows[0]));
+
+  const doc = rows[0];
+  await logEvent(
+    "document_ingested",
+    `Document uploaded: ${docTitle}`,
+    { caseId: parsedCaseId, documentId: doc.id }
+  );
+
+  res.status(201).json(formatDoc(doc));
 });
 
 router.delete("/documents/:id", async (req, res) => {

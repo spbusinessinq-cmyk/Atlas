@@ -283,8 +283,8 @@ function CaseDetailInner({
       )
     );
 
-    const suggestions: SuggestedEdge[] = [];
-    const seen = new Set<string>();
+    // Aggregate by entity pair across all docs to compute a score
+    const pairData = new Map<string, { entityAId: number; entityBId: number; docCount: number; docTitle?: string }>();
 
     Object.entries(byDoc).forEach(([docIdStr, entityNames]) => {
       const docId = parseInt(docIdStr);
@@ -301,15 +301,25 @@ function CaseDetailInner({
           const a = entityIds[i];
           const b = entityIds[j];
           const key = `${Math.min(a, b)}-${Math.max(a, b)}`;
-          if (!confirmedPairs.has(key) && !seen.has(key)) {
-            seen.add(key);
-            suggestions.push({ entityAId: a, entityBId: b, documentTitle: docTitle });
+          if (!confirmedPairs.has(key)) {
+            const existing = pairData.get(key);
+            if (existing) {
+              existing.docCount++;
+            } else {
+              pairData.set(key, { entityAId: a, entityBId: b, docCount: 1, docTitle });
+            }
           }
         }
       }
     });
 
-    return suggestions;
+    return Array.from(pairData.values()).map((p) => ({
+      entityAId: p.entityAId,
+      entityBId: p.entityBId,
+      documentTitle: p.docTitle,
+      sharedDocCount: p.docCount,
+      score: p.docCount >= 3 ? "HIGH" : p.docCount >= 2 ? "MEDIUM" : "LOW",
+    }));
   }, [approvedMentions, relationships, entities, documents]);
 
   const workflowSteps = useMemo((): WorkflowStep[] => {
@@ -377,6 +387,19 @@ function CaseDetailInner({
         color: "border-cyan-500/20 bg-cyan-500/5 text-cyan-400",
       };
     }
+    if (entities.length > 0 && suggestedEdges.length > 0 && relationships.length === 0) {
+      const highCount = suggestedEdges.filter((e) => e.score === "HIGH").length;
+      const msg = highCount > 0
+        ? `${highCount} high-confidence co-mention association${highCount !== 1 ? "s" : ""} detected. Review suggested links.`
+        : `${suggestedEdges.length} co-mention association${suggestedEdges.length !== 1 ? "s" : ""} detected. Inspect entities and begin building confirmed relationships.`;
+      return {
+        message: msg,
+        cta: "REVIEW CO-MENTIONS",
+        navigate: "graph" as SectionId,
+        icon: GitBranch,
+        color: "border-cyan-500/20 bg-cyan-500/5 text-cyan-400",
+      };
+    }
     if (entities.length > 0 && relationships.length === 0 && notes.length === 0) {
       return {
         message: "Review graph nodes and begin building links or analyst notes.",
@@ -387,7 +410,7 @@ function CaseDetailInner({
       };
     }
     return null;
-  }, [documents, pendingMentions, entities, relationships, notes]);
+  }, [documents, pendingMentions, entities, relationships, notes, suggestedEdges]);
 
   const centerLabel = viewingDoc
     ? `VIEWING: ${viewingDoc.title}`

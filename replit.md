@@ -88,6 +88,43 @@ ATLAS can search the public web and ingest results directly into the Document Va
 - DocumentViewer detects `previewType === "web-article"` and shows article viewer with source metadata bar, article body (rawText), and OPEN ORIGINAL button
 - DocumentInspector header shows "WEB SOURCE" with globe icon, WEB INGEST badge, DOMAIN, METHOD: WEB, and OPEN ORIGINAL URL button
 
+### Entity Intelligence Layer (PASS 4)
+
+**Auto-Dossier** — The EntityIntelPanel (Entity Dossier) in the Link Analysis graph now shows full dossier-level intelligence:
+- MENTIONS + DOCUMENTS metric grid (approved mentions only)
+- FIRST SEEN / LAST SEEN dates computed from mention createdAt
+- SOURCE DOCUMENTS — actual document titles with Globe icon for web sources, mention frequency count
+- CONFIRMED CONNECTIONS — existing relationship links
+- CO-MENTIONED ENTITIES — entities that appear in the same document; scored LOW/MEDIUM/HIGH based on shared document count; displayed with colored score prefix
+- MENTION LOG — ALL mentions for this entity (approved + pending + rejected), each showing: document title, source domain, context snippet, status badge, confidence %, date
+
+**Entity Registry Enrichment** — Each entity row now shows:
+- MENTIONS count (cyan, from approved entity mentions)
+- DOCS count (unique documents containing the entity)
+- FIRST SEEN date (earliest mention createdAt)
+
+**Suggested Edge Scoring** — Co-mention suggestions now carry a score:
+- 1 shared document → LOW → "POSSIBLE ASSOC" (faint dashed cyan edge)
+- 2 shared documents → MEDIUM → "CO-MENTION" (medium dashed cyan edge)
+- 3+ shared documents → HIGH → "HIGH CO-OCCUR" (brighter dashed cyan edge)
+
+**Graph Stats Overlay** — Top-left bar shows: `N NODES · M EDGES · K SUGGESTED (X HIGH)`
+
+**Next Action Guidance** — New state: if entities exist AND suggested links detected AND no confirmed relationships → "X co-mention associations detected. Review suggested links." CTA: "REVIEW CO-MENTIONS"
+
+**System Log** (`/logs` page + `GET /api/system-log`):
+- Real event feed from `system_log` PostgreSQL table
+- Events logged from: document upload (`document_ingested`), web ingest (`web_source_ingested`), NER analysis (`analysis_completed`), entity approve (`entity_approved`), entity reject (`entity_rejected`)
+- Each entry: timestamp, colored event type badge with icon, message, CASE # / DOC # / ENTITY # refs
+- Auto-refreshes every 15s, manual REFRESH button, total count display
+
+**PDF Parser Fix** — `entity-extractor.ts` updated to use pdf-parse v2 API: `new PDFParse({ data: buffer }).getText()` instead of the v1 function-call style
+
+**New files**:
+- `lib/db/src/schema/system_log.ts` — system_log table
+- `artifacts/api-server/src/lib/log-event.ts` — shared logEvent() helper
+- `artifacts/api-server/src/routes/system_log.ts` — GET /system-log route
+
 ### Key Frontend Features
 
 1. Case Dashboard — grid/list view of all cases

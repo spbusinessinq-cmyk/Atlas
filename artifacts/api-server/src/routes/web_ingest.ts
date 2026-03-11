@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import { parse as parseHtml } from "node-html-parser";
 import { extractEntities } from "../lib/entity-extractor";
+import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
 
@@ -248,6 +249,12 @@ router.post("/web-ingest", async (req, res) => {
     .returning();
 
   const doc = rows[0];
+
+  await logEvent(
+    "web_source_ingested",
+    `Web source ingested: "${title}" from ${sourceDomain || tryHostname(url)}`,
+    { caseId: doc.caseId, documentId: doc.id }
+  );
 
   // Auto-run entity analysis on whatever text we have
   const textForAnalysis = rawText || `${title} ${sourceDomain || ""}`;

@@ -7,6 +7,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { extractTextFromFile, extractEntities } from "../lib/entity-extractor";
+import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
 
@@ -73,6 +74,12 @@ router.post("/documents/:id/analyze", async (req, res) => {
     inserted.push(rows[0]);
   }
 
+  await logEvent(
+    "analysis_completed",
+    `Analysis completed on "${doc.title || `DOC-${docId}`}": ${inserted.length} entity detection${inserted.length !== 1 ? "s" : ""} found`,
+    { caseId: doc.caseId, documentId: docId }
+  );
+
   res.json({
     documentId: docId,
     mentionsCreated: inserted.length,
@@ -138,6 +145,12 @@ router.post("/entity-mentions/:id/approve", async (req, res) => {
     .set({ status: "approved" })
     .where(eq(entityMentionsTable.id, id));
 
+  await logEvent(
+    "entity_approved",
+    `Entity approved: ${name} [${type.replace(/_/g, " ").toUpperCase()}]`,
+    { caseId: resolvedCaseId, entityId: entityRows[0].id }
+  );
+
   res.json({
     id: entityRows[0].id,
     name: entityRows[0].name,
@@ -158,7 +171,15 @@ router.post("/entity-mentions/:id/reject", async (req, res) => {
     .where(eq(entityMentionsTable.id, id))
     .returning();
   if (!rows.length) return res.status(404).json({ error: "Mention not found" });
-  res.json(formatMention(rows[0]));
+
+  const mention = rows[0];
+  await logEvent(
+    "entity_rejected",
+    `Detection rejected: ${mention.entityName} [${mention.entityType.replace(/_/g, " ").toUpperCase()}]`,
+    { caseId: mention.caseId }
+  );
+
+  res.json(formatMention(mention));
 });
 
 function formatMention(m: typeof entityMentionsTable.$inferSelect) {

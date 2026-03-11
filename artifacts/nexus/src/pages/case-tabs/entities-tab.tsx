@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useCreateEntity, Entity, EntityType } from "@workspace/api-client-react";
+import React, { useState, useMemo } from "react";
+import { useCreateEntity, Entity, EntityType, useListEntityMentions } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Plus, Search } from "lucide-react";
 import { Link } from "wouter";
+import { format } from "date-fns";
 
 export default function EntitiesTab({ caseId, entities }: { caseId: number, entities: Entity[] }) {
   const [search, setSearch] = useState("");
+
+  const { data: allMentions = [] } = useListEntityMentions({ caseId, status: "approved" });
+
+  const entityStats = useMemo(() => {
+    const stats: Record<string, { mentions: number; docs: Set<number>; firstSeen: Date | null }> = {};
+    allMentions.forEach((m) => {
+      const key = m.entityName.toLowerCase();
+      if (!stats[key]) stats[key] = { mentions: 0, docs: new Set(), firstSeen: null };
+      stats[key].mentions++;
+      stats[key].docs.add(m.documentId);
+      const d = new Date(m.createdAt);
+      if (!stats[key].firstSeen || d < stats[key].firstSeen!) {
+        stats[key].firstSeen = d;
+      }
+    });
+    return stats;
+  }, [allMentions]);
 
   const filtered = entities.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -46,33 +64,61 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
         <div className="flex bg-[#ffffff05] border-b border-[#ffffff0d] px-4 py-2 font-mono text-[10px] text-neutral-500 uppercase tracking-widest sticky top-0">
           <div className="w-32">TYPE</div>
           <div className="flex-1">NAME</div>
-          <div className="w-32 hidden sm:block text-right">ALIASES</div>
+          <div className="w-16 text-right hidden md:block">MENTIONS</div>
+          <div className="w-12 text-right hidden md:block">DOCS</div>
+          <div className="w-28 text-right hidden lg:block">FIRST SEEN</div>
           <div className="w-16 text-right">→</div>
         </div>
         
         <div className="divide-y divide-[#ffffff05]">
           {filtered.length === 0 ? (
             <div className="p-8 text-center font-mono text-neutral-500 text-sm uppercase">NO RECORDS MATCH QUERY</div>
-          ) : filtered.map((entity) => (
-            <Link key={entity.id} href={`/entities/${entity.id}`}>
-              <div className="flex px-4 py-3 items-center hover:bg-[#ffffff05] cursor-pointer transition-colors group">
-                <div className="w-32">
-                  <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border bg-black ${typeColors[entity.type] || typeColors.other}`}>
-                    {entity.type.replace('_', ' ')}
-                  </span>
+          ) : filtered.map((entity) => {
+            const key = entity.name.toLowerCase();
+            const stats = entityStats[key];
+            const mentionCount = stats?.mentions ?? 0;
+            const docCount = stats?.docs.size ?? 0;
+            const firstSeen = stats?.firstSeen ?? null;
+            return (
+              <Link key={entity.id} href={`/entities/${entity.id}`}>
+                <div className="flex px-4 py-3 items-center hover:bg-[#ffffff05] cursor-pointer transition-colors group">
+                  <div className="w-32">
+                    <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border bg-black ${typeColors[entity.type] || typeColors.other}`}>
+                      {entity.type.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="flex-1 font-medium text-sm text-white group-hover:text-red-400 transition-colors uppercase min-w-0">
+                    <span className="truncate block">{entity.name}</span>
+                    {entity.aliases && entity.aliases.length > 0 && (
+                      <span className="text-[9px] font-mono text-neutral-700 block">
+                        AKA: {entity.aliases.slice(0, 2).join(", ")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-16 text-right hidden md:block font-mono text-[11px] tabular-nums">
+                    {mentionCount > 0 ? (
+                      <span className="text-cyan-700">{mentionCount.toString().padStart(2, "0")}</span>
+                    ) : (
+                      <span className="text-neutral-800">—</span>
+                    )}
+                  </div>
+                  <div className="w-12 text-right hidden md:block font-mono text-[11px] tabular-nums">
+                    {docCount > 0 ? (
+                      <span className="text-neutral-500">{docCount.toString().padStart(2, "0")}</span>
+                    ) : (
+                      <span className="text-neutral-800">—</span>
+                    )}
+                  </div>
+                  <div className="w-28 text-right hidden lg:block font-mono text-[9px] text-neutral-700">
+                    {firstSeen ? format(firstSeen, "yyyy-MM-dd") : "—"}
+                  </div>
+                  <div className="w-16 text-right text-neutral-600 group-hover:text-red-500 font-mono text-xs">
+                    ACCESS
+                  </div>
                 </div>
-                <div className="flex-1 font-medium text-sm text-white group-hover:text-red-400 transition-colors uppercase">
-                  {entity.name}
-                </div>
-                <div className="w-32 hidden sm:block font-mono text-[10px] text-neutral-500 text-right">
-                  {entity.aliases?.length || 0}
-                </div>
-                <div className="w-16 text-right text-neutral-600 group-hover:text-red-500 font-mono text-xs">
-                  ACCESS
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>

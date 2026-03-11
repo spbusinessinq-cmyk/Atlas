@@ -11,6 +11,7 @@ import moneyFlowsRouter from "./money_flows";
 import entityMentionsRouter from "./entity_mentions";
 import relationshipEvidenceRouter from "./relationship_evidence";
 import webIngestRouter from "./web_ingest";
+import systemLogRouter from "./system_log";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(timelineRouter);
 router.use(eventsRouter);
 router.use(notesRouter);
 router.use(moneyFlowsRouter);
+router.use(systemLogRouter);
 
 export default router;

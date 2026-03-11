@@ -20,7 +20,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { X, Plus, Trash2, FileText, Link2, ScanLine } from "lucide-react";
+import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar } from "lucide-react";
+import { format } from "date-fns";
 
 export const TYPE_COLORS: Record<string, string> = {
   person: "#06b6d4",
@@ -36,6 +37,8 @@ export interface SuggestedEdge {
   entityAId: number;
   entityBId: number;
   documentTitle?: string;
+  sharedDocCount?: number;
+  score?: "LOW" | "MEDIUM" | "HIGH";
 }
 
 interface GraphCanvasProps {
@@ -49,6 +52,12 @@ interface GraphCanvasProps {
   suggestedEdges?: SuggestedEdge[];
   documentCount?: number;
 }
+
+const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: number; label: string }> = {
+  HIGH:   { stroke: "#06b6d4", opacity: 0.60, width: 1.8, label: "HIGH CO-OCCUR" },
+  MEDIUM: { stroke: "#06b6d4", opacity: 0.40, width: 1.2, label: "CO-MENTION"    },
+  LOW:    { stroke: "#06b6d4", opacity: 0.22, width: 1.0, label: "POSSIBLE ASSOC" },
+};
 
 export default function GraphCanvas({
   entities,
@@ -139,27 +148,30 @@ export default function GraphCanvas({
         const key = `${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`;
         return !confirmedPairs.has(key);
       })
-      .map((se) => ({
-        id: `suggested-${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`,
-        source: se.entityAId.toString(),
-        target: se.entityBId.toString(),
-        label: "CO-MENTION",
-        animated: false,
-        data: { suggested: true, documentTitle: se.documentTitle },
-        style: {
-          stroke: "#06b6d4",
-          strokeWidth: 1,
-          strokeDasharray: "5 4",
-          opacity: 0.35,
-        },
-        labelStyle: {
-          fill: "#06b6d4",
-          fontFamily: "monospace",
-          fontSize: 7,
-          opacity: 0.7,
-        },
-        labelBgStyle: { fill: "#000", fillOpacity: 0.9 },
-      }));
+      .map((se) => {
+        const s = SCORE_STYLE[se.score || "LOW"];
+        return {
+          id: `suggested-${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`,
+          source: se.entityAId.toString(),
+          target: se.entityBId.toString(),
+          label: s.label,
+          animated: false,
+          data: { suggested: true, documentTitle: se.documentTitle, score: se.score },
+          style: {
+            stroke: s.stroke,
+            strokeWidth: s.width,
+            strokeDasharray: "5 4",
+            opacity: s.opacity,
+          },
+          labelStyle: {
+            fill: s.stroke,
+            fontFamily: "monospace",
+            fontSize: 7,
+            opacity: s.opacity + 0.15,
+          },
+          labelBgStyle: { fill: "#000", fillOpacity: 0.9 },
+        };
+      });
 
     return [...confirmed, ...suggested];
   }, [relationships, selectedRelId, suggestedEdges]);
@@ -184,6 +196,9 @@ export default function GraphCanvas({
     onEntitySelect(null);
     onRelSelect(null);
   }, [onEntitySelect, onRelSelect]);
+
+  const highSuggested = suggestedEdges.filter((e) => e.score === "HIGH").length;
+  const medSuggested  = suggestedEdges.filter((e) => e.score === "MEDIUM").length;
 
   if (entities.length === 0) {
     if (documentCount > 0) {
@@ -252,11 +267,33 @@ export default function GraphCanvas({
           }}
         />
       </ReactFlow>
+
+      {/* ── Graph stats (top-left) ── */}
+      <div className="absolute top-3 left-3 z-10 flex items-center gap-2 pointer-events-none">
+        <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
+          {entities.length} NODE{entities.length !== 1 ? "S" : ""}
+        </span>
+        <span className="text-neutral-800">·</span>
+        <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
+          {relationships.length} EDGE{relationships.length !== 1 ? "S" : ""}
+        </span>
+        {suggestedEdges.length > 0 && (
+          <>
+            <span className="text-neutral-800">·</span>
+            <span className="font-mono text-[9px] text-cyan-900 uppercase tracking-widest">
+              {suggestedEdges.length} SUGGESTED
+              {highSuggested > 0 && <span className="text-cyan-700"> ({highSuggested} HIGH)</span>}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* ── Bottom hint ── */}
       <div className="absolute bottom-3 left-3 z-10 font-mono text-[9px] text-neutral-800 uppercase tracking-widest pointer-events-none">
         CLICK EDGE → LINK INTELLIGENCE &nbsp;·&nbsp; CLICK NODE → ENTITY DOSSIER
-        {suggestedEdges.length > 0 && (
+        {medSuggested > 0 && (
           <span className="text-cyan-900">
-            &nbsp;·&nbsp; {suggestedEdges.length} SUGGESTED LINK{suggestedEdges.length !== 1 ? "S" : ""}
+            &nbsp;·&nbsp; DASHED = CO-MENTION SUGGESTION
           </span>
         )}
       </div>
@@ -452,15 +489,63 @@ export function EntityIntelPanel({
     (r) => r.entityAId === entity.id || r.entityBId === entity.id
   );
 
-  const { data: allApprovedMentions = [] } = useListEntityMentions({
-    caseId,
-    status: "approved",
-  });
+  const { data: allMentions = [] } = useListEntityMentions({ caseId });
+  const { data: docs = [] } = useListDocuments({ caseId });
 
-  const entityMentions = allApprovedMentions.filter(
-    (m) => m.entityName.toLowerCase() === entity.name.toLowerCase()
+  const docMap = useMemo(
+    () => Object.fromEntries(docs.map((d) => [d.id, d])),
+    [docs]
   );
-  const linkedDocIds = [...new Set(entityMentions.map((m) => m.documentId))];
+
+  const entityMentions = useMemo(
+    () => allMentions.filter((m) => m.entityName.toLowerCase() === entity.name.toLowerCase()),
+    [allMentions, entity.name]
+  );
+
+  const approvedMentions = entityMentions.filter((m) => m.status === "approved");
+  const linkedDocIds = [...new Set(approvedMentions.map((m) => m.documentId))];
+
+  const { firstSeen, lastSeen } = useMemo(() => {
+    if (!entityMentions.length) return { firstSeen: null, lastSeen: null };
+    const sorted = [...entityMentions].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    return {
+      firstSeen: new Date(sorted[0].createdAt),
+      lastSeen: new Date(sorted[sorted.length - 1].createdAt),
+    };
+  }, [entityMentions]);
+
+  const coMentionedEntities = useMemo(() => {
+    const sharedDocs = new Map<string, number>();
+    entityMentions.forEach((m) => {
+      allMentions
+        .filter(
+          (m2) =>
+            m2.documentId === m.documentId &&
+            m2.entityName.toLowerCase() !== entity.name.toLowerCase() &&
+            m2.status === "approved"
+        )
+        .forEach((m2) => {
+          const key = m2.entityName;
+          sharedDocs.set(key, (sharedDocs.get(key) || 0) + 1);
+        });
+    });
+    return Array.from(sharedDocs.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        score: count >= 3 ? "HIGH" : count >= 2 ? "MEDIUM" : "LOW",
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [entityMentions, allMentions, entity.name]);
+
+  const scoreColor = (s: string) =>
+    s === "HIGH" ? "text-red-400" : s === "MEDIUM" ? "text-amber-400" : "text-neutral-600";
+
+  const formatDate = (d: Date | null) =>
+    d ? format(d, "yyyy-MM-dd") : "—";
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -475,6 +560,7 @@ export function EntityIntelPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
+        {/* ── Identity block ── */}
         <div
           className="p-3 border space-y-2"
           style={{ borderColor: `${color}30`, background: `${color}08` }}
@@ -507,10 +593,11 @@ export function EntityIntelPanel({
           )}
         </div>
 
+        {/* ── Metrics ── */}
         <div className="grid grid-cols-2 gap-2">
           <div className="p-2 border border-[#ffffff06] bg-[#0a0e14] text-center">
             <div className="font-mono text-[18px] font-bold tabular-nums" style={{ color }}>
-              {entityMentions.length.toString().padStart(2, "0")}
+              {approvedMentions.length.toString().padStart(2, "0")}
             </div>
             <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mt-0.5">
               MENTIONS
@@ -526,21 +613,52 @@ export function EntityIntelPanel({
           </div>
         </div>
 
+        {/* ── First / Last seen ── */}
+        {(firstSeen || lastSeen) && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2 border border-[#ffffff06] bg-[#0a0e14]">
+              <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mb-1">
+                FIRST SEEN
+              </div>
+              <div className="font-mono text-[10px] text-neutral-400 flex items-center gap-1">
+                <Calendar className="w-2.5 h-2.5 text-neutral-700 flex-shrink-0" />
+                {formatDate(firstSeen)}
+              </div>
+            </div>
+            <div className="p-2 border border-[#ffffff06] bg-[#0a0e14]">
+              <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mb-1">
+                LAST SEEN
+              </div>
+              <div className="font-mono text-[10px] text-neutral-400 flex items-center gap-1">
+                <Calendar className="w-2.5 h-2.5 text-neutral-700 flex-shrink-0" />
+                {formatDate(lastSeen)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Linked Documents ── */}
         {linkedDocIds.length > 0 && (
           <div className="space-y-1.5">
             <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
-              LINKED DOCUMENTS ({linkedDocIds.length})
+              SOURCE DOCUMENTS ({linkedDocIds.length})
             </div>
             {linkedDocIds.map((docId) => {
-              const docMentions = entityMentions.filter((m) => m.documentId === docId);
+              const docMentions = approvedMentions.filter((m) => m.documentId === docId);
+              const doc = docMap[docId];
+              const isWeb = (doc as any)?.ingestMethod === "web";
               return (
                 <div
                   key={docId}
                   className="flex items-center gap-2 p-2 border border-[#ffffff06] bg-[#0a0e14] text-[10px] font-mono"
                 >
-                  <FileText className="w-3 h-3 text-neutral-700 flex-shrink-0" />
+                  {isWeb ? (
+                    <Globe className="w-3 h-3 text-cyan-800 flex-shrink-0" />
+                  ) : (
+                    <FileText className="w-3 h-3 text-neutral-700 flex-shrink-0" />
+                  )}
                   <span className="text-neutral-400 flex-1 truncate">
-                    DOC-{docId.toString().padStart(4, "0")}
+                    {doc?.title || `DOC-${docId.toString().padStart(4, "0")}`}
                   </span>
                   <span className="text-cyan-700 text-[9px]">
                     {docMentions.length}×
@@ -551,13 +669,14 @@ export function EntityIntelPanel({
           </div>
         )}
 
+        {/* ── Connections ── */}
         <div className="space-y-1.5">
           <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
-            CONNECTIONS ({connectedRels.length})
+            CONFIRMED CONNECTIONS ({connectedRels.length})
           </div>
           {connectedRels.length === 0 ? (
             <div className="text-[10px] font-mono text-neutral-800 py-3 text-center">
-              NO CONNECTIONS IN THIS CASE
+              NO CONFIRMED CONNECTIONS
             </div>
           ) : (
             connectedRels.map((r) => {
@@ -582,6 +701,87 @@ export function EntityIntelPanel({
             })
           )}
         </div>
+
+        {/* ── Co-mentioned / Related Entities ── */}
+        {coMentionedEntities.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
+              CO-MENTIONED ENTITIES ({coMentionedEntities.length})
+            </div>
+            {coMentionedEntities.map((ce) => (
+              <div
+                key={ce.name}
+                className="flex items-center gap-2 p-2 border border-[#ffffff06] bg-[#0a0e14] text-[10px] font-mono"
+              >
+                <span className={`text-[9px] font-bold uppercase w-14 flex-shrink-0 ${scoreColor(ce.score)}`}>
+                  {ce.score}
+                </span>
+                <span className="text-white truncate flex-1 uppercase">{ce.name}</span>
+                <span className="text-neutral-700 text-[9px]">{ce.count}×</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Mention Log ── */}
+        {entityMentions.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
+              MENTION LOG ({entityMentions.length})
+            </div>
+            {entityMentions.map((m) => {
+              const doc = docMap[m.documentId];
+              const confPct = m.confidence ? Math.round(m.confidence * 100) : null;
+              const statusColor =
+                m.status === "approved"
+                  ? "text-green-500"
+                  : m.status === "rejected"
+                  ? "text-red-700"
+                  : "text-amber-500";
+              const isWeb = (doc as any)?.ingestMethod === "web";
+              return (
+                <div
+                  key={m.id}
+                  className="p-2 border border-[#ffffff06] bg-[#080b10] space-y-1"
+                >
+                  <div className="flex items-center gap-2">
+                    {isWeb ? (
+                      <Globe className="w-2.5 h-2.5 text-cyan-800 flex-shrink-0" />
+                    ) : (
+                      <FileText className="w-2.5 h-2.5 text-neutral-700 flex-shrink-0" />
+                    )}
+                    <span className="text-[9px] font-mono text-neutral-400 flex-1 truncate">
+                      {doc?.title || `DOC-${m.documentId.toString().padStart(4, "0")}`}
+                    </span>
+                    {doc && isWeb && (
+                      <span className="text-[8px] font-mono text-cyan-800">
+                        {(doc as any).sourceDomain || ""}
+                      </span>
+                    )}
+                  </div>
+                  {m.context && (
+                    <div className="text-[9px] font-mono text-neutral-600 italic leading-relaxed line-clamp-2">
+                      &ldquo;{m.context}&rdquo;
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <span className={`text-[8px] font-mono uppercase font-bold ${statusColor}`}>
+                      {m.status}
+                    </span>
+                    {confPct !== null && (
+                      <span className="text-[8px] font-mono text-neutral-700">
+                        CONF: {confPct}%
+                      </span>
+                    )}
+                    <span className="text-[8px] font-mono text-neutral-800 ml-auto">
+                      {format(new Date(m.createdAt), "MM/dd/yyyy")}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

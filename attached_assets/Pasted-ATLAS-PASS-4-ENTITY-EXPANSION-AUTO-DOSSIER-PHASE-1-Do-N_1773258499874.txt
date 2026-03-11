@@ -1,0 +1,283 @@
+ATLAS PASS 4 — ENTITY EXPANSION + AUTO-DOSSIER PHASE 1
+
+Do NOT redesign the UI.
+Do NOT rebuild the app.
+Do NOT introduce mock data.
+Preserve the current ATLAS case workspace, Document Vault, WEB INGEST flow, and analysis pipeline.
+
+This pass adds the first real intelligence layer on top of the now-working ingest system.
+
+SYSTEM NAME
+
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+==================================================
+PRIMARY GOAL
+==================================================
+
+Make ATLAS begin assembling dossier-level intelligence automatically from documents already inside a case.
+
+After this pass, ATLAS should be able to:
+
+1. ingest uploaded or web-sourced documents
+2. analyze documents for entity detections
+3. aggregate those detections across the case
+4. build real entity dossier summaries
+5. suggest simple entity-to-entity links based on repeated co-mentions
+6. make the graph start feeling like a growing investigation board
+
+==================================================
+SCOPE RULES
+==================================================
+
+Build only Phase 1 of dossier intelligence.
+
+Do NOT build yet:
+- recursive web expansion
+- endless auto-search loops
+- cross-case intelligence
+- advanced money-flow inference
+- advanced timeline generation
+- AI-written conclusions
+- fully automatic case creation
+
+This pass should only build:
+- dossier aggregation
+- mention rollups
+- repeated co-mention suggestions
+- improved entity detail panels
+- graph enrichment from real case data
+
+==================================================
+1. CASE-WIDE ENTITY AGGREGATION
+==================================================
+
+For each case, aggregate entity detections and approved entities across all documents.
+
+ATLAS must compute, for each entity:
+
+- total mentions in case
+- total linked documents
+- first seen date
+- last seen date
+- entity type
+- aliases if any
+- related co-mentioned entities
+- source documents where it appears
+
+Use real data only.
+
+==================================================
+2. AUTO-DOSSIER SUMMARY
+==================================================
+
+When an entity is approved into the Entity Registry, ATLAS should automatically build a dossier summary from case data.
+
+Entity dossier should include:
+
+- entity name
+- entity type
+- aliases
+- total mentions
+- linked documents count
+- first seen
+- last seen
+- related entities
+- mention excerpts/snippets
+- source list
+
+Show this inside the existing right-side Entity Dossier panel when a node or entity is selected.
+
+If some fields are missing, show clean empty states, not fake values.
+
+==================================================
+3. ENTITY MENTION LOG
+==================================================
+
+Add a “Mention Log” section inside the Entity Dossier panel or entity detail view.
+
+For each mention show:
+
+- document title
+- source/domain
+- snippet or surrounding text
+- confidence score
+- mention status (approved / pending / rejected if available)
+- date ingested
+
+This should help the user understand exactly where the entity came from.
+
+==================================================
+4. GRAPH ENRICHMENT
+==================================================
+
+Improve the graph using real case data.
+
+Rules:
+- approved entities become graph nodes
+- repeated co-mentions across one or more documents can create suggested links
+- suggested links must be visually distinct from confirmed links
+- suggested links must be labeled clearly:
+  CO-MENTION
+  SAME DOCUMENT
+  POSSIBLE ASSOCIATION
+
+Do NOT represent suggested links as confirmed evidence.
+
+Graph should show:
+- node count
+- confirmed edge count
+- suggested edge count
+
+Keep graph central and readable.
+
+==================================================
+5. SUGGESTED RELATIONSHIP SCORING
+==================================================
+
+For each pair of approved entities, compute a lightweight relationship strength score based on:
+
+- number of shared documents
+- number of shared mention contexts
+- repeated co-occurrence across multiple sources
+
+Use this only for internal suggestion ranking.
+
+Display this as:
+LOW
+MEDIUM
+HIGH
+
+or a numeric score if cleaner.
+
+Do NOT overstate confidence.
+This is a suggestion system only.
+
+==================================================
+6. ENTITY REGISTRY ENRICHMENT
+==================================================
+
+Upgrade the Entity Registry so each row can show more useful real intelligence:
+
+- entity type
+- name
+- linked case
+- mentions count
+- documents count
+- first seen / last seen if feasible
+
+Keep it dense and readable.
+No fake counts.
+
+==================================================
+7. NEXT ACTION GUIDANCE
+==================================================
+
+Update the right-side default Case Overview / Next Action logic so it guides the user properly.
+
+Examples:
+If documents exist but no approved entities:
+NEXT ACTION
+Review detections and approve entities.
+
+If approved entities exist but no graph links:
+NEXT ACTION
+Review co-mention suggestions in Link Analysis.
+
+If graph has entities and suggested links:
+NEXT ACTION
+Inspect entities and begin building confirmed relationships.
+
+Use one clear next action only.
+
+==================================================
+8. SYSTEM LOG ENRICHMENT
+==================================================
+
+Add real log events for:
+- document ingested
+- web source ingested
+- analysis completed
+- entity approved
+- entity rejected
+- suggested link generated
+
+No fake logs.
+
+==================================================
+9. BACKEND / DATA MODEL SUPPORT
+==================================================
+
+Extend backend carefully if needed.
+
+Possible additions:
+- entity mention aggregation query
+- dossier summary endpoint
+- suggested relationship query
+- mention-log endpoint or field expansion
+
+Keep compatibility with existing uploaded documents and web-ingested sources.
+
+==================================================
+10. UI / LAYOUT RULES
+==================================================
+
+Keep current ATLAS visual language:
+- black / charcoal
+- white text
+- red action accent
+- teal/cyan scan accent
+- amber pending
+- green approved
+
+Do NOT clutter the workspace.
+Do NOT add new huge panels.
+Reuse the current:
+- center graph
+- left navigation
+- right inspector
+
+This pass should make the existing system smarter, not heavier.
+
+==================================================
+11. TESTING CHECKLIST
+==================================================
+
+After implementation verify this flow:
+
+1. Open a real case
+2. Ingest at least 2–3 documents or web sources
+3. Analyze them
+4. Approve several entities
+5. Entity Registry updates with real counts
+6. Graph nodes appear
+7. Suggested links appear where entities co-occur
+8. Click a node
+9. Entity Dossier shows aggregated case data
+10. Mention Log shows real source snippets and documents
+
+==================================================
+12. IMPORTANT CONSTRAINT
+==================================================
+
+Do not attempt fully automatic recursive entity expansion yet.
+
+This pass is only:
+documents -> detections -> approved entities -> dossier aggregation -> suggested links
+
+Not:
+entity -> auto-search forever -> full autonomous investigator
+
+That comes next.
+
+==================================================
+FINAL SUMMARY
+==================================================
+
+At the end, summarize:
+1. how dossier aggregation works
+2. how suggested links are computed
+3. what data appears in the entity dossier
+4. what endpoints/files were added or changed
+5. what remains for the next recursive expansion phase

@@ -35,13 +35,13 @@ export async function extractTextFromFile(filePath: string): Promise<string> {
 
   if (ext === ".pdf") {
     try {
-      // Dynamic import to handle ESM/CJS interop
-      const pdfParse = await import("pdf-parse").then((m) => m.default || m);
+      // pdf-parse v2 API: new PDFParse({ data: buffer }).getText()
+      const { PDFParse } = await import("pdf-parse");
       const buffer = fs.readFileSync(absPath);
-      const data = await pdfParse(buffer);
-      return data.text || "";
+      const parser = new PDFParse({ data: buffer });
+      const result = await parser.getText();
+      return result.text || "";
     } catch (err) {
-      // If PDF parsing fails, return empty string
       console.warn("PDF parse error:", err);
       return "";
     }
