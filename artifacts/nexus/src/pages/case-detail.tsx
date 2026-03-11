@@ -72,6 +72,7 @@ export default function CaseDetail() {
   const [selectedRelId, setSelectedRelId] = useState<number | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
   const [viewingDocId, setViewingDocId] = useState<number | null>(null);
+  const [expansionQuery, setExpansionQuery] = useState<string | null>(null);
 
   const { data: approvedMentions = [] } = useListEntityMentions({
     caseId,
@@ -114,6 +115,16 @@ export default function CaseDetail() {
       setViewingDocId(docId);
       setSelectedDocId(docId);
     }
+  }, [summary]);
+
+  // Auto-prefill WEB INGEST from expansion suggestion (triggered via entity dossier page)
+  useEffect(() => {
+    if (!summary) return;
+    const query = sessionStorage.getItem("atlas_expansion_query");
+    if (!query) return;
+    sessionStorage.removeItem("atlas_expansion_query");
+    setExpansionQuery(query);
+    setActiveSection("web-ingest");
   }, [summary]);
 
   if (isLoading)
@@ -181,6 +192,11 @@ export default function CaseDetail() {
       onEntityClose={() => setSelectedEntityId(null)}
       onRelClose={() => setSelectedRelId(null)}
       onDocClose={() => setSelectedDocId(null)}
+      onOpenWebIngest={(query) => {
+        setExpansionQuery(query);
+        handleSectionChange("web-ingest");
+      }}
+      expansionQuery={expansionQuery}
     />
   );
 }
@@ -251,6 +267,8 @@ function CaseDetailInner({
   onEntityClose,
   onRelClose,
   onDocClose,
+  onOpenWebIngest,
+  expansionQuery,
 }: {
   caseId: number;
   caseData: { id: number; title: string; description?: string | null; tags?: string[] | null; status: string; createdAt: string };
@@ -281,6 +299,8 @@ function CaseDetailInner({
   onEntityClose: () => void;
   onRelClose: () => void;
   onDocClose: () => void;
+  onOpenWebIngest: (query: string) => void;
+  expansionQuery: string | null;
 }) {
   const suggestedEdges = useMemo((): SuggestedEdge[] => {
     if (approvedMentions.length < 2 || entities.length < 2) return [];
@@ -391,7 +411,7 @@ function CaseDetailInner({
         cta: "REVIEW DETECTIONS",
         navigate: "documents" as SectionId,
         icon: AlertTriangle,
-        color: "border-amber-500/25 bg-amber-500/5 text-amber-400",
+        color: "border-orange-500/25 bg-orange-500/5 text-orange-400",
       };
     }
     if (entities.length === 0 && documents.length > 0) {
@@ -483,7 +503,7 @@ function CaseDetailInner({
                 <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="flex-1">{s.label}</span>
                 {hasBadge && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
                 )}
               </button>
             );
@@ -606,7 +626,7 @@ function CaseDetailInner({
 
           {activeSection === "web-ingest" && (
             <div className="h-full">
-              <WebIngestTab caseId={caseId} />
+              <WebIngestTab caseId={caseId} initialQuery={expansionQuery ?? undefined} />
             </div>
           )}
 
@@ -643,6 +663,10 @@ function CaseDetailInner({
             relationships={relationships}
             caseId={caseId}
             onClose={onEntityClose}
+            onOpenWebIngest={(query) => {
+              onOpenWebIngest(query);
+              onEntityClose();
+            }}
           />
         )}
         {activeSection === "documents" && selectedDoc && (

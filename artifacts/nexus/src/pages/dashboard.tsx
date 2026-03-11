@@ -78,9 +78,9 @@ export default function Dashboard() {
       label: "ATLAS PENDING",
       value: pendingCount,
       sub: "AWAITING TRIAGE",
-      color: pendingCount > 0 ? "text-amber-400" : "text-neutral-600",
-      borderColor: pendingCount > 0 ? "border-amber-500/25" : "border-[#ffffff0d]",
-      bgColor: pendingCount > 0 ? "bg-amber-500/5" : "bg-[#ffffff03]",
+      color: pendingCount > 0 ? "text-orange-400" : "text-neutral-600",
+      borderColor: pendingCount > 0 ? "border-orange-500/25" : "border-[#ffffff0d]",
+      bgColor: pendingCount > 0 ? "bg-orange-500/5" : "bg-[#ffffff03]",
     },
   ];
 

@@ -70,13 +70,13 @@ export function RightRail({
 
       {/* ATLAS Status */}
       {pendingMentions > 0 && (
-        <div className="nexus-panel rounded-none border-amber-500/20">
-          <div className="nexus-header-strip border-amber-500/10 bg-amber-500/5">
-            <span className="nexus-label flex items-center gap-1.5 text-amber-500">
+        <div className="nexus-panel rounded-none border-orange-500/20">
+          <div className="nexus-header-strip border-orange-500/10 bg-orange-500/5">
+            <span className="nexus-label flex items-center gap-1.5 text-orange-500">
               <Cpu className="w-3 h-3" />
               ATLAS PENDING
             </span>
-            <span className="font-mono text-[11px] font-bold text-amber-400 tabular-nums">
+            <span className="font-mono text-[11px] font-bold text-orange-400 tabular-nums">
               {pendingMentions}
             </span>
           </div>

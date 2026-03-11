@@ -1,0 +1,306 @@
+ATLAS PASS 5 — DOSSIER ENRICHMENT + CONTROLLED EXPANSION
+
+Do NOT redesign the whole UI.
+Do NOT rebuild the app.
+Do NOT add mock data.
+Do NOT implement full recursive autonomous expansion yet.
+
+System:
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+PRIMARY GOAL
+
+Strengthen ATLAS as an investigative workstation by improving:
+1. entity dossier usefulness
+2. search precision for investigation targets
+3. controlled expansion suggestions
+4. warning color refinement (yellow -> orange)
+
+After this pass, ATLAS should:
+- make entity pages feel like real dossiers
+- show why an entity matters
+- help the user expand investigations intentionally
+- improve precision for targeted searches like:
+  "Highland Gardens Hotel" Los Angeles
+  LAHSA hotel contracts
+  Project Homekey Los Angeles
+
+==================================================
+1. WARNING COLOR REFINEMENT
+==================================================
+
+Replace the current yellow warning/pending color with a stronger orange tone.
+
+Use orange for:
+- pending detections
+- triage counts
+- warning banners
+- extraction incomplete
+- next-action caution states
+
+Keep:
+- red = critical/action
+- teal/cyan = scan/intelligence
+- green = approved
+- orange = pending/caution
+
+Do not leave mustard/yellow warning tones in the UI.
+
+==================================================
+2. DOSSIER ENRICHMENT
+==================================================
+
+Entity detail pages and the right-side entity dossier panel need to become much more useful.
+
+For each approved entity, compute and display:
+
+- entity name
+- type
+- aliases if any
+- total mentions
+- linked documents count
+- first seen
+- last seen
+- related entities
+- case membership
+- mention excerpts/snippets
+- source list
+
+Improve the standalone entity page so it no longer feels empty.
+
+Add useful sections such as:
+- DOSSIER SUMMARY
+- LINKED DOCUMENTS
+- MENTION LOG
+- RELATED ENTITIES
+- RELATIONSHIPS
+- TIMELINE APPEARANCES (if available, otherwise clean empty state)
+
+If data is unavailable, do not fake values.
+Use clean empty states like:
+NO LINKED DOCUMENTS YET
+NO TIMELINE ACTIVITY RECORDED
+
+==================================================
+3. LINKED DOCUMENTS ON ENTITY PAGES
+==================================================
+
+When an entity has mentions in documents, show those real linked documents clearly.
+
+Each linked document item should display:
+- document title
+- source/domain
+- ingest date
+- mention count within that document
+- quick action:
+  OPEN DOCUMENT
+  VIEW IN CASE
+
+This is critical.
+Right now entity pages do not feel connected enough to the evidence.
+
+==================================================
+4. MENTION LOG IMPROVEMENT
+==================================================
+
+Add a real Mention Log on entity pages and/or right-panel dossier view.
+
+Each mention entry should show:
+- source document
+- snippet/context
+- confidence
+- mention status
+- ingest date
+
+Make the log dense and readable.
+This is one of the most important parts of the dossier.
+
+==================================================
+5. RELATED ENTITY PANEL
+==================================================
+
+For each entity, compute related entities based on:
+- shared documents
+- repeated co-mentions
+- approved co-occurrence
+
+Show:
+- related entity name
+- type
+- strength score or LOW/MEDIUM/HIGH label
+- shared document count
+
+Do NOT present these as confirmed factual relationships unless actually confirmed.
+Use language like:
+RELATED SIGNAL
+CO-MENTIONED
+POSSIBLE ASSOCIATION
+
+==================================================
+6. SEARCH PRECISION IMPROVEMENT
+==================================================
+
+Improve WEB INGEST search behavior for investigative precision.
+
+Current results are still too broad for some entity searches.
+
+When query looks like a named entity, especially:
+- quoted phrases
+- title case phrases
+- hotel/facility names
+- agency names
+
+Boost:
+- exact title matches
+- exact phrase matches
+- matching locations
+- investigation keywords:
+  contract
+  budget
+  shelter
+  homeless
+  hotel
+  housing
+  authority
+  department
+  funding
+  nonprofit
+  program
+
+Strongly demote irrelevant travel/lifestyle/listicle content when searching investigative targets.
+
+Do NOT fabricate results.
+Only improve sorting/filtering.
+
+If useful, add a basic search mode:
+- Standard
+- Exact / Investigative
+
+But only if lightweight.
+
+==================================================
+7. CONTROLLED EXPANSION SUGGESTIONS
+==================================================
+
+Do NOT auto-ingest everything yet.
+
+Instead, add controlled expansion suggestions.
+
+When an entity dossier is open, ATLAS should be able to suggest:
+- related web searches
+- related source queries
+- related entities worth expanding
+
+Examples:
+For LAS PALMAS HOTEL:
+- Search "Las Palmas Hotel Los Angeles contract"
+- Search "Las Palmas Hotel Project Homekey"
+- Search "Las Palmas Hotel homelessness program"
+
+For LAHSA:
+- Search "LAHSA hotel contracts"
+- Search "LAHSA Project Homekey"
+- Search "LAHSA interim housing providers"
+
+Display these as:
+EXPANSION SUGGESTIONS
+
+Allow the user to click a suggestion and open WEB INGEST pre-filled with that query.
+
+This is controlled expansion, not autonomous crawling.
+
+==================================================
+8. CASE OVERVIEW / NEXT ACTION REFINEMENT
+==================================================
+
+Improve the Next Action logic now that detections and entities exist.
+
+Examples:
+If many pending detections exist:
+NEXT ACTION
+Review pending detections and approve high-value entities.
+
+If entities exist but dossiers are sparse:
+NEXT ACTION
+Inspect entity dossiers and review linked documents.
+
+If strong co-mentions exist:
+NEXT ACTION
+Review suggested associations in Link Analysis.
+
+Use one clear next action only.
+
+==================================================
+9. ENTITY REGISTRY ENRICHMENT
+==================================================
+
+Improve Entity Registry rows to show more useful intelligence, if feasible:
+
+- entity type
+- entity name
+- case
+- mention count
+- documents count
+- first seen
+
+Keep it readable and dense.
+No fake values.
+
+==================================================
+10. SYSTEM LOG
+==================================================
+
+Add useful real events for:
+- dossier opened
+- expansion suggestion triggered
+- linked documents viewed from dossier
+- search query launched from entity expansion suggestion
+
+No fake events.
+
+==================================================
+11. KEEP THE SYSTEM CLEAN
+==================================================
+
+Do not clutter the interface.
+Do not add huge new panels.
+Reuse the current structure:
+- left nav
+- center workspace
+- right inspector
+- entity detail pages
+
+This pass should make ATLAS smarter and more investigative, not heavier.
+
+==================================================
+12. TESTING CHECKLIST
+==================================================
+
+Verify at least this flow:
+
+1. Open case with approved entities
+2. Open an entity from graph or registry
+3. Entity dossier shows:
+   - mentions
+   - linked docs
+   - related entities
+   - first/last seen
+4. Click linked document from entity page
+5. Open document successfully
+6. Trigger an expansion suggestion
+7. WEB INGEST opens with the suggested query prefilled
+8. Search results show better relevance than before
+9. Orange warning states replace yellow
+
+==================================================
+FINAL SUMMARY
+==================================================
+
+At the end, summarize:
+1. what dossier fields were added
+2. how related entities are computed
+3. how expansion suggestions work
+4. what changed in search precision
+5. what files/endpoints changed
+6. what remains for the later recursive expansion phase

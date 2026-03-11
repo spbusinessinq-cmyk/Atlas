@@ -5,8 +5,9 @@ import {
   relationshipsTable,
   documentsTable,
   timelineEntriesTable,
+  entityMentionsTable,
 } from "@workspace/db/schema";
-import { eq, or } from "drizzle-orm";
+import { eq, or, and, inArray, ilike } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -18,7 +19,34 @@ router.get("/entities", async (req, res) => {
   } else {
     rows = await db.select().from(entitiesTable);
   }
-  res.json(rows.map(formatEntity));
+
+  if (rows.length === 0) return res.json([]);
+
+  const names = rows.map((e) => e.name.toLowerCase());
+  const allMentions = await db
+    .select({ entityName: entityMentionsTable.entityName, documentId: entityMentionsTable.documentId, status: entityMentionsTable.status })
+    .from(entityMentionsTable);
+
+  const mentionCountMap = new Map<string, number>();
+  const docCountMap = new Map<string, Set<number>>();
+  for (const m of allMentions) {
+    if (m.status !== "approved") continue;
+    const key = m.entityName.toLowerCase();
+    mentionCountMap.set(key, (mentionCountMap.get(key) || 0) + 1);
+    if (!docCountMap.has(key)) docCountMap.set(key, new Set());
+    docCountMap.get(key)!.add(m.documentId);
+  }
+
+  res.json(
+    rows.map((e) => {
+      const key = e.name.toLowerCase();
+      return {
+        ...formatEntity(e),
+        mentionCount: mentionCountMap.get(key) || 0,
+        documentCount: docCountMap.get(key)?.size || 0,
+      };
+    })
+  );
 });
 
 router.get("/entities/:id", async (req, res) => {
@@ -27,44 +55,122 @@ router.get("/entities/:id", async (req, res) => {
   if (!rows.length) return res.status(404).json({ error: "Not found" });
 
   const entity = rows[0];
-  const [relationships, timelineAppearances] = await Promise.all([
+
+  const mentionFilter = entity.caseId
+    ? and(ilike(entityMentionsTable.entityName, entity.name), eq(entityMentionsTable.caseId, entity.caseId))
+    : ilike(entityMentionsTable.entityName, entity.name);
+
+  const [mentions, relationships, timelineAppearances] = await Promise.all([
+    db.select().from(entityMentionsTable).where(mentionFilter),
     db
       .select()
       .from(relationshipsTable)
-      .where(
-        or(eq(relationshipsTable.entityAId, id), eq(relationshipsTable.entityBId, id))
-      ),
-    db
-      .select()
-      .from(timelineEntriesTable)
-      .where(eq(timelineEntriesTable.linkedEntityId, id)),
+      .where(or(eq(relationshipsTable.entityAId, id), eq(relationshipsTable.entityBId, id))),
+    db.select().from(timelineEntriesTable).where(eq(timelineEntriesTable.linkedEntityId, id)),
   ]);
+
+  const mentionDocIds = [...new Set(mentions.map((m) => m.documentId))];
+
+  let linkedDocuments: typeof documentsTable.$inferSelect[] = [];
+  if (mentionDocIds.length > 0) {
+    linkedDocuments = await db
+      .select()
+      .from(documentsTable)
+      .where(inArray(documentsTable.id, mentionDocIds));
+  }
+
+  const mentionCountByDoc: Record<number, number> = {};
+  for (const m of mentions) {
+    mentionCountByDoc[m.documentId] = (mentionCountByDoc[m.documentId] || 0) + 1;
+  }
+
+  let allDocMentions: typeof entityMentionsTable.$inferSelect[] = [];
+  if (mentionDocIds.length > 0) {
+    allDocMentions = await db
+      .select()
+      .from(entityMentionsTable)
+      .where(
+        and(
+          inArray(entityMentionsTable.documentId, mentionDocIds),
+          eq(entityMentionsTable.status, "approved")
+        )
+      );
+  }
+
+  const coMentionMap = new Map<string, number>();
+  const entityNameLower = entity.name.toLowerCase();
+  for (const m of mentions) {
+    for (const m2 of allDocMentions) {
+      if (m2.documentId === m.documentId && m2.entityName.toLowerCase() !== entityNameLower) {
+        coMentionMap.set(m2.entityName, (coMentionMap.get(m2.entityName) || 0) + 1);
+      }
+    }
+  }
+  const coMentioned = Array.from(coMentionMap.entries())
+    .map(([name, count]) => ({
+      name,
+      count,
+      score: count >= 3 ? "HIGH" : count >= 2 ? "MEDIUM" : "LOW",
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  const sortedMentions = [...mentions].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const firstSeen = sortedMentions.length > 0 ? sortedMentions[0].createdAt.toISOString() : null;
+  const lastSeen =
+    sortedMentions.length > 0
+      ? sortedMentions[sortedMentions.length - 1].createdAt.toISOString()
+      : null;
 
   const allEntityIds = new Set<number>();
   relationships.forEach((r) => {
     allEntityIds.add(r.entityAId);
     allEntityIds.add(r.entityBId);
   });
-
   const relatedEntities = await db.select().from(entitiesTable);
   const entityMap = Object.fromEntries(relatedEntities.map((e) => [e.id, e.name]));
 
-  const documentIds = new Set<number>();
+  const docIdSet = new Set<number>();
   timelineAppearances.forEach((t) => {
-    if (t.linkedDocumentId) documentIds.add(t.linkedDocumentId);
+    if (t.linkedDocumentId) docIdSet.add(t.linkedDocumentId);
   });
   relationships.forEach((r) => {
-    if (r.evidenceDocumentId) documentIds.add(r.evidenceDocumentId);
+    if (r.evidenceDocumentId) docIdSet.add(r.evidenceDocumentId);
   });
-
-  let documents: typeof documentsTable.$inferSelect[] = [];
-  if (documentIds.size > 0) {
-    documents = await db.select().from(documentsTable);
-    documents = documents.filter((d) => documentIds.has(d.id));
-  }
 
   res.json({
     entity: formatEntity(entity),
+    mentions: mentions.map((m) => ({
+      id: m.id,
+      documentId: m.documentId,
+      entityName: m.entityName,
+      entityType: m.entityType,
+      confidence: m.confidence,
+      status: m.status,
+      context: m.context,
+      createdAt: m.createdAt.toISOString(),
+    })),
+    mentionCounts: {
+      total: mentions.length,
+      approved: mentions.filter((m) => m.status === "approved").length,
+      pending: mentions.filter((m) => m.status === "pending").length,
+      rejected: mentions.filter((m) => m.status === "rejected").length,
+    },
+    firstSeen,
+    lastSeen,
+    linkedDocuments: linkedDocuments.map((d) => ({
+      id: d.id,
+      title: d.title,
+      source: d.source,
+      sourceDomain: (d as any).sourceDomain || null,
+      ingestMethod: (d as any).ingestMethod || "upload",
+      uploadedAt: d.uploadedAt.toISOString(),
+      caseId: d.caseId,
+      mentionCount: mentionCountByDoc[d.id] || 0,
+    })),
+    coMentioned,
     relationships: relationships.map((r) => ({
       id: r.id,
       entityAId: r.entityAId,
@@ -77,12 +183,10 @@ router.get("/entities/:id", async (req, res) => {
       caseId: r.caseId,
       createdAt: r.createdAt.toISOString(),
     })),
-    documents: documents.map((d) => ({
+    documents: linkedDocuments.map((d) => ({
       id: d.id,
       title: d.title,
-      filePath: d.filePath,
       source: d.source,
-      publishDate: d.publishDate,
       uploadedAt: d.uploadedAt.toISOString(),
       caseId: d.caseId,
     })),

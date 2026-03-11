@@ -27,9 +27,21 @@ interface IngestState {
   [url: string]: "ingesting" | "done" | "error";
 }
 
-export default function WebIngestTab({ caseId }: { caseId: number }) {
+export default function WebIngestTab({ caseId, initialQuery }: { caseId: number; initialQuery?: string }) {
   const queryClient = useQueryClient();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => {
+    const stored = sessionStorage.getItem("atlas_expansion_query");
+    if (stored) {
+      sessionStorage.removeItem("atlas_expansion_query");
+      return stored;
+    }
+    return initialQuery || "";
+  });
+
+  React.useEffect(() => {
+    if (initialQuery) setQuery(initialQuery);
+  }, [initialQuery]);
+
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);

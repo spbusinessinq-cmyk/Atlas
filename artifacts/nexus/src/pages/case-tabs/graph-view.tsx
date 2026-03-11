@@ -20,8 +20,40 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar } from "lucide-react";
+import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { useLocation } from "wouter";
+
+function generateExpansionSuggestions(name: string, type: string): string[] {
+  const base = name.replace(/"/g, "");
+  const nameLower = base.toLowerCase();
+  if (nameLower.includes("hotel") || nameLower.includes("motel") || nameLower.includes("inn")) {
+    return [
+      `"${base}" homelessness program`,
+      `"${base}" Project Homekey contract`,
+      `"${base}" LAHSA contract`,
+    ];
+  }
+  if (nameLower.includes("homeless") || nameLower.includes("lahsa") || nameLower.includes("housing authority")) {
+    return [
+      `"${base}" hotel contracts`,
+      `"${base}" Project Homekey`,
+      `"${base}" interim housing providers`,
+    ];
+  }
+  if (nameLower.includes("project") || nameLower.includes("program")) {
+    return [
+      `"${base}" Los Angeles funding`,
+      `"${base}" hotel acquisitions`,
+      `"${base}" accountability`,
+    ];
+  }
+  return [
+    `"${base}" Los Angeles`,
+    `"${base}" contract funding`,
+    `"${base}" investigation`,
+  ];
+}
 
 export const TYPE_COLORS: Record<string, string> = {
   person: "#06b6d4",
@@ -478,13 +510,28 @@ export function EntityIntelPanel({
   relationships,
   caseId,
   onClose,
+  onOpenWebIngest,
 }: {
   entity: Entity;
   relationships: Relationship[];
   caseId: number;
   onClose: () => void;
+  onOpenWebIngest?: (query: string) => void;
 }) {
+  const [, navigate] = useLocation();
   const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
+  const expansionSuggestions = useMemo(
+    () => generateExpansionSuggestions(entity.name, entity.type),
+    [entity.name, entity.type]
+  );
+  const handleExpand = (query: string) => {
+    sessionStorage.setItem("atlas_expansion_query", query);
+    if (onOpenWebIngest) {
+      onOpenWebIngest(query);
+    } else {
+      navigate(`/cases/${caseId}?section=web-ingest`);
+    }
+  };
   const connectedRels = relationships.filter(
     (r) => r.entityAId === entity.id || r.entityBId === entity.id
   );
@@ -737,7 +784,7 @@ export function EntityIntelPanel({
                   ? "text-green-500"
                   : m.status === "rejected"
                   ? "text-red-700"
-                  : "text-amber-500";
+                  : "text-orange-500";
               const isWeb = (doc as any)?.ingestMethod === "web";
               return (
                 <div
@@ -782,6 +829,27 @@ export function EntityIntelPanel({
             })}
           </div>
         )}
+
+        {/* ── Expansion Suggestions ── */}
+        <div className="space-y-1.5 border-t border-[#ffffff06] pt-3">
+          <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest flex items-center gap-1.5">
+            <Search className="w-2.5 h-2.5" />
+            EXPANSION SUGGESTIONS
+          </div>
+          {expansionSuggestions.map((q, i) => (
+            <button
+              key={i}
+              onClick={() => handleExpand(q)}
+              className="w-full text-left flex items-center gap-2 p-2 border border-[#ffffff06] hover:border-cyan-500/30 hover:bg-cyan-500/5 group transition-all"
+            >
+              <Search className="w-2.5 h-2.5 text-neutral-800 group-hover:text-cyan-700 flex-shrink-0" />
+              <span className="text-[9px] font-mono text-neutral-700 group-hover:text-cyan-500 flex-1 leading-relaxed transition-colors">
+                {q}
+              </span>
+              <ChevronRight className="w-2.5 h-2.5 text-neutral-800 group-hover:text-cyan-700 flex-shrink-0 transition-colors" />
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

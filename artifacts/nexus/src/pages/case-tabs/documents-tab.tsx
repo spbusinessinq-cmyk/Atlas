@@ -416,13 +416,13 @@ function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
 
       {/* Extraction incomplete warning */}
       {isIncomplete && (
-        <div className="mx-6 mt-4 p-3 border border-amber-500/30 bg-amber-500/5 flex items-start gap-2.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="mx-6 mt-4 p-3 border border-orange-500/30 bg-orange-500/5 flex items-start gap-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
           <div className="space-y-0.5">
-            <div className="font-mono text-[9px] text-amber-500 uppercase tracking-widest">
+            <div className="font-mono text-[9px] text-orange-500 uppercase tracking-widest">
               EXTRACTION INCOMPLETE
             </div>
-            <div className="font-mono text-[8px] text-amber-700 uppercase">
+            <div className="font-mono text-[8px] text-orange-700 uppercase">
               Full article body could not be retrieved. Content below is a partial snapshot.
               Open the original source to read the complete article.
             </div>
@@ -667,7 +667,7 @@ export function DocumentInspector({
           <div className="grid grid-cols-4 gap-1 p-2 border border-[#ffffff06] bg-[#08090d]">
             {[
               { label: "TOTAL", val: totalDetections, color: "text-neutral-400" },
-              { label: "PENDING", val: pendingMentions.length, color: "text-amber-400" },
+              { label: "PENDING", val: pendingMentions.length, color: "text-orange-400" },
               { label: "APPROVED", val: approvedMentions.length, color: "text-green-500" },
               { label: "REJECTED", val: rejectedMentions.length, color: "text-red-500" },
             ].map((s) => (
@@ -697,8 +697,8 @@ export function DocumentInspector({
 
         {pendingMentions.length > 0 && (
           <div className="space-y-2">
-            <div className="font-mono text-[9px] text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-amber-500 inline-block" />
+            <div className="font-mono text-[9px] text-orange-500 uppercase tracking-widest flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-orange-500 inline-block" />
               PENDING TRIAGE — {pendingMentions.length}
             </div>
             <div className="space-y-1">
