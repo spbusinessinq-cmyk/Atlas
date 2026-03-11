@@ -3,12 +3,10 @@ import { useCreateEntity, Entity, EntityType } from "@workspace/api-client-react
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Search, User } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Link } from "wouter";
 
 export default function EntitiesTab({ caseId, entities }: { caseId: number, entities: Entity[] }) {
@@ -16,55 +14,66 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
 
   const filtered = entities.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
 
+  const typeColors: Record<string, string> = {
+    person: "text-cyan-500 border-cyan-500/30",
+    organization: "text-amber-500 border-amber-500/30",
+    company: "text-green-500 border-green-500/30",
+    government_agency: "text-red-500 border-red-500/30",
+    location: "text-purple-500 border-purple-500/30",
+    event: "text-blue-500 border-blue-500/30",
+    other: "text-neutral-400 border-neutral-500/30"
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="relative w-72">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input 
-            placeholder="Search known entities..." 
-            className="pl-9 font-mono bg-input border-border"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="nexus-panel rounded-none h-full flex flex-col">
+      <div className="nexus-header-strip">
+        <span className="nexus-label">ENTITY REGISTRY</span>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-neutral-500" />
+            <input 
+              placeholder="SEARCH REGISTRY..." 
+              className="bg-[#000] border border-[#ffffff1a] text-[10px] font-mono pl-7 pr-3 py-1 w-48 text-white focus:outline-none focus:border-red-500 placeholder:text-neutral-600 transition-colors"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <CreateEntityDialog caseId={caseId} />
         </div>
-        <CreateEntityDialog caseId={caseId} />
       </div>
 
-      <div className="rounded-md border border-border overflow-hidden bg-card">
-        <Table>
-          <TableHeader className="bg-muted/50">
-            <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="font-mono text-xs">ID</TableHead>
-              <TableHead className="font-mono text-xs">DESIGNATION</TableHead>
-              <TableHead className="font-mono text-xs">CLASSIFICATION</TableHead>
-              <TableHead className="font-mono text-xs text-right">ACTION</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground font-mono">NO RECORDS MATCH QUERY</TableCell>
-              </TableRow>
-            ) : filtered.map((entity) => (
-              <TableRow key={entity.id} className="border-border hover:bg-muted/30">
-                <TableCell className="font-mono text-xs text-muted-foreground">{entity.id.toString().padStart(5, '0')}</TableCell>
-                <TableCell className="font-bold flex items-center gap-2">
-                  <User className="w-4 h-4 text-muted-foreground" />
+      <div className="flex-1 overflow-auto">
+        <div className="flex bg-[#ffffff05] border-b border-[#ffffff0d] px-4 py-2 font-mono text-[10px] text-neutral-500 uppercase tracking-widest sticky top-0">
+          <div className="w-32">TYPE</div>
+          <div className="flex-1">NAME</div>
+          <div className="w-32 hidden sm:block text-right">ALIASES</div>
+          <div className="w-16 text-right">→</div>
+        </div>
+        
+        <div className="divide-y divide-[#ffffff05]">
+          {filtered.length === 0 ? (
+            <div className="p-8 text-center font-mono text-neutral-500 text-sm uppercase">NO RECORDS MATCH QUERY</div>
+          ) : filtered.map((entity) => (
+            <Link key={entity.id} href={`/entities/${entity.id}`}>
+              <div className="flex px-4 py-3 items-center hover:bg-[#ffffff05] cursor-pointer transition-colors group">
+                <div className="w-32">
+                  <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border bg-black ${typeColors[entity.type] || typeColors.other}`}>
+                    {entity.type.replace('_', ' ')}
+                  </span>
+                </div>
+                <div className="flex-1 font-medium text-sm text-white group-hover:text-red-400 transition-colors uppercase">
                   {entity.name}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="font-mono text-xs bg-secondary">{entity.type.toUpperCase()}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Link href={`/entities/${entity.id}`}>
-                    <Button variant="ghost" size="sm" className="font-mono text-xs hover:text-primary">PROFILE</Button>
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                </div>
+                <div className="w-32 hidden sm:block font-mono text-[10px] text-neutral-500 text-right">
+                  {entity.aliases?.length || 0}
+                </div>
+                <div className="w-16 text-right text-neutral-600 group-hover:text-red-500 font-mono text-xs">
+                  ACCESS
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -99,39 +108,41 @@ function CreateEntityDialog({ caseId }: { caseId: number }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border font-mono text-sm gap-2">
-          <Plus className="w-4 h-4" /> ADD_ENTITY
+        <Button className="bg-[#ffffff10] hover:bg-[#ffffff20] text-white rounded-none h-6 px-3 font-mono text-[10px] uppercase tracking-wider gap-1.5 border border-[#ffffff1a]">
+          <Plus className="w-3 h-3" /> ADD ENTITY
         </Button>
       </DialogTrigger>
-      <DialogContent className="border-border bg-card">
-        <DialogHeader>
-          <DialogTitle className="font-mono">REGISTER NEW ENTITY</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <Label className="font-mono text-xs">Primary Designation / Name</Label>
-            <Input name="name" required className="bg-input font-mono" />
+      <DialogContent className="sm:max-w-[400px] border border-[#ffffff1a] bg-[#0d1117] rounded-none p-0">
+        <div className="nexus-header-strip">
+          <span className="nexus-label">REGISTER NEW ENTITY</span>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div className="space-y-1">
+            <Label className="nexus-label">Primary Designation / Name</Label>
+            <Input name="name" required className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono" />
           </div>
-          <div className="space-y-2">
-            <Label className="font-mono text-xs">Classification</Label>
+          <div className="space-y-1">
+            <Label className="nexus-label">Classification</Label>
             <Select name="type" defaultValue="person">
-              <SelectTrigger className="bg-input font-mono"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="bg-[#000] border-[#ffffff1a] rounded-none font-mono focus:ring-0 focus:border-red-500 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#0d1117] border-[#ffffff1a] rounded-none font-mono text-xs uppercase tracking-wider">
                 {Object.values(EntityType).map(t => (
-                  <SelectItem key={t} value={t}>{t.toUpperCase()}</SelectItem>
+                  <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label className="font-mono text-xs">Initial Intel</Label>
-            <Input name="description" className="bg-input font-mono" />
+          <div className="space-y-1">
+            <Label className="nexus-label">Initial Intel</Label>
+            <Input name="description" className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono" />
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={createMutation.isPending} className="bg-primary text-primary-foreground font-mono">
-              {createMutation.isPending ? "REGISTERING..." : "COMMIT_RECORD"}
+          <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d] mt-4">
+            <Button type="submit" disabled={createMutation.isPending} className="bg-red-600 hover:bg-red-700 text-white rounded-none font-mono text-[11px] w-full uppercase tracking-widest">
+              {createMutation.isPending ? "REGISTERING..." : "COMMIT RECORD"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

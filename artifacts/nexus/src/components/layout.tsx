@@ -1,17 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   Briefcase, 
-  Users, 
   Files, 
   Activity, 
-  Settings, 
-  Search,
   Bell,
-  ShieldAlert
+  Search,
+  ShieldAlert,
+  ChevronLeft,
+  Database,
+  Menu
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -19,87 +19,102 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems = [
-    { icon: Briefcase, label: "Cases", href: "/" },
-    { icon: Users, label: "Entities", href: "/entities" },
-    { icon: Files, label: "Documents", href: "/documents" },
-    { icon: Activity, label: "System Log", href: "/logs" },
+    { icon: Briefcase, label: "CASE CONTROL", href: "/" },
+    { icon: Database, label: "ENTITY REGISTRY", href: "/entities" },
+    { icon: Files, label: "DOCUMENT VAULT", href: "/documents" },
+    { icon: Activity, label: "SYSTEM LOG", href: "/logs" },
   ];
 
   return (
-    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans">
+    <div className="flex h-screen w-full bg-[#080a0d] text-foreground overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className="w-16 md:w-64 flex-shrink-0 border-r border-border bg-sidebar flex flex-col justify-between z-20 transition-all duration-300">
+      <aside className={cn(
+        "flex-shrink-0 border-r border-[#ffffff0d] bg-black flex flex-col justify-between z-20 transition-all duration-300",
+        isCollapsed ? "w-16" : "w-64"
+      )}>
         <div>
-          <div className="h-16 flex items-center justify-center md:justify-start md:px-6 border-b border-border">
-            <div className="flex items-center gap-3">
-              <ShieldAlert className="w-6 h-6 text-primary" />
-              <span className="hidden md:block font-bold tracking-widest text-lg tracking-[0.2em] text-foreground">NEXUS</span>
-            </div>
+          <div className="h-8 flex items-center justify-between px-4 border-b border-[#ffffff0d]">
+            {!isCollapsed && <span className="font-mono text-[10px] text-red-600 uppercase tracking-widest">SYS:NEXUS</span>}
+            <button onClick={() => setIsCollapsed(!isCollapsed)} className="text-muted-foreground hover:text-white transition-colors ml-auto">
+              {isCollapsed ? <Menu className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+            </button>
           </div>
-          <nav className="p-2 md:p-4 space-y-2 mt-4">
+          <nav className="p-2 space-y-1 mt-2">
             {navItems.map((item) => {
               const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
               return (
                 <Link key={item.href} href={item.href} className="block">
-                  <Button
-                    variant="ghost"
+                  <div
                     className={cn(
-                      "w-full flex items-center justify-center md:justify-start gap-3 h-12 transition-all group relative",
+                      "w-full flex items-center px-3 py-2.5 transition-all group relative cursor-pointer text-xs font-mono uppercase tracking-wider",
                       isActive 
-                        ? "bg-primary/10 text-primary hover:bg-primary/20" 
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        ? "bg-[#dc262610] text-primary border-l-2 border-red-600" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-[#ffffff05] border-l-2 border-transparent"
                     )}
                   >
-                    {isActive && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
-                    )}
-                    <item.icon className="w-5 h-5 flex-shrink-0" />
-                    <span className="hidden md:block font-medium">{item.label}</span>
-                  </Button>
+                    <item.icon className="w-4 h-4 flex-shrink-0 mr-3" />
+                    {!isCollapsed && <span>{item.label}</span>}
+                  </div>
                 </Link>
               );
             })}
           </nav>
         </div>
         
-        <div className="p-2 md:p-4 border-t border-border">
-          <Button variant="ghost" className="w-full flex items-center justify-center md:justify-start gap-3 h-12 text-muted-foreground hover:text-foreground">
-            <Settings className="w-5 h-5 flex-shrink-0" />
-            <span className="hidden md:block font-medium">Settings</span>
-          </Button>
+        <div className="p-4 border-t border-[#ffffff0d] flex flex-col gap-2">
+          {!isCollapsed && (
+            <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-tight">
+              // NEXUS-CORE v1.0<br />
+              // RESTRICTED
+            </div>
+          )}
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 bg-background relative">
-        <header className="h-16 flex-shrink-0 border-b border-border flex items-center justify-between px-6 bg-background/80 backdrop-blur-md z-10">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground font-mono">
-            <span>[ SYSTEM: ONLINE ]</span>
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+      <main className="flex-1 flex flex-col min-w-0 bg-[#080a0d] relative">
+        {/* TOP BAR */}
+        <header className="h-8 flex-shrink-0 border-b border-[#ffffff0d] flex items-center justify-between px-4 bg-black z-10 w-full">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-red-600" />
+            <span className="font-bold text-white tracking-widest text-xs">NEXUS</span>
           </div>
           
+          <div className="flex items-center gap-4 text-[10px] font-mono uppercase text-muted-foreground hidden md:flex tracking-widest">
+            <div className="flex items-center gap-2">
+              <span>[ NEXUS CORE: ONLINE ]</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            </div>
+            <div className="w-px h-3 bg-[#ffffff0d]" />
+            <span>ACTIVE DOSSIERS: N</span>
+            <div className="w-px h-3 bg-[#ffffff0d]" />
+            <span>OPEN FLAGS: 0</span>
+            <div className="w-px h-3 bg-[#ffffff0d]" />
+            <span>DOC INGEST: N</span>
+            <div className="w-px h-3 bg-[#ffffff0d]" />
+            <span>ENTITY REGISTRY: N</span>
+          </div>
+
           <div className="flex items-center gap-4">
             <div className="relative group">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
-                placeholder="Global query..." 
-                className="w-64 h-9 bg-input border border-border rounded-md pl-9 pr-4 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                placeholder="SEARCH..." 
+                className="w-32 md:w-48 bg-transparent border-none text-[10px] font-mono text-white placeholder:text-muted-foreground focus:outline-none focus:ring-0 text-right pr-6 transition-all"
               />
+              <Search className="w-3 h-3 absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
             </div>
-            <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
-            </Button>
-            <div className="w-8 h-8 rounded-md border border-border bg-muted flex items-center justify-center overflow-hidden ml-2">
-              <img src={`${import.meta.env.BASE_URL}images/nexus-logo.png`} alt="User" className="w-full h-full object-cover opacity-80" />
-            </div>
+            <div className="w-px h-3 bg-[#ffffff0d]" />
+            <button className="text-muted-foreground hover:text-white relative">
+              <Bell className="w-3 h-3" />
+            </button>
           </div>
         </header>
         
-        <div className="flex-1 overflow-auto p-6 md:p-8">
+        <div className="flex-1 overflow-auto p-4 md:p-6 text-foreground">
           {children}
         </div>
       </main>

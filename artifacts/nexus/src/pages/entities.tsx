@@ -1,10 +1,6 @@
 import React from "react";
 import { useListEntities } from "@workspace/api-client-react";
-import { Search, Users, Database } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { Link } from "wouter";
 import { formatDate } from "@/lib/utils";
 
@@ -14,72 +10,76 @@ export default function EntityList() {
 
   const filtered = entities?.filter(e => e.name.toLowerCase().includes(search.toLowerCase())) || [];
 
+  const typeColors: Record<string, string> = {
+    person: "text-cyan-500 border-cyan-500/30 bg-cyan-500/10",
+    organization: "text-amber-500 border-amber-500/30 bg-amber-500/10",
+    company: "text-green-500 border-green-500/30 bg-green-500/10",
+    government_agency: "text-red-500 border-red-500/30 bg-red-500/10",
+    location: "text-purple-500 border-purple-500/30 bg-purple-500/10",
+    event: "text-blue-500 border-blue-500/30 bg-blue-500/10",
+    other: "text-neutral-400 border-neutral-500/30 bg-neutral-500/10"
+  };
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Database className="w-8 h-8 text-primary" />
-            Global Entity Registry
-          </h1>
-          <p className="text-muted-foreground font-mono mt-1 text-sm">TOTAL KNOWN IDENTITIES: {entities?.length || 0}</p>
-        </div>
-        <div className="relative w-full md:w-96">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input 
-            placeholder="Search across all cases..." 
-            className="pl-9 font-mono bg-card border-border h-10"
+    <div className="max-w-7xl mx-auto space-y-4">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight text-white uppercase">ENTITY REGISTRY</h1>
+        <p className="text-neutral-500 tracking-widest text-[10px] font-mono mt-1 uppercase">// CLASSIFIED SUBJECTS & ORGANIZATIONS</p>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="relative w-full max-w-md">
+          <input 
+            type="text"
+            placeholder="SEARCH REGISTRY..." 
+            className="w-full bg-[#000] border border-[#ffffff1a] h-8 pl-8 pr-3 text-xs font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-red-500 focus:ring-0 transition-colors"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card overflow-hidden shadow-lg">
-        {isLoading ? (
-          <div className="p-8 text-center font-mono text-primary animate-pulse">QUERYING MAINFRAME...</div>
-        ) : (
-          <Table>
-            <TableHeader className="bg-muted">
-              <TableRow className="border-border">
-                <TableHead className="font-mono text-xs w-24">SYS_ID</TableHead>
-                <TableHead className="font-mono text-xs">DESIGNATION</TableHead>
-                <TableHead className="font-mono text-xs">CLASS</TableHead>
-                <TableHead className="font-mono text-xs hidden md:table-cell">RECORDED</TableHead>
-                <TableHead className="font-mono text-xs text-right">ACTION</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(entity => (
-                <TableRow key={entity.id} className="border-border hover:bg-muted/50 transition-colors">
-                  <TableCell className="font-mono text-xs text-muted-foreground">{entity.id.toString().padStart(6, '0')}</TableCell>
-                  <TableCell className="font-bold flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary/70" />
+      <div className="border border-[#ffffff0d] bg-[#080a0d]">
+        <div className="flex bg-[#ffffff05] border-b border-[#ffffff0d] px-4 py-2 font-mono text-[10px] text-neutral-500 uppercase tracking-widest">
+          <div className="w-32">TYPE</div>
+          <div className="flex-1">NAME</div>
+          <div className="w-32 hidden sm:block">CASE</div>
+          <div className="w-32 hidden md:block">CREATED</div>
+          <div className="w-16 text-right">→</div>
+        </div>
+        
+        <div className="divide-y divide-[#ffffff05]">
+          {isLoading ? (
+            <div className="p-8 text-center font-mono text-red-500 text-sm animate-pulse uppercase">QUERYING MAINFRAME...</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center font-mono text-neutral-500 text-sm uppercase">NO MATCHING RECORDS</div>
+          ) : (
+            filtered.map(entity => (
+              <Link key={entity.id} href={`/entities/${entity.id}`}>
+                <div className="flex px-4 py-3 items-center hover:bg-[#ffffff05] cursor-pointer transition-colors group">
+                  <div className="w-32">
+                    <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border ${typeColors[entity.type] || typeColors.other}`}>
+                      {entity.type.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="flex-1 font-medium text-sm text-white group-hover:text-red-400 transition-colors">
                     {entity.name}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-[10px] bg-secondary border-border">{entity.type.toUpperCase()}</Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground hidden md:table-cell">
-                    {formatDate(entity.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/entities/${entity.id}`}>
-                      <Button variant="ghost" size="sm" className="font-mono text-xs text-primary hover:text-primary-foreground hover:bg-primary">
-                        ACCESS
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 font-mono text-muted-foreground">NO MATCHING RECORDS</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        )}
+                  </div>
+                  <div className="w-32 hidden sm:block font-mono text-[10px] text-neutral-500">
+                    {entity.caseId ? `CASE-${entity.caseId.toString().padStart(4, '0')}` : 'UNLINKED'}
+                  </div>
+                  <div className="w-32 hidden md:block font-mono text-[10px] text-neutral-500">
+                    {formatDate(entity.createdAt).split(',')[0]}
+                  </div>
+                  <div className="w-16 text-right text-neutral-600 group-hover:text-red-500 font-mono text-xs">
+                    ACCESS
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

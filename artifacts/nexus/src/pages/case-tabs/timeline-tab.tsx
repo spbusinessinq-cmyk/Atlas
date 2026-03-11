@@ -3,9 +3,9 @@ import { useCreateTimelineEntry, TimelineEntry } from "@workspace/api-client-rea
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Clock } from "lucide-react";
+import { Plus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 export default function TimelineTab({ caseId, timeline }: { caseId: number, timeline: TimelineEntry[] }) {
@@ -13,40 +13,37 @@ export default function TimelineTab({ caseId, timeline }: { caseId: number, time
   const sorted = [...timeline].sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto py-6">
-      <div className="flex justify-between items-center border-b border-border pb-4">
-        <h3 className="font-mono text-lg flex items-center gap-2">
-          <Clock className="w-5 h-5 text-primary" /> CHRONOLOGY
-        </h3>
+    <div className="nexus-panel rounded-none h-full flex flex-col">
+      <div className="nexus-header-strip">
+        <span className="nexus-label">TEMPORAL TRACE</span>
         <CreateTimelineDialog caseId={caseId} />
       </div>
 
-      <div className="relative pl-8 space-y-8 before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-        {sorted.length === 0 ? (
-          <div className="text-center font-mono text-muted-foreground py-10">NO TIMELINE ENTRIES DETECTED</div>
-        ) : sorted.map((entry, i) => (
-          <div key={entry.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-            {/* Marker */}
-            <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-background bg-primary absolute left-0 md:left-1/2 -translate-x-1/2 shadow shadow-primary/40 z-10 group-hover:scale-125 transition-transform">
-              <div className="w-2 h-2 bg-background rounded-full" />
-            </div>
-            
-            {/* Card */}
-            <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-lg bg-card border border-border shadow-md group-hover:border-primary/50 transition-colors">
-              <div className="flex items-center justify-between mb-1">
-                <div className="font-mono text-xs text-primary font-bold">{formatDate(entry.eventDate)}</div>
-              </div>
-              <h4 className="text-md font-bold text-foreground mb-2">{entry.title}</h4>
-              {entry.description && <p className="text-sm text-muted-foreground">{entry.description}</p>}
+      <div className="flex-1 overflow-auto p-6 lg:p-10">
+        <div className="relative pl-6 space-y-8 before:absolute before:inset-0 before:ml-[5px] before:h-full before:w-px before:bg-red-600/30 max-w-3xl mx-auto">
+          {sorted.length === 0 ? (
+            <div className="text-center font-mono text-neutral-500 text-sm uppercase tracking-widest py-10">NO TIMELINE ENTRIES DETECTED</div>
+          ) : sorted.map((entry) => (
+            <div key={entry.id} className="relative group">
+              {/* Diamond Marker */}
+              <div className="absolute left-[-29px] top-1 w-2.5 h-2.5 bg-black border border-red-600 rotate-45 group-hover:bg-red-600 transition-colors z-10" />
               
-              {entry.linkedEntityName && (
-                <div className="mt-3 inline-block px-2 py-1 bg-secondary rounded text-xs font-mono text-secondary-foreground border border-border">
-                  LINKED: {entry.linkedEntityName}
+              <div className="p-4 bg-[#111820] border border-[#ffffff0d] group-hover:border-red-500/30 transition-colors">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="font-mono text-[10px] text-red-500 uppercase tracking-widest">{formatDate(entry.eventDate)}</div>
                 </div>
-              )}
+                <h4 className="text-sm font-bold text-white mb-2 uppercase">{entry.title}</h4>
+                {entry.description && <p className="text-xs text-neutral-400 leading-relaxed mb-3">{entry.description}</p>}
+                
+                {entry.linkedEntityName && (
+                  <div className="inline-block px-1.5 py-0.5 bg-[#000] border border-[#ffffff1a] text-[9px] font-mono text-cyan-500 uppercase">
+                    LINKED: {entry.linkedEntityName}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -80,32 +77,32 @@ function CreateTimelineDialog({ caseId }: { caseId: number }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-secondary text-secondary-foreground font-mono gap-2 border border-border">
-          <Plus className="w-4 h-4" /> ADD_EVENT
+        <Button className="bg-[#ffffff10] hover:bg-[#ffffff20] text-white rounded-none h-6 px-3 font-mono text-[10px] uppercase tracking-wider gap-1.5 border border-[#ffffff1a]">
+          <Plus className="w-3 h-3" /> ADD EVENT
         </Button>
       </DialogTrigger>
-      <DialogContent className="border-border bg-card">
-        <DialogHeader>
-          <DialogTitle className="font-mono">LOG TIMELINE EVENT</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <Label className="font-mono text-xs">Event Title</Label>
-            <Input name="title" required className="bg-input font-mono" />
+      <DialogContent className="sm:max-w-[400px] border border-[#ffffff1a] bg-[#0d1117] rounded-none p-0">
+        <div className="nexus-header-strip">
+          <span className="nexus-label">LOG TIMELINE EVENT</span>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div className="space-y-1">
+            <Label className="nexus-label">Event Title</Label>
+            <Input name="title" required className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono" />
           </div>
-          <div className="space-y-2">
-            <Label className="font-mono text-xs">Date & Time</Label>
-            <Input type="datetime-local" name="eventDate" required className="bg-input font-mono" />
+          <div className="space-y-1">
+            <Label className="nexus-label">Date & Time</Label>
+            <Input type="datetime-local" name="eventDate" required className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono [color-scheme:dark]" />
           </div>
-          <div className="space-y-2">
-            <Label className="font-mono text-xs">Details</Label>
-            <Input name="description" className="bg-input font-mono" />
+          <div className="space-y-1">
+            <Label className="nexus-label">Details</Label>
+            <Input name="description" className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono" />
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={createMutation.isPending} className="bg-primary text-primary-foreground font-mono">
-              SAVE_LOG
+          <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d] mt-4">
+            <Button type="submit" disabled={createMutation.isPending} className="bg-red-600 hover:bg-red-700 text-white rounded-none font-mono text-[11px] w-full uppercase tracking-widest">
+              {createMutation.isPending ? "SAVING..." : "SAVE LOG"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

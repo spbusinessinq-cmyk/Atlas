@@ -5,9 +5,7 @@ import { useListCases, useCreateCase, CaseStatus } from "@workspace/api-client-r
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Briefcase, ChevronRight, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,37 +17,33 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const statusColors: Record<CaseStatus, string> = {
-    open: "border-l-blue-500 bg-blue-500/10 text-blue-500",
-    active: "border-l-primary bg-primary/10 text-primary",
-    closed: "border-l-muted-foreground bg-muted text-muted-foreground",
-    archived: "border-l-yellow-500 bg-yellow-500/10 text-yellow-500"
+    open: "border-blue-500/50 text-blue-500 before:bg-blue-500",
+    active: "border-red-600/50 text-red-600 before:bg-red-600",
+    closed: "border-neutral-500/50 text-neutral-500 before:bg-neutral-500",
+    archived: "border-amber-500/50 text-amber-500 before:bg-amber-500"
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#ffffff0d] pb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Active Operations</h1>
-          <p className="text-muted-foreground font-mono mt-1 text-sm">MONITORING {cases?.length || 0} DIRECTIVES</p>
+          <h1 className="text-2xl font-bold tracking-tight text-white uppercase">ACTIVE DOSSIERS</h1>
+          <p className="text-neutral-500 tracking-widest text-[10px] font-mono mt-1 uppercase">CASE CONTROL</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-input rounded-md p-1 border border-border">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className={`h-7 w-7 rounded-sm ${viewMode === "grid" ? "bg-muted shadow-sm" : ""}`}
+        <div className="flex items-center gap-4">
+          <div className="flex bg-[#0d1117] rounded-none p-1 border border-[#ffffff0d]">
+            <button 
+              className={`p-1.5 ${viewMode === "grid" ? "bg-[#ffffff10] text-white" : "text-neutral-500 hover:text-white"}`}
               onClick={() => setViewMode("grid")}
             >
               <LayoutGrid className="w-4 h-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className={`h-7 w-7 rounded-sm ${viewMode === "list" ? "bg-muted shadow-sm" : ""}`}
+            </button>
+            <button 
+              className={`p-1.5 ${viewMode === "list" ? "bg-[#ffffff10] text-white" : "text-neutral-500 hover:text-white"}`}
               onClick={() => setViewMode("list")}
             >
               <List className="w-4 h-4" />
-            </Button>
+            </button>
           </div>
           <CreateCaseDialog />
         </div>
@@ -58,7 +52,7 @@ export default function Dashboard() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1,2,3].map(i => (
-            <Card key={i} className="h-64 animate-pulse bg-muted/50" />
+            <div key={i} className="h-64 animate-pulse bg-[#0d1117] border border-[#ffffff0d]" />
           ))}
         </div>
       ) : (
@@ -70,48 +64,52 @@ export default function Dashboard() {
         >
           {cases?.map((c) => (
             <Link key={c.id} href={`/cases/${c.id}`}>
-              <Card className={`group cursor-pointer hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 bg-card overflow-hidden ${viewMode === 'list' ? 'flex flex-row items-center p-4' : 'flex flex-col h-full'}`}>
-                <div className={`w-1 shrink-0 ${statusColors[c.status].split(' ')[0]} ${viewMode === 'list' ? 'h-full rounded-full mr-4' : 'h-1 w-full absolute top-0 left-0'}`} />
-                
-                <CardHeader className={viewMode === "list" ? "p-0 flex-1" : "pb-2"}>
-                  <div className="flex justify-between items-start">
-                    <Badge variant="outline" className={`font-mono text-xs border-transparent ${statusColors[c.status].split(' ').slice(1).join(' ')}`}>
-                      {c.status.toUpperCase()}
-                    </Badge>
-                    <span className="text-xs font-mono text-muted-foreground">{formatDate(c.updatedAt)}</span>
+              <div className={`group cursor-pointer nexus-card flex flex-col hover:border-[#dc262640] transition-all duration-300 relative ${viewMode === 'list' ? 'flex-row items-stretch' : 'h-full'}`}>
+                {/* Top strip */}
+                <div className="nexus-header-strip">
+                  <div className={`font-mono text-[10px] uppercase tracking-wider flex items-center gap-1.5 ${statusColors[c.status].split(' ')[1]}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${statusColors[c.status].split(' ')[2].replace('before:bg-', 'bg-')}`} />
+                    {c.status}
                   </div>
-                  <CardTitle className="text-xl mt-3 group-hover:text-primary transition-colors flex items-center gap-2">
-                    <Briefcase className="w-5 h-5 text-muted-foreground" />
-                    {c.title}
-                  </CardTitle>
-                  <CardDescription className="line-clamp-2 mt-2">
-                    {c.description || "No description provided."}
-                  </CardDescription>
-                </CardHeader>
+                  <div className="font-mono text-[11px] text-neutral-500">
+                    CASE-{c.id.toString().padStart(6, '0')} // {formatDate(c.updatedAt).split(',')[0]}
+                  </div>
+                </div>
                 
-                <CardContent className={viewMode === "list" ? "p-0 flex-1 hidden md:block" : "flex-1 mt-4"}>
-                  <div className="flex flex-wrap gap-2">
+                <div className={`p-4 flex-1 flex flex-col ${viewMode === 'list' ? 'flex-row items-center gap-6' : ''}`}>
+                  <div className={viewMode === 'list' ? 'flex-1' : ''}>
+                    <h3 className="text-lg font-bold text-white mb-2 group-hover:text-red-500 transition-colors uppercase">{c.title}</h3>
+                    <p className="text-sm text-neutral-400 line-clamp-2 leading-relaxed">
+                      {c.description || "No classification brief provided."}
+                    </p>
+                  </div>
+                  
+                  <div className={`flex flex-wrap gap-2 ${viewMode === 'list' ? 'w-48' : 'mt-4'}`}>
                     {c.tags?.slice(0, 3).map(tag => (
-                      <Badge key={tag} variant="secondary" className="bg-secondary text-secondary-foreground text-xs font-mono">
+                      <span key={tag} className="px-1.5 py-0.5 border border-[#ffffff10] text-[10px] font-mono text-neutral-400 uppercase bg-[#00000050]">
                         {tag}
-                      </Badge>
+                      </span>
                     ))}
                     {(c.tags?.length || 0) > 3 && (
-                      <Badge variant="secondary" className="bg-secondary text-xs font-mono">
+                      <span className="px-1.5 py-0.5 border border-[#ffffff10] text-[10px] font-mono text-neutral-400 bg-[#00000050]">
                         +{(c.tags?.length || 0) - 3}
-                      </Badge>
+                      </span>
                     )}
                   </div>
-                </CardContent>
+                </div>
                 
-                <CardFooter className={viewMode === "list" ? "p-0 justify-end" : "pt-4 border-t border-border/50 justify-between text-sm text-muted-foreground"}>
-                  {viewMode === "grid" && <span className="font-mono text-xs">ID: {c.id.toString().padStart(6, '0')}</span>}
-                  <div className="flex items-center text-primary group-hover:translate-x-1 transition-transform">
-                    {viewMode === "list" && <span className="mr-2 font-mono text-xs opacity-0 group-hover:opacity-100 transition-opacity">ACCESS</span>}
-                    <ChevronRight className="w-4 h-4" />
+                {/* Bottom strip */}
+                <div className="bg-[#ffffff02] border-t border-[#ffffff0d] px-3 py-2 flex items-center justify-between mt-auto">
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-neutral-500">
+                    <span>ENT: N/A</span>
+                    <span className="text-[#ffffff20]">|</span>
+                    <span>DOC: N/A</span>
+                    <span className="text-[#ffffff20]">|</span>
+                    <span>TIMELINE: N/A</span>
                   </div>
-                </CardFooter>
-              </Card>
+                  <ChevronRight className="w-4 h-4 text-neutral-600 group-hover:text-red-500 transition-colors group-hover:translate-x-1" />
+                </div>
+              </div>
             </Link>
           ))}
         </motion.div>
@@ -148,52 +146,51 @@ function CreateCaseDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline font-mono">NEW_CASE</span>
+        <Button className="bg-red-600 hover:bg-red-700 text-white rounded-none h-8 px-4 font-mono text-[11px] uppercase tracking-wider gap-2">
+          <Plus className="w-3 h-3" /> NEW CASE
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] border-border bg-card shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl border-b border-border pb-4 flex items-center gap-2">
-            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+      <DialogContent className="sm:max-w-[500px] border border-[#ffffff1a] bg-[#0d1117] rounded-none p-0">
+        <div className="nexus-header-strip">
+          <span className="nexus-label flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
             INITIALIZE NEW CASE
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-          <div className="space-y-2">
-            <Label htmlFor="title" className="font-mono text-xs text-muted-foreground uppercase">Designation</Label>
-            <Input id="title" name="title" required className="font-mono bg-input border-border" placeholder="e.g. OP-CRIMSON-TIDE" />
+          </span>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="title" className="nexus-label">Designation</Label>
+            <Input id="title" name="title" required className="font-mono bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 nexus-glow-focus text-sm" placeholder="e.g. OP-CRIMSON-TIDE" />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="description" className="font-mono text-xs text-muted-foreground uppercase">Briefing / Objective</Label>
-            <Textarea id="description" name="description" className="bg-input border-border min-h-[100px]" placeholder="Detailed case objectives..." />
+          <div className="space-y-1">
+            <Label htmlFor="description" className="nexus-label">Briefing / Objective</Label>
+            <Textarea id="description" name="description" className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 nexus-glow-focus min-h-[100px] text-sm" placeholder="Detailed case objectives..." />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="status" className="font-mono text-xs text-muted-foreground uppercase">Initial Status</Label>
+            <div className="space-y-1">
+              <Label htmlFor="status" className="nexus-label">Initial Status</Label>
               <Select name="status" defaultValue="open">
-                <SelectTrigger className="bg-input border-border font-mono">
+                <SelectTrigger className="bg-[#000] border-[#ffffff1a] rounded-none font-mono focus:ring-0 focus:border-red-500 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-[#0d1117] border-[#ffffff1a] rounded-none font-mono">
                   <SelectItem value="open">OPEN</SelectItem>
                   <SelectItem value="active">ACTIVE</SelectItem>
                   <SelectItem value="closed">CLOSED</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="tags" className="font-mono text-xs text-muted-foreground uppercase">Tags (comma separated)</Label>
-              <Input id="tags" name="tags" className="bg-input border-border font-mono text-sm" placeholder="fraud, cysec, target-x" />
+            <div className="space-y-1">
+              <Label htmlFor="tags" className="nexus-label">Tags (comma separated)</Label>
+              <Input id="tags" name="tags" className="bg-[#000] border-[#ffffff1a] rounded-none font-mono text-sm focus-visible:ring-0 focus-visible:border-red-500" placeholder="fraud, cysec, target-x" />
             </div>
           </div>
-          <DialogFooter className="border-t border-border pt-4">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="font-mono">CANCEL</Button>
-            <Button type="submit" disabled={createMutation.isPending} className="bg-primary text-primary-foreground font-mono">
-              {createMutation.isPending ? "INITIALIZING..." : "CONFIRM_INIT"}
+          <div className="pt-4 flex justify-end gap-2 border-t border-[#ffffff0d] mt-2">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="rounded-none font-mono text-[11px] text-neutral-400 hover:text-white hover:bg-[#ffffff05]">CANCEL</Button>
+            <Button type="submit" disabled={createMutation.isPending} className="bg-red-600 hover:bg-red-700 text-white rounded-none font-mono text-[11px]">
+              {createMutation.isPending ? "INITIALIZING..." : "CONFIRM INIT"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

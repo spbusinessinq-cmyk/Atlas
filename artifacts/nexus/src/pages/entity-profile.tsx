@@ -1,10 +1,7 @@
 import React from "react";
 import { useParams, Link } from "wouter";
 import { useGetEntity } from "@workspace/api-client-react";
-import { User, Activity, FileText, ArrowLeft, Network, Shield } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { ArrowLeft } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 export default function EntityProfile() {
@@ -12,133 +9,160 @@ export default function EntityProfile() {
   const entityId = parseInt(id || "0", 10);
   const { data: profile, isLoading } = useGetEntity(entityId);
 
-  if (isLoading) return <div className="p-8 text-primary font-mono animate-pulse">COMPILING DOSSIER...</div>;
-  if (!profile) return <div className="p-8 text-destructive font-mono">ERROR 404: IDENTITY EXPUNGED.</div>;
+  if (isLoading) return <div className="p-8 text-red-500 font-mono animate-pulse text-sm">COMPILING DOSSIER...</div>;
+  if (!profile) return <div className="p-8 text-red-500 font-mono text-sm">ERROR 404: IDENTITY EXPUNGED.</div>;
 
   const { entity, relationships, documents, timelineAppearances } = profile;
 
+  const typeColors: Record<string, string> = {
+    person: "text-cyan-500 border-cyan-500/30",
+    organization: "text-amber-500 border-amber-500/30",
+    company: "text-green-500 border-green-500/30",
+    government_agency: "text-red-500 border-red-500/30",
+    location: "text-purple-500 border-purple-500/30",
+    event: "text-blue-500 border-blue-500/30",
+    other: "text-neutral-400 border-neutral-500/30"
+  };
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <Link href="/entities">
-        <Button variant="ghost" size="sm" className="font-mono text-muted-foreground hover:text-foreground mb-4">
-          <ArrowLeft className="w-4 h-4 mr-2" /> RETURN TO REGISTRY
-        </Button>
+        <button className="text-[10px] font-mono text-neutral-500 hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors mb-2">
+          <ArrowLeft className="w-3 h-3" /> RETURN TO REGISTRY
+        </button>
       </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Dossier summary */}
-        <div className="col-span-1 space-y-6">
-          <Card className="bg-card border-primary/20 shadow-lg shadow-primary/5 overflow-hidden">
-            <div className="h-2 w-full bg-primary" />
-            <CardContent className="pt-6">
-              <div className="w-24 h-24 bg-muted rounded-full mx-auto mb-4 border-2 border-border flex items-center justify-center">
-                <User className="w-12 h-12 text-muted-foreground" />
-              </div>
-              <h2 className="text-2xl font-bold text-center mb-1">{entity.name}</h2>
-              <div className="text-center mb-6">
-                <Badge className="bg-primary text-primary-foreground font-mono">{entity.type.toUpperCase()}</Badge>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Main Column */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">// CLEARANCE: INTERNAL</span>
+              <span className="font-mono text-[10px] text-neutral-500">ID:{entity.id.toString().padStart(8, '0')}</span>
+            </div>
+            <div className="p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-white uppercase leading-tight">{entity.name}</h1>
+                  <span className={`inline-block mt-2 text-[10px] font-mono uppercase px-2 py-0.5 border ${typeColors[entity.type] || typeColors.other}`}>
+                    {entity.type.replace('_', ' ')}
+                  </span>
+                </div>
               </div>
               
-              <div className="space-y-4 text-sm font-mono">
-                <div>
-                  <div className="text-muted-foreground text-xs">SYSTEM ID</div>
-                  <div>{entity.id.toString().padStart(8, '0')}</div>
+              <div className="text-sm text-neutral-400 leading-relaxed mb-6">
+                {entity.description || "No supplemental intelligence recorded for this identity."}
+              </div>
+              
+              <div className="space-y-2">
+                <div className="text-[10px] font-mono text-neutral-500 tracking-widest uppercase">KNOWN ALIASES</div>
+                <div className="flex flex-wrap gap-2">
+                  {entity.aliases && entity.aliases.length > 0 ? (
+                    entity.aliases.map(a => (
+                      <span key={a} className="px-2 py-1 bg-[#000] border border-[#ffffff1a] text-xs font-mono text-neutral-300">
+                        {a}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs font-mono text-neutral-600">NONE RECORDED</span>
+                  )}
                 </div>
-                <div>
-                  <div className="text-muted-foreground text-xs">RECORD ESTABLISHED</div>
-                  <div>{formatDate(entity.createdAt)}</div>
-                </div>
-                {entity.caseId && (
-                  <div>
-                    <div className="text-muted-foreground text-xs">PRIMARY OPERATION</div>
-                    <Link href={`/cases/${entity.caseId}`}>
-                      <span className="text-primary hover:underline cursor-pointer">OP_{entity.caseId.toString().padStart(4, '0')}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">RELATIONSHIPS</span>
+            </div>
+            <div className="p-0">
+              {relationships.length === 0 ? (
+                <div className="p-4 text-xs font-mono text-neutral-600">NO KNOWN ASSOCIATIONS</div>
+              ) : relationships.map(rel => {
+                const isA = rel.entityAId === entity.id;
+                const otherName = isA ? rel.entityBName : rel.entityAName;
+                const otherId = isA ? rel.entityBId : rel.entityAId;
+                
+                return (
+                  <div key={rel.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border-b border-[#ffffff05] hover:bg-[#ffffff02]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-mono uppercase text-red-500 border border-red-500/30 px-1.5 py-0.5 bg-red-500/5">
+                        {rel.relationshipType}
+                      </span>
+                      <span className="text-sm text-white font-medium uppercase">{otherName}</span>
+                    </div>
+                    <Link href={`/entities/${otherId}`}>
+                      <button className="text-[10px] font-mono text-neutral-500 hover:text-white mt-2 sm:mt-0">VIEW →</button>
                     </Link>
                   </div>
-                )}
-                <div>
-                  <div className="text-muted-foreground text-xs">KNOWN ALIASES</div>
-                  <div className="mt-1">
-                    {entity.aliases && entity.aliases.length > 0 ? (
-                      entity.aliases.map(a => <Badge key={a} variant="outline" className="mr-1 mb-1">{a}</Badge>)
-                    ) : (
-                      <span className="text-muted-foreground">NONE RECORDED</span>
-                    )}
+                );
+              })}
+            </div>
+          </div>
+          
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">TIMELINE APPEARANCES</span>
+            </div>
+            <div className="p-4 space-y-4">
+              {timelineAppearances.length === 0 ? (
+                <div className="text-xs font-mono text-neutral-600">NO ACTIVITY RECORDED</div>
+              ) : timelineAppearances.map(t => (
+                <div key={t.id} className="flex gap-3">
+                  <div className="w-1.5 h-1.5 bg-red-600 rounded-full mt-1.5 shrink-0" />
+                  <div>
+                    <div className="text-[10px] font-mono text-red-500 mb-0.5">{formatDate(t.eventDate).split(',')[0]}</div>
+                    <div className="text-sm text-white">{t.title}</div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-mono text-sm flex items-center gap-2">
-                <Shield className="w-4 h-4 text-primary" /> INTEL SUMMARY
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-foreground/80 leading-relaxed">
-                {entity.description || "No supplemental intelligence recorded for this identity."}
-              </p>
-            </CardContent>
-          </Card>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Right Column: Relationships & Activity */}
-        <div className="col-span-1 lg:col-span-2 space-y-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="font-mono flex items-center gap-2">
-                <Network className="w-5 h-5 text-primary" /> KNOWN ASSOCIATIONS
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {relationships.length === 0 ? (
-                  <div className="text-muted-foreground font-mono text-sm">NO KNOWN ASSOCIATIONS</div>
-                ) : relationships.map(rel => {
-                  const isA = rel.entityAId === entity.id;
-                  const otherName = isA ? rel.entityBName : rel.entityAName;
-                  const otherId = isA ? rel.entityBId : rel.entityAId;
-                  
-                  return (
-                    <div key={rel.id} className="flex items-center justify-between p-3 border border-border bg-sidebar rounded-md">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="font-mono text-xs border-primary/50 text-primary">{rel.relationshipType}</Badge>
-                        <span className="font-bold">{otherName}</span>
-                      </div>
-                      <Link href={`/entities/${otherId}`}>
-                        <Button variant="ghost" size="sm" className="font-mono text-xs">VIEW</Button>
-                      </Link>
-                    </div>
-                  );
-                })}
+        {/* Right Column */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">METADATA</span>
+            </div>
+            <div className="p-4 space-y-3 font-mono text-[11px] uppercase">
+              <div className="flex justify-between border-b border-[#ffffff0a] pb-2">
+                <span className="text-neutral-500">SYSTEM ID</span>
+                <span className="text-white">{entity.id.toString().padStart(8, '0')}</span>
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex justify-between border-b border-[#ffffff0a] pb-2">
+                <span className="text-neutral-500">CREATED</span>
+                <span className="text-white">{formatDate(entity.createdAt).split(',')[0]}</span>
+              </div>
+              <div className="flex justify-between pb-1">
+                <span className="text-neutral-500">PRIMARY OP</span>
+                {entity.caseId ? (
+                  <Link href={`/cases/${entity.caseId}`}>
+                    <span className="text-red-500 hover:text-red-400 cursor-pointer">OP_{entity.caseId.toString().padStart(4, '0')}</span>
+                  </Link>
+                ) : (
+                  <span className="text-neutral-600">UNLINKED</span>
+                )}
+              </div>
+            </div>
+          </div>
 
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="font-mono flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" /> TIMELINE APPEARANCES
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-border pl-6 md:pl-0">
-                {timelineAppearances.length === 0 ? (
-                  <div className="text-muted-foreground font-mono text-sm text-center py-4">NO ACTIVITY RECORDED</div>
-                ) : timelineAppearances.map(t => (
-                  <div key={t.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                     <div className="flex items-center justify-center w-4 h-4 rounded-full bg-primary absolute left-[-1.5rem] md:left-1/2 md:-translate-x-1/2 z-10" />
-                     <div className="w-full md:w-[calc(50%-1.5rem)] p-3 rounded-lg bg-sidebar border border-border">
-                        <div className="font-mono text-xs text-primary mb-1">{formatDate(t.eventDate)}</div>
-                        <div className="font-bold text-sm">{t.title}</div>
-                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">LINKED DOCUMENTS</span>
+            </div>
+            <div className="p-0">
+              {documents && documents.length > 0 ? documents.map(doc => (
+                 <div key={doc.id} className="px-3 py-2 border-b border-[#ffffff05] text-sm text-white hover:bg-[#ffffff02]">
+                   <div className="truncate">{doc.title}</div>
+                   <div className="text-[10px] font-mono text-neutral-500 mt-1">{formatDate(doc.uploadedAt).split(',')[0]}</div>
+                 </div>
+              )) : (
+                 <div className="p-4 text-xs font-mono text-neutral-600">NO DOCUMENTS ATTACHED</div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

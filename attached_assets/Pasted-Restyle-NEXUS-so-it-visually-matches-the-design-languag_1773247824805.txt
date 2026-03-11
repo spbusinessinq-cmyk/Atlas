@@ -1,0 +1,96 @@
+Restyle NEXUS so it visually matches the design language of RSR ORION and RSR BLACKDOG.
+
+Do not rebuild the app logic. Focus on UI/UX redesign and component restructuring.
+
+TARGET STYLE:
+NEXUS should feel like an investigative operations system, not a generic dashboard. It must visually sit in the same ecosystem as ORION and BLACKDOG:
+- dark intelligence-command aesthetic
+- dense modular panel layout
+- thin borders and framed compartments
+- restrained glow accents
+- white typography with red/amber/green status accents
+- mono telemetry labels for IDs, timestamps, classifications, counts
+- right-side live intel rail
+- strong top telemetry bar
+- compact, information-dense cards
+- system language and coded section names
+
+DESIGN RULES:
+- Use a black / near-black background
+- Keep red as the primary accent
+- Add amber for watch/pending states
+- Add green for verified/confirmed states
+- Use subtle cyan/blue only for neutral system metadata
+- Use uppercase micro-labels with tracking
+- Use larger bold white titles for primary headers
+- Add more internal panel borders and segmented modules
+- Reduce empty space and increase dashboard density
+- Avoid generic SaaS styling
+
+NEXUS UI SECTIONS SHOULD BE RENAMED / STYLED AS:
+- Cases -> ACTIVE DOSSIERS or CASE CONTROL
+- Entities -> ENTITY REGISTRY
+- Documents -> DOCUMENT VAULT
+- Timeline -> TEMPORAL TRACE
+- Graph -> LINK ANALYSIS
+- Notes -> ANALYST NOTES
+- Events -> EVENT INGEST
+- Money Flow -> FLOW TRACE
+- Right rail -> CASE SIGNALS
+
+MAIN CASE DASHBOARD:
+Redesign the main case page into a modular intelligence grid with:
+- case header block
+- status/classification block
+- key entities panel
+- latest documents panel
+- timeline snapshot panel
+- money flow preview panel
+- graph preview panel
+- analyst notes panel
+- unresolved leads / flags panel
+- ORION matched events panel
+- right-side live signal feed panel
+
+ENTITY PAGE:
+Make the entity page feel like a dossier:
+- entity name
+- class/type
+- aliases
+- linked cases
+- relationship count
+- linked docs
+- timeline appearances
+- confidence / relevance indicators
+- relationship preview panel
+- supporting evidence list
+
+DOCUMENT PAGE:
+Make the document page feel like an evidence file:
+- document title
+- source
+- ingest date
+- linked entities
+- linked timeline events
+- extracted notes
+- evidence references
+- classification/status tags
+
+TOP BAR:
+Add a telemetry strip similar to ORION/BLACKDOG:
+[NEXUS CORE: ONLINE] • ACTIVE CASES • OPEN FLAGS • DOC INGEST • ENTITY COUNT
+
+RIGHT RAIL:
+Add a live CASE SIGNALS panel showing:
+- recent document ingests
+- ORION matches
+- new entity links
+- pending validations
+- contradiction alerts
+- note updates
+
+TYPOGRAPHY:
+Use bold modern sans for main titles and monospace for metadata labels, timestamps, IDs, and status data.
+
+OUTPUT:
+Refactor the existing React frontend components and Tailwind styling to achieve this. Keep the current functionality but dramatically upgrade the interface to feel like a premium investigative intelligence platform in the same family as ORION and BLACKDOG.
