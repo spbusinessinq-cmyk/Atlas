@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import {
   useGetCaseSummary,
@@ -73,6 +74,8 @@ export default function CaseDetail() {
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
   const [viewingDocId, setViewingDocId] = useState<number | null>(null);
   const [expansionQuery, setExpansionQuery] = useState<string | null>(null);
+  const [showSuggested, setShowSuggested] = useState(true);
+  const [hiddenEntityIds, setHiddenEntityIds] = useState<Set<number>>(new Set());
 
   const { data: approvedMentions = [] } = useListEntityMentions({
     caseId,
@@ -157,6 +160,7 @@ export default function CaseDetail() {
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
   const viewingDoc = documents.find((d) => d.id === viewingDocId) || null;
 
+
   const statusColor =
     STATUS_COLORS[caseData.status as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.open;
   const statusDot =
@@ -167,6 +171,7 @@ export default function CaseDetail() {
       caseId={caseId}
       caseData={caseData}
       entities={entities}
+      hiddenEntityIds={hiddenEntityIds}
       documents={documents}
       timeline={timeline}
       notes={notes}
@@ -186,6 +191,9 @@ export default function CaseDetail() {
       viewingDoc={viewingDoc}
       statusColor={statusColor}
       statusDot={statusDot}
+      showSuggested={showSuggested}
+      onToggleSuggested={setShowSuggested}
+      onRemoveFromGraph={(id) => setHiddenEntityIds(prev => { const next = new Set(prev); next.add(id); return next; })}
       onSectionChange={handleSectionChange}
       onEntitySelect={handleEntitySelect}
       onRelSelect={handleRelSelect}
@@ -243,6 +251,7 @@ function CaseDetailInner({
   caseId,
   caseData,
   entities,
+  hiddenEntityIds,
   documents,
   timeline,
   notes,
@@ -262,6 +271,9 @@ function CaseDetailInner({
   viewingDoc,
   statusColor,
   statusDot,
+  showSuggested,
+  onToggleSuggested,
+  onRemoveFromGraph,
   onSectionChange,
   onEntitySelect,
   onRelSelect,
@@ -276,6 +288,7 @@ function CaseDetailInner({
   caseId: number;
   caseData: { id: number; title: string; description?: string | null; tags?: string[] | null; status: string; createdAt: string };
   entities: Entity[];
+  hiddenEntityIds: Set<number>;
   documents: Document[];
   timeline: TimelineEntry[];
   notes: Note[];
@@ -295,6 +308,9 @@ function CaseDetailInner({
   viewingDoc: Document | null;
   statusColor: string;
   statusDot: string;
+  showSuggested: boolean;
+  onToggleSuggested: (v: boolean) => void;
+  onRemoveFromGraph: (entityId: number) => void;
   onSectionChange: (s: SectionId) => void;
   onEntitySelect: (id: number | null) => void;
   onRelSelect: (id: number | null) => void;
@@ -306,6 +322,12 @@ function CaseDetailInner({
   onOpenWebIngest: (query: string) => void;
   expansionQuery: string | null;
 }) {
+  // Client-side graph visibility filter
+  const visibleEntities = useMemo(
+    () => entities.filter((e) => !hiddenEntityIds.has(e.id)),
+    [entities, hiddenEntityIds]
+  );
+
   const suggestedEdges = useMemo((): SuggestedEdge[] => {
     if (approvedMentions.length < 2 || entities.length < 2) return [];
 
@@ -576,7 +598,7 @@ function CaseDetailInner({
           {activeSection === "graph" && (
             <div className="h-full">
               <GraphCanvas
-                entities={entities}
+                entities={visibleEntities}
                 relationships={relationships}
                 caseId={caseId}
                 selectedEntityId={selectedEntityId}
@@ -585,6 +607,8 @@ function CaseDetailInner({
                 onRelSelect={onRelSelect}
                 suggestedEdges={suggestedEdges}
                 documentCount={documents.length}
+                showSuggested={showSuggested}
+                onToggleSuggested={onToggleSuggested}
               />
             </div>
           )}
@@ -660,6 +684,7 @@ function CaseDetailInner({
             relationship={selectedRel}
             caseId={caseId}
             onClose={onRelClose}
+            onHideAllSuggested={() => onToggleSuggested(false)}
           />
         )}
         {activeSection === "graph" && selectedEntity && !selectedRel && (
@@ -672,6 +697,7 @@ function CaseDetailInner({
               onOpenWebIngest(query);
               onEntityClose();
             }}
+            onRemoveFromGraph={onRemoveFromGraph}
           />
         )}
         {activeSection === "documents" && selectedDoc && (
@@ -685,6 +711,7 @@ function CaseDetailInner({
         {!(activeSection === "graph" && (selectedRel || selectedEntity)) &&
           !(activeSection === "documents" && selectedDoc) && (
           <DefaultInspector
+            caseId={caseId}
             caseData={caseData}
             entities={entities}
             documents={documents}
@@ -1225,6 +1252,7 @@ interface NextActionConfig {
 }
 
 function DefaultInspector({
+  caseId,
   caseData,
   entities,
   documents,
@@ -1233,6 +1261,7 @@ function DefaultInspector({
   nextAction,
   onNavigate,
 }: {
+  caseId: number;
   caseData: {
     title: string;
     description?: string | null;
@@ -1246,6 +1275,35 @@ function DefaultInspector({
   nextAction: NextActionConfig | null;
   onNavigate: (s: SectionId) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [ctrlMsg, setCtrlMsg] = React.useState<string | null>(null);
+  const [ctrlWorking, setCtrlWorking] = React.useState(false);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+
+  const bulkReject = async (type: string) => {
+    setCtrlWorking(true); setCtrlMsg(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/mentions/bulk-reject`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type })
+      });
+      const d = await r.json();
+      setCtrlMsg(`Rejected ${d.rejected ?? "?"} mention(s).`);
+      await invalidate();
+    } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+  };
+
+  const purgeFailedDocs = async () => {
+    setCtrlWorking(true); setCtrlMsg(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/documents/purge?type=all-failed`, { method: "DELETE" });
+      const d = await r.json();
+      setCtrlMsg(`Purged ${d.purged ?? "?"} failed doc(s).`);
+      await invalidate();
+    } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="nexus-header-strip flex-shrink-0">
@@ -1299,6 +1357,44 @@ function DefaultInspector({
             </div>
           </div>
         )}
+
+        {/* ── CASE CONTROLS ── */}
+        <div className="space-y-1.5 pt-1">
+          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] pb-1">CASE CONTROLS</div>
+          {ctrlMsg && (
+            <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1">{ctrlMsg}</div>
+          )}
+          <button
+            disabled={ctrlWorking}
+            onClick={() => bulkReject("low-confidence")}
+            className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+          >
+            <span className="text-[10px]">✕</span> REJECT LOW-CONFIDENCE MENTIONS
+          </button>
+          <button
+            disabled={ctrlWorking}
+            onClick={() => bulkReject("single-word-person")}
+            className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+          >
+            <span className="text-[10px]">✕</span> REJECT SINGLE-WORD PERSONS
+          </button>
+          <button
+            disabled={ctrlWorking}
+            onClick={purgeFailedDocs}
+            className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-600 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+          >
+            <span className="text-[10px]">⊗</span> PURGE FAILED DOCUMENTS
+          </button>
+          {pendingMentions > 0 && (
+            <button
+              disabled={ctrlWorking}
+              onClick={() => bulkReject("all-pending")}
+              className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-red-900/40 text-red-900 hover:text-red-500 hover:border-red-700/50 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+            >
+              <span className="text-[10px]">⊗</span> REJECT ALL {pendingMentions} PENDING
+            </button>
+          )}
+        </div>
 
       </div>
     </div>

@@ -12,7 +12,8 @@ import {
   entityMentionsTable,
   financialSignalsTable,
 } from "@workspace/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql, ilike, inArray } from "drizzle-orm";
+import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
 
@@ -115,6 +116,162 @@ router.delete("/cases/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   await db.delete(casesTable).where(eq(casesTable.id, id));
   res.status(204).send();
+});
+
+// ── Remove entity from case (not globally) ─────────────────────────────────
+router.delete("/cases/:caseId/entities/:entityId", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  const entityId = parseInt(req.params.entityId);
+
+  const rows = await db.select().from(entitiesTable)
+    .where(and(eq(entitiesTable.id, entityId), eq(entitiesTable.caseId, caseId)));
+  if (!rows.length) return res.status(404).json({ error: "Entity not found in this case" });
+  const entity = rows[0];
+
+  // Delete relationships involving this entity in this case
+  await db.delete(relationshipsTable).where(
+    and(
+      eq(relationshipsTable.caseId, caseId),
+      or(eq(relationshipsTable.entityAId, entityId), eq(relationshipsTable.entityBId, entityId))
+    )
+  );
+
+  // Reject all pending mentions with this entity name in this case
+  await db.update(entityMentionsTable)
+    .set({ status: "rejected" })
+    .where(and(
+      eq(entityMentionsTable.caseId, caseId),
+      ilike(entityMentionsTable.entityName, entity.name),
+      eq(entityMentionsTable.status, "pending")
+    ));
+
+  await db.delete(entitiesTable).where(eq(entitiesTable.id, entityId));
+
+  await logEvent(
+    "entity_removed_from_case",
+    `Entity removed from case: "${entity.name}" [${entity.type.replace(/_/g, " ").toUpperCase()}]`,
+    { caseId, entityId }
+  );
+
+  res.status(204).send();
+});
+
+// ── Reject all pending mentions for an entity name in a case ───────────────
+router.post("/cases/:caseId/entities/:entityId/reject-mentions", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  const entityId = parseInt(req.params.entityId);
+
+  const entityRows = await db.select().from(entitiesTable).where(eq(entitiesTable.id, entityId));
+  if (!entityRows.length) return res.status(404).json({ error: "Entity not found" });
+  const entity = entityRows[0];
+
+  const result = await db.update(entityMentionsTable)
+    .set({ status: "rejected" })
+    .where(and(
+      eq(entityMentionsTable.caseId, caseId),
+      ilike(entityMentionsTable.entityName, entity.name),
+      eq(entityMentionsTable.status, "pending")
+    ))
+    .returning();
+
+  await logEvent(
+    "pending_mentions_cleared",
+    `Pending mentions for "${entity.name}" rejected in case ${caseId} (${result.length} mentions)`,
+    { caseId, entityId }
+  );
+
+  res.json({ rejected: result.length });
+});
+
+// ── Purge failed / wrapper documents from a case ───────────────────────────
+router.delete("/cases/:caseId/documents/purge", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  const type = (req.query.type as string) || "all-failed";
+
+  const docs = await db.select().from(documentsTable).where(eq(documentsTable.caseId, caseId));
+
+  let toDelete: number[];
+  if (type === "failed") {
+    toDelete = docs.filter(d => d.rawText?.includes("[FETCH_FAILED]")).map(d => d.id);
+  } else if (type === "wrapper") {
+    toDelete = docs.filter(d => d.rawText?.includes("[WRAPPER_BLOCKED]")).map(d => d.id);
+  } else {
+    // all-failed: fetch_failed + wrapper + diag status=failed with no ok/partial
+    toDelete = docs.filter(d => {
+      const rt = d.rawText || "";
+      return rt.includes("[FETCH_FAILED]") || rt.includes("[WRAPPER_BLOCKED]") ||
+        (rt.includes("status=failed") && !rt.includes("status=ok") && !rt.includes("status=partial"));
+    }).map(d => d.id);
+  }
+
+  for (const docId of toDelete) {
+    await db.delete(entityMentionsTable).where(eq(entityMentionsTable.documentId, docId));
+    await db.delete(documentsTable).where(eq(documentsTable.id, docId));
+  }
+
+  if (toDelete.length > 0) {
+    await logEvent(
+      "failed_docs_purged",
+      `Purged ${toDelete.length} ${type} document(s) from case ${caseId}`,
+      { caseId }
+    );
+  }
+
+  res.json({ purged: toDelete.length });
+});
+
+// ── Reject all pending entity mentions in a case ───────────────────────────
+router.delete("/cases/:caseId/mentions/pending", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+
+  const result = await db.update(entityMentionsTable)
+    .set({ status: "rejected" })
+    .where(and(
+      eq(entityMentionsTable.caseId, caseId),
+      eq(entityMentionsTable.status, "pending")
+    ))
+    .returning();
+
+  await logEvent(
+    "pending_mentions_cleared",
+    `All pending mentions rejected in case ${caseId} (${result.length} signals)`,
+    { caseId }
+  );
+
+  res.json({ rejected: result.length });
+});
+
+// ── Bulk-reject pending mentions with filter criteria ─────────────────────
+router.post("/cases/:caseId/mentions/bulk-reject", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  const { type } = req.body as { type: string };
+
+  const pending = await db.select().from(entityMentionsTable).where(
+    and(eq(entityMentionsTable.caseId, caseId), eq(entityMentionsTable.status, "pending"))
+  );
+
+  let toReject: number[] = [];
+  if (type === "low-confidence") {
+    toReject = pending.filter(m => (m.confidence ?? 1) < 0.60).map(m => m.id);
+  } else if (type === "single-word-person") {
+    toReject = pending.filter(m => m.entityType === "person" && !m.entityName.includes(" ")).map(m => m.id);
+  } else if (type === "all-pending") {
+    toReject = pending.map(m => m.id);
+  }
+
+  if (toReject.length > 0) {
+    await db.update(entityMentionsTable)
+      .set({ status: "rejected" })
+      .where(inArray(entityMentionsTable.id, toReject));
+  }
+
+  await logEvent(
+    "pending_mentions_cleared",
+    `Bulk rejected ${toReject.length} pending mentions (filter: ${type}) in case ${caseId}`,
+    { caseId }
+  );
+
+  res.json({ rejected: toReject.length });
 });
 
 function formatCase(

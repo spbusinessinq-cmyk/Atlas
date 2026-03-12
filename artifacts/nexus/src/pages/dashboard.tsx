@@ -433,7 +433,7 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
 
       {/* Delete overlay — sits outside Link to avoid navigation */}
       <div
-        className="absolute top-2 right-2 z-10"
+        className="absolute bottom-2 right-2 z-10"
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
       >
         {confirmDelete ? (

@@ -85,6 +85,8 @@ interface GraphCanvasProps {
   onRelSelect: (id: number | null) => void;
   suggestedEdges?: SuggestedEdge[];
   documentCount?: number;
+  showSuggested?: boolean;
+  onToggleSuggested?: (v: boolean) => void;
 }
 
 const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: number; label: string }> = {
@@ -124,6 +126,8 @@ export default function GraphCanvas({
   onRelSelect,
   suggestedEdges = [],
   documentCount = 0,
+  showSuggested = true,
+  onToggleSuggested,
 }: GraphCanvasProps) {
   const posStorageKey = `atlas-graph-pos-${entities[0]?.caseId ?? "default"}`;
   const rfRef = useRef<{ fitView: (opts?: object) => void } | null>(null);
@@ -135,7 +139,8 @@ export default function GraphCanvas({
     } catch { return {}; }
   });
 
-  const [showSuggested, setShowSuggested] = useState(true);
+  const [hideIsolated, setHideIsolated] = useState(false);
+  const [hideLowDegree, setHideLowDegree] = useState(false);
 
   const handleResetLayout = useCallback(() => {
     setNodePositions({});
@@ -150,11 +155,37 @@ export default function GraphCanvas({
     });
   }, [posStorageKey]);
 
+  // Compute which entity IDs have confirmed edges
+  const confirmedEdgeEntityIds = useMemo(() => {
+    const ids = new Set<number>();
+    relationships.forEach(r => { ids.add(r.entityAId); ids.add(r.entityBId); });
+    return ids;
+  }, [relationships]);
+
+  // Degree count for each entity (confirmed edges only)
+  const confirmedDegree = useMemo(() => {
+    const degree: Record<number, number> = {};
+    relationships.forEach(r => {
+      degree[r.entityAId] = (degree[r.entityAId] || 0) + 1;
+      degree[r.entityBId] = (degree[r.entityBId] || 0) + 1;
+    });
+    return degree;
+  }, [relationships]);
+
+  // Filter entities based on active toggles
+  const visibleEntities = useMemo(() => {
+    return entities.filter(e => {
+      if (hideIsolated && !confirmedEdgeEntityIds.has(e.id)) return false;
+      if (hideLowDegree && (confirmedDegree[e.id] || 0) <= 1) return false;
+      return true;
+    });
+  }, [entities, hideIsolated, hideLowDegree, confirmedEdgeEntityIds, confirmedDegree]);
+
   const nodes = useMemo(() => {
     const radius = 260;
     const center = { x: 420, y: 300 };
-    return entities.map((entity, i) => {
-      const angle = (i / entities.length) * 2 * Math.PI;
+    return visibleEntities.map((entity, i) => {
+      const angle = (i / visibleEntities.length) * 2 * Math.PI;
       const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
       const isSelected = entity.id === selectedEntityId;
       const defaultPos = {
@@ -169,7 +200,7 @@ export default function GraphCanvas({
         style: buildNodeStyle(color, isSelected),
       };
     });
-  }, [entities, selectedEntityId, nodePositions]);
+  }, [visibleEntities, selectedEntityId, nodePositions]);
 
   const edges = useMemo(() => {
     const confirmed = relationships.map((rel) => {
@@ -347,17 +378,33 @@ export default function GraphCanvas({
       </ReactFlowProvider>
 
       {/* Layout controls overlay */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+      <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1.5">
         {suggestedEdges.length > 0 && (
           <button
-            onClick={() => setShowSuggested(!showSuggested)}
-            className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-cyan-500/40 text-neutral-500 hover:text-cyan-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
+            onClick={() => onToggleSuggested ? onToggleSuggested(!showSuggested) : undefined}
+            className={`flex items-center gap-1 px-2 py-1 bg-[#0d1117] border font-mono text-[9px] uppercase tracking-wider transition-colors ${showSuggested ? "border-cyan-500/40 text-cyan-600 hover:text-cyan-400" : "border-[#ffffff15] text-neutral-600 hover:text-white"}`}
             title={showSuggested ? "Hide suggested links" : "Show suggested links"}
           >
             {showSuggested ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-            {showSuggested ? "HIDE SUGGESTED" : "SHOW SUGGESTED"}
+            {showSuggested ? "SUGGESTED ✓" : "SUGGESTED"}
           </button>
         )}
+        <button
+          onClick={() => setHideIsolated(v => !v)}
+          className={`flex items-center gap-1 px-2 py-1 bg-[#0d1117] border font-mono text-[9px] uppercase tracking-wider transition-colors ${hideIsolated ? "border-amber-500/40 text-amber-500" : "border-[#ffffff15] text-neutral-600 hover:text-white"}`}
+          title="Hide nodes with no confirmed edges"
+        >
+          <EyeOff className="w-3 h-3" />
+          {hideIsolated ? "ISOLATED HIDDEN" : "HIDE ISOLATED"}
+        </button>
+        <button
+          onClick={() => setHideLowDegree(v => !v)}
+          className={`flex items-center gap-1 px-2 py-1 bg-[#0d1117] border font-mono text-[9px] uppercase tracking-wider transition-colors ${hideLowDegree ? "border-amber-500/40 text-amber-500" : "border-[#ffffff15] text-neutral-600 hover:text-white"}`}
+          title="Hide nodes with only 1 confirmed edge"
+        >
+          <EyeOff className="w-3 h-3" />
+          {hideLowDegree ? "LOW-DEG HIDDEN" : "HIDE LOW-DEG"}
+        </button>
         <button
           onClick={() => rfRef.current?.fitView({ padding: 0.2, duration: 400 })}
           className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-cyan-500/40 text-neutral-500 hover:text-cyan-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
@@ -379,7 +426,7 @@ export default function GraphCanvas({
       {/* ── Graph stats (top-left) ── */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2 pointer-events-none">
         <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-          {entities.length} NODE{entities.length !== 1 ? "S" : ""}
+          {visibleEntities.length}{visibleEntities.length !== entities.length ? `/${entities.length}` : ""} NODE{entities.length !== 1 ? "S" : ""}
         </span>
         <span className="text-neutral-800">·</span>
         <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
@@ -415,14 +462,18 @@ export function LinkIntelPanel({
   relationship,
   caseId,
   onClose,
+  onHideAllSuggested,
 }: {
   relationship: Relationship;
   caseId: number;
   onClose: () => void;
+  onHideAllSuggested?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [selectedDocId, setSelectedDocId] = useState<number | undefined>();
   const [excerpt, setExcerpt] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: evidenceList = [] } = useListRelationshipEvidence({
     relationshipId: relationship.id,
@@ -465,6 +516,53 @@ export function LinkIntelPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
+        {/* ── Edge control actions ── */}
+        <div className="space-y-1">
+          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-1.5">EDGE CONTROLS</div>
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-red-800/40 text-red-700 hover:bg-red-500/10 hover:border-red-500/60 hover:text-red-400 font-mono text-[9px] uppercase tracking-widest transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+              DELETE EDGE
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 border border-red-700/50 bg-[#0d0000] px-2 py-1.5">
+              <span className="font-mono text-[9px] text-red-400 uppercase flex-1">Confirm delete edge?</span>
+              <button
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await fetch(`/api/relationships/${relationship.id}`, { method: "DELETE" });
+                    queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+                    onClose();
+                  } finally { setDeleting(false); setConfirmDelete(false); }
+                }}
+                disabled={deleting}
+                className="font-mono text-[9px] text-red-400 hover:text-red-300 uppercase px-1.5 py-0.5 hover:bg-red-500/20 transition-colors"
+              >
+                {deleting ? "…" : "YES"}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="font-mono text-[9px] text-neutral-600 hover:text-white uppercase px-1.5 py-0.5"
+              >
+                NO
+              </button>
+            </div>
+          )}
+          {onHideAllSuggested && (
+            <button
+              onClick={onHideAllSuggested}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-[#ffffff10] text-neutral-600 hover:text-white hover:border-[#ffffff20] font-mono text-[9px] uppercase tracking-widest transition-colors"
+            >
+              <EyeOff className="w-3 h-3" />
+              HIDE ALL SUGGESTED EDGES
+            </button>
+          )}
+        </div>
+
         <div className="p-2.5 border border-amber-500/20 bg-amber-500/5 space-y-2">
           <div className="font-mono text-[9px] text-amber-500/70 uppercase tracking-widest">
             RELATIONSHIP VECTOR
@@ -587,18 +685,78 @@ export function EntityIntelPanel({
   caseId,
   onClose,
   onOpenWebIngest,
+  onRemoveFromGraph,
 }: {
   entity: Entity;
   relationships: Relationship[];
   caseId: number;
   onClose: () => void;
   onOpenWebIngest?: (query: string) => void;
+  onRemoveFromGraph?: (entityId: number) => void;
 }) {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
+
+  // Operator action state
+  const [opsConfirm, setOpsConfirm] = useState<"delete-case" | "delete-global" | null>(null);
+  const [opsWorking, setOpsWorking] = useState(false);
+  const [opsMsg, setOpsMsg] = useState<string | null>(null);
+
+  const invalidateSummary = () =>
+    queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+
+  const handleDeleteFromCase = async () => {
+    setOpsWorking(true);
+    setOpsMsg(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/entities/${entity.id}`, { method: "DELETE" });
+      if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
+      await invalidateSummary();
+      onClose();
+    } catch (e) {
+      setOpsMsg(`Error: ${e}`);
+    } finally { setOpsWorking(false); setOpsConfirm(null); }
+  };
+
+  const handleDeleteGlobal = async () => {
+    setOpsWorking(true);
+    setOpsMsg(null);
+    try {
+      const r = await fetch(`/api/entities/${entity.id}`, { method: "DELETE" });
+      if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
+      await invalidateSummary();
+      onClose();
+    } catch (e) {
+      setOpsMsg(`Error: ${e}`);
+    } finally { setOpsWorking(false); setOpsConfirm(null); }
+  };
+
+  const handleRejectMentions = async () => {
+    setOpsWorking(true);
+    setOpsMsg(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/entities/${entity.id}/reject-mentions`, { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      setOpsMsg(`Rejected ${(data as any).rejected ?? "?"} pending mention(s).`);
+      await invalidateSummary();
+    } catch (e) {
+      setOpsMsg(`Error: ${e}`);
+    } finally { setOpsWorking(false); }
+  };
   const expansionSuggestions = useMemo(
     () => generateExpansionSuggestions(entity.name, entity.type),
     [entity.name, entity.type]
+  );
+
+  const OpsActionRow = ({ label, cls, onClick }: { label: string; cls?: string; onClick: () => void }) => (
+    <button
+      onClick={onClick}
+      disabled={opsWorking}
+      className={`w-full flex items-center justify-center gap-1.5 py-1.5 border font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40 ${cls || "border-red-800/40 text-red-700 hover:bg-red-500/10 hover:border-red-500/60 hover:text-red-400"}`}
+    >
+      {opsWorking ? "…" : label}
+    </button>
   );
   const handleExpand = (query: string) => {
     sessionStorage.setItem("atlas_expansion_query", query);
@@ -683,6 +841,49 @@ export function EntityIntelPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
+
+        {/* ── OPERATOR ACTIONS ── */}
+        <div className="space-y-1.5">
+          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] pb-1">OPERATOR ACTIONS</div>
+          {opsMsg && (
+            <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1">{opsMsg}</div>
+          )}
+          {onRemoveFromGraph && (
+            <OpsActionRow
+              label="⊖  REMOVE FROM GRAPH VIEW"
+              cls="border-amber-800/40 text-amber-700 hover:bg-amber-500/10 hover:border-amber-500/60 hover:text-amber-400"
+              onClick={() => { onRemoveFromGraph(entity.id); onClose(); }}
+            />
+          )}
+          <OpsActionRow
+            label="✕  REJECT ALL PENDING MENTIONS"
+            cls="border-[#ffffff10] text-neutral-600 hover:text-white hover:border-[#ffffff20]"
+            onClick={handleRejectMentions}
+          />
+          {opsConfirm !== "delete-case" ? (
+            <OpsActionRow label="⊗  DELETE FROM CASE" onClick={() => setOpsConfirm("delete-case")} />
+          ) : (
+            <div className="flex items-center gap-2 border border-red-700/50 bg-[#0d0000] px-2 py-1.5">
+              <span className="font-mono text-[9px] text-red-400 uppercase flex-1">Delete from this case?</span>
+              <button onClick={handleDeleteFromCase} disabled={opsWorking} className="font-mono text-[9px] text-red-400 hover:text-red-300 uppercase px-1.5 py-0.5 hover:bg-red-500/20">{opsWorking ? "…" : "YES"}</button>
+              <button onClick={() => setOpsConfirm(null)} className="font-mono text-[9px] text-neutral-600 hover:text-white uppercase px-1.5 py-0.5">NO</button>
+            </div>
+          )}
+          {opsConfirm !== "delete-global" ? (
+            <OpsActionRow
+              label="⊗  DELETE GLOBALLY (ALL CASES)"
+              cls="border-red-900/60 text-red-800 hover:bg-red-500/10 hover:border-red-600/60 hover:text-red-500"
+              onClick={() => setOpsConfirm("delete-global")}
+            />
+          ) : (
+            <div className="flex items-center gap-2 border border-red-700/50 bg-[#120000] px-2 py-1.5">
+              <span className="font-mono text-[9px] text-red-300 uppercase flex-1">GLOBALLY delete entity?</span>
+              <button onClick={handleDeleteGlobal} disabled={opsWorking} className="font-mono text-[9px] text-red-300 hover:text-red-200 uppercase px-1.5 py-0.5 hover:bg-red-500/20">{opsWorking ? "…" : "YES"}</button>
+              <button onClick={() => setOpsConfirm(null)} className="font-mono text-[9px] text-neutral-600 hover:text-white uppercase px-1.5 py-0.5">NO</button>
+            </div>
+          )}
+        </div>
+
         {/* ── Identity block ── */}
         <div
           className="p-3 border space-y-2"

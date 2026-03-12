@@ -1,0 +1,188 @@
+ATLAS PASS 14 — GRAPH / CASE CONTROL HARDENING
+
+This pass is about CONTROL, not styling.
+
+ATLAS now has enough ingestion and extraction working that cleanup/edit controls are mandatory.
+Right now documents can sometimes be deleted, but graph nodes/edges are not truly manageable.
+I need full operator control over bad entities, noisy graph links, and bad seeded docs.
+
+Do NOT do a cosmetic pass first.
+Do NOT spend time on new design systems until these controls are solid.
+
+==================================================
+PRIMARY GOALS
+==================================================
+
+1. Make graph nodes editable/removable
+2. Make graph edges removable
+3. Add case-level cleanup actions
+4. Fix dashboard delete button overlap with case ID
+5. Make web/doc cleanup reliable and visible
+6. Reduce junk graph clutter fast
+
+==================================================
+1. GRAPH NODE ACTIONS
+==================================================
+
+When I click a node in LINK ANALYSIS, the right dossier panel must include operator actions:
+
+- REMOVE FROM GRAPH
+- DELETE ENTITY FROM CASE
+- DELETE ENTITY GLOBALLY (with strong confirm)
+- REJECT / PURGE ALL PENDING MENTIONS FOR THIS ENTITY IN THIS CASE
+- OPEN SOURCE DOCS for this entity
+
+Behavior:
+- REMOVE FROM GRAPH = remove graph presence/links in this case only, but keep entity record
+- DELETE ENTITY FROM CASE = remove entity + mentions + case relationships for that case
+- DELETE ENTITY GLOBALLY = full destructive delete with confirmation
+
+Must update graph immediately without reload.
+
+==================================================
+2. GRAPH EDGE ACTIONS
+==================================================
+
+When I click an edge, I need a real LINK CONTROL panel:
+
+- DELETE EDGE
+- CONFIRM EDGE
+- HIDE EDGE
+- HIDE ALL SUGGESTED EDGES
+- DELETE ALL SUGGESTED EDGES IN CASE
+- CLEAR ONLY AUTO-GENERATED CO-MENTION EDGES
+
+Need a clean distinction between:
+- confirmed relationships
+- suggested co-mention edges
+- hidden edges
+
+==================================================
+3. CASE CLEANUP TOOLBAR
+==================================================
+
+Add a compact “CASE CONTROL” / “CLEANUP” action strip somewhere in case detail with:
+
+- PURGE FAILED DOCS
+- PURGE WRAPPER / BLOCKED DOCS
+- PURGE EMPTY ANALYSIS DOCS
+- CLEAR ALL SUGGESTED EDGES
+- CLEAR ALL GRAPH POSITIONS
+- REMOVE ALL PENDING MENTIONS
+- RESET CASE GRAPH
+
+Each action must have confirmation.
+
+==================================================
+4. DOCUMENT VAULT HARDENING
+==================================================
+
+Document delete must be reliable in both:
+- case-scoped document vault
+- global document vault
+
+After delete:
+- remove linked entity mentions
+- remove related suggested edges if they depended on that doc
+- refresh right inspector cleanly
+- do not leave ghost selected state
+
+If selected document is deleted, inspector should switch to a neutral state.
+
+==================================================
+5. DASHBOARD DELETE BUTTON OVERLAP FIX
+==================================================
+
+The case delete icon currently crowds the CASE-0000XX label.
+Move it so it no longer overlaps or visually conflicts with the case number.
+
+Fix the layout cleanly.
+
+==================================================
+6. BULK JUNK CONTROL FOR PENDING DETECTIONS
+==================================================
+
+Need better triage controls in the right inspector / approval queue:
+
+- REJECT ALL LOW-CONFIDENCE
+- REJECT ALL WRAPPER-LIKE ENTITIES
+- REJECT ALL SINGLE-WORD PERSON NAMES
+- REJECT ALL ENTITIES FROM FAILED/PARTIAL DOCS
+- BULK APPROVE selected
+- BULK REJECT selected
+
+Add simple filters:
+- pending only
+- by type
+- by confidence
+- by source doc
+
+==================================================
+7. GRAPH USABILITY
+==================================================
+
+Add graph controls for:
+- SHOW ONLY CONFIRMED
+- SHOW CONFIRMED + SUGGESTED
+- HIDE ISOLATED NODES
+- HIDE LOW-DEGREE NOISE
+- AUTO-CLUSTER / REPACK
+- FIT / RESET remain
+
+Need the graph to become manageable when there are 20+ nodes.
+
+==================================================
+8. ENTITY NOISE DEFENSE
+==================================================
+
+Tighten promotion / graph seeding so obvious junk is easier to suppress.
+
+Add quick case-level reject patterns for:
+- single common surnames
+- sports/news unrelated drift
+- boilerplate publishing artifacts
+- generic titles like PRESIDENT, CARTER, SMITH unless confidence + multi-doc evidence justify them
+
+Do not overbuild a new extraction engine here.
+Just improve operator control and fast cleanup.
+
+==================================================
+9. SYSTEM LOG
+==================================================
+
+Log these new actions:
+- document_deleted
+- entity_removed_from_case
+- entity_deleted_global
+- edge_deleted
+- suggested_edges_cleared
+- failed_docs_purged
+- pending_mentions_cleared
+- case_graph_reset
+
+==================================================
+10. ACCEPTANCE TEST
+==================================================
+
+This pass is not done until you verify all of this on a real noisy case:
+
+Use one of the messy seeded cases already in the app.
+
+You must demonstrate:
+- deleting a document removes it cleanly
+- deleting an entity from graph/case updates graph immediately
+- deleting an edge works immediately
+- clearing suggested edges works
+- dashboard delete icon no longer overlaps case number
+- inspector state does not break after destructive actions
+
+==================================================
+11. FINAL REPORT
+==================================================
+
+At the end report:
+- which delete controls were added
+- which are case-only vs global
+- which graph cleanup actions now exist
+- what files changed
+- any remaining known limits

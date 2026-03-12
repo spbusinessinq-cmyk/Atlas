@@ -64,9 +64,19 @@ The project is structured as a pnpm monorepo using Node.js 24 and TypeScript 5.9
     *   **Next Action Guidance:** Provides UI prompts for reviewing co-mention associations.
     *   **System Log:** Real-time event feed (`/logs` page) for document ingestion, web ingestion, analysis, and entity approval/rejection events.
 
-5.  **API Routes:**
+5.  **Graph & Case Control Hardening (Pass 14):**
+    *   **Operator Actions (EntityIntelPanel):** REMOVE FROM GRAPH (client-side hide), DELETE FROM CASE (API cascade delete + reject mentions), DELETE GLOBALLY (all cases), REJECT ALL PENDING MENTIONS — all with inline confirmation UI.
+    *   **Edge Controls (LinkIntelPanel):** DELETE EDGE button with confirmation, HIDE ALL SUGGESTED EDGES toggle.
+    *   **Graph Filters:** HIDE ISOLATED (no confirmed edges) and HIDE LOW-DEG (≤1 confirmed edge) toggles on graph canvas; visible node count shown as N/Total.
+    *   **showSuggested lifted to case-detail.tsx:** State lifted from GraphCanvas to CaseDetail for LinkIntelPanel's HIDE ALL SUGGESTED to work.
+    *   **hiddenEntityIds Set in CaseDetail:** Client-side entity visibility, filtered visibleEntities passed to GraphCanvas.
+    *   **CASE CONTROLS Panel (DefaultInspector):** Bulk mention controls — REJECT LOW-CONFIDENCE, REJECT SINGLE-WORD PERSONS, REJECT ALL PENDING, PURGE FAILED DOCUMENTS — all with API calls and query invalidation.
+    *   **Dashboard delete button:** Moved from top-right (overlapping CASE-ID label) to bottom-right of case cards.
+
+6.  **API Routes:**
     *   All API routes are under `/api` and cover CRUD operations for cases, entities, documents, relationships, timeline entries, events, notes, money flows, and entity mentions.
     *   Includes specific routes for document upload, analysis, web search, web ingestion, and entity mention approval/rejection.
+    *   New endpoints: `DELETE /cases/:caseId/entities/:entityId` (cascade delete), `POST /cases/:caseId/entities/:entityId/reject-mentions`, `DELETE /cases/:caseId/documents/purge?type=`, `DELETE /cases/:caseId/mentions/pending`, `POST /cases/:caseId/mentions/bulk-reject`.
 
 6.  **TypeScript Configuration:** Each package extends `tsconfig.base.json` with `composite: true`. Root `tsconfig.json` lists all packages as project references.
 
