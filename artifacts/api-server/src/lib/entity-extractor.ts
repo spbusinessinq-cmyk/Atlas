@@ -121,11 +121,16 @@ const SKIP_NAMES = new Set([
 ]);
 
 // Media/aggregator entities that are sources, not investigative subjects
+// (also includes wrapper-page injection artifacts from WRAPPER_ENTITY_BLOCKLIST)
 const MEDIA_SOURCE_BLOCKLIST = new Set([
-  "Google News", "Google", "Google LLC",
+  "Google News", "Google", "Google LLC", "Google Search", "News Google",
   "Associated Press", "Reuters", "Bloomberg",
-  "News Google", "Google Search",
   "Yahoo News", "Yahoo Finance", "Yahoo",
+  // Wrapper / junk page artifacts
+  "JavaScript", "Sign In", "Log In", "Subscribe", "Continue", "Accept",
+  "Enable JavaScript", "Cookie", "Cookies", "Privacy Policy",
+  "Terms of Service", "More", "Share", "Close", "Skip",
+  "Loading", "Please Wait", "Redirect", "Follow",
   "MSN", "MSN News", "Bing News", "Bing",
   "Apple News", "Apple",
   "Facebook", "Twitter", "Instagram", "YouTube",

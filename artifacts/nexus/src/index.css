@@ -186,8 +186,30 @@ button:focus-visible {
 .react-flow__node-default:focus,
 .react-flow__node-default:focus-visible,
 .react-flow__handle:focus,
-.react-flow__handle:focus-visible {
+.react-flow__handle:focus-visible,
+.react-flow__edge:focus,
+.react-flow__edge:focus-visible,
+.react-flow__edge-path:focus,
+.react-flow__edge-path:focus-visible,
+.react-flow__container:focus,
+.react-flow__renderer:focus,
+.react-flow__pane:focus {
   outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Input / textarea focus ring suppression (no browser blue glow) ── */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.10) !important;
   box-shadow: none !important;
 }
 

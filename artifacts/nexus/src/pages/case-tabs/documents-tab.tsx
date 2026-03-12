@@ -420,8 +420,14 @@ export function DocumentViewer({
 function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
   const rawText = doc.rawText || "";
   const isIncomplete = rawText.startsWith("[EXTRACTION_INCOMPLETE]");
-  const displayText = isIncomplete
-    ? rawText.replace("[EXTRACTION_INCOMPLETE]\n", "").replace("[EXTRACTION_INCOMPLETE]", "").trim()
+  const isFailed = rawText.startsWith("[EXTRACTION_FAILED]");
+  const displayText = (isIncomplete || isFailed)
+    ? rawText
+        .replace("[EXTRACTION_INCOMPLETE]\n", "")
+        .replace("[EXTRACTION_INCOMPLETE]", "")
+        .replace("[EXTRACTION_FAILED]\n", "")
+        .replace("[EXTRACTION_FAILED]", "")
+        .trim()
     : rawText.trim();
   const hasText = displayText.length > 20;
 
@@ -460,8 +466,25 @@ function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
         </h1>
       </div>
 
+      {/* Extraction failed banner — wrapper / paywall / redirect */}
+      {isFailed && (
+        <div className="mx-6 mt-4 p-3 border border-red-500/30 bg-red-500/5 flex items-start gap-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <div className="font-mono text-[9px] text-red-500 uppercase tracking-widest">
+              EXTRACTION FAILED — WRAPPER / PAYWALLED PAGE
+            </div>
+            <div className="font-mono text-[8px] text-red-800 uppercase">
+              ATLAS could not retrieve article content. This URL is a redirect wrapper, paywall, or
+              cookie-consent gate. No entity analysis was performed. Open the original source to
+              access the article directly.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Extraction incomplete warning */}
-      {isIncomplete && (
+      {isIncomplete && !isFailed && (
         <div className="mx-6 mt-4 p-3 border border-orange-500/30 bg-orange-500/5 flex items-start gap-2.5">
           <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
           <div className="space-y-0.5">

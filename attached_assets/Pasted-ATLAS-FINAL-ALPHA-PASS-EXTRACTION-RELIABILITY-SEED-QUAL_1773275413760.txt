@@ -1,0 +1,256 @@
+ATLAS FINAL ALPHA PASS — EXTRACTION RELIABILITY + SEED QUALITY + AUTO ALPHA STABILIZATION
+
+System:
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+IMPORTANT:
+This is the final stabilization pass for a usable auto-alpha.
+Do NOT redesign the architecture.
+Do NOT add mock data.
+Do NOT spend effort on cosmetic-only changes until extraction reliability is fixed.
+
+PRIMARY GOAL
+
+Make ATLAS reliably usable as an automatic case seeding system.
+
+A seeded case must no longer feel broken, empty, or polluted by wrapper pages / junk results.
+
+The highest priority is:
+1. real article extraction
+2. source quality
+3. usable seeded case output
+4. final cleanup issues
+
+========================================================
+1. CRITICAL FIX — GOOGLE NEWS / WRAPPER EXTRACTION
+========================================================
+
+Problem:
+Some web-ingested documents still resolve to Google News wrapper or partial snapshot content.
+The document body shows things like:
+<!doctype html>Google News
+
+This breaks:
+- entity detection
+- timeline extraction
+- money extraction
+- auto-approval
+- seeded case usefulness
+
+Fix this first.
+
+Requirements:
+
+1. Detect wrapper / redirect / metadata-only pages.
+Examples:
+- Google News wrappers
+- feed wrappers
+- pages with almost no article body
+- metadata-only snapshots
+
+2. Resolve the real original source URL whenever possible.
+
+3. Extract article body only from real source content.
+
+4. If extraction fails:
+- mark the doc as EXTRACTION_FAILED or EXTRACTION_PARTIAL
+- do NOT run normal entity extraction on wrapper text
+- do NOT create junk entities like "Google News"
+
+5. Add a blocklist / suppression rule so wrapper-only values cannot become entities.
+
+6. Update the analyzer so entity extraction only runs on valid extracted article text.
+
+========================================================
+2. SOURCE QUALITY / SEED SEARCH IMPROVEMENT
+========================================================
+
+Problem:
+Seeded searches still pull junk or weakly related sources.
+
+Improve seeded source selection quality.
+
+Boost:
+- exact phrase match
+- named entity match
+- location match
+- financial / investigative terms
+- real news and investigative reporting domains
+
+Demote:
+- SEO spam
+- listicles
+- generic “best of” articles
+- low-value lifestyle content
+- weakly related foreign results
+- wrapper pages / syndicated noise
+
+When target looks like:
+"Los Angeles studio funding"
+
+ATLAS should prefer:
+- LA business reporting
+- funding / grants / subsidies
+- development / policy / program reporting
+- public finance / city / county reporting
+
+Add stronger deduping.
+
+========================================================
+3. SEEDED CASE FALLBACK LOGIC
+========================================================
+
+Problem:
+A case can be auto-seeded with docs ingested, but still feel empty because 0 entities auto-approved.
+
+Fix seeded-case behavior.
+
+If:
+- documents > 0
+- pending detections > 0
+- approved entities = 0
+
+then ATLAS must NOT leave the case visually dead.
+
+Required behavior:
+1. clear case-state message explaining:
+   "Sources ingested. No entities auto-approved. Review pending detections to build the graph."
+
+2. highlight the best pending detections first
+
+3. optionally auto-open the strongest document
+
+4. for seeded cases only:
+allow a slightly more forgiving seed approval rule for top 1–3 safe detections
+but only if they are clearly non-junk
+
+Goal:
+Every seeded case should either:
+- populate with seed entities
+or
+- clearly surface the best pending detections immediately
+
+========================================================
+4. MINIMUM AUTO-ALPHA ENTITY SEEDING
+========================================================
+
+For seeded cases, create a safer minimal bootstrap rule.
+
+If high-confidence repeated detections are not available, ATLAS may promote a tiny starter set of safest detections only if:
+- confidence is reasonably high
+- value is not blocked
+- extracted article text is valid
+- detection is not wrapper metadata
+
+This is only to prevent seeded cases from feeling empty.
+Do NOT over-approve junk.
+
+========================================================
+5. TIMELINE / MONEY EXTRACTION ONLY FROM VALID TEXT
+========================================================
+
+Timeline and financial extraction must only run on valid article text.
+
+Do NOT extract:
+- fake dates from metadata wrappers
+- fake money values from irrelevant snippets
+- junk financial signals from malformed extraction
+
+If text is invalid or partial:
+show the partial warning
+but suppress downstream junk extraction.
+
+========================================================
+6. DELETE UI CLEANUP
+========================================================
+
+Small but important cleanup:
+
+Delete confirmation boxes should not overlap:
+- case numbers
+- row text
+- titles
+- action buttons
+
+Tighten layout spacing for delete confirm UI in:
+- case cards
+- main document vault
+- main entity registry
+- case-scoped document list if needed
+
+Keep inline confirmation, but make it clean and readable.
+
+========================================================
+7. BLUE BOX / FOCUS ARTIFACT FINAL FIX
+========================================================
+
+Remove remaining blue focus / canvas / browser-looking outline artifacts.
+
+Replace with subtle ATLAS-style focus states only.
+
+No large bright blue rectangles anywhere.
+
+========================================================
+8. UI CLARITY FOR SEED LAUNCHER
+========================================================
+
+Make it obvious on the seed launcher what happens.
+
+Add / refine helper text:
+ATLAS will create a case, search public sources, ingest top results, extract entities, detect timeline and financial signals, and seed the investigation.
+
+Also add better seeded-case summary wording:
+- sources ingested
+- detections found
+- auto-approved count
+- next action
+
+========================================================
+9. DOCUMENT VIEW / ANALYZE CLARITY
+========================================================
+
+If a document is partial or failed extraction:
+- show that clearly
+- disable or warn on full analysis if needed
+- prevent junk entities from being generated from wrapper pages
+
+The right inspector should make clear whether:
+- extraction succeeded
+- extraction was partial
+- extraction failed
+
+========================================================
+10. TESTING CHECKLIST
+========================================================
+
+Verify all of this using a seeded case.
+
+Test flow:
+1. Start new investigation
+2. Case is created
+3. Sources are ingested
+4. At least the top sources are real usable article bodies
+5. No Google News wrapper text becomes an entity
+6. No "Google News" entity appears in registry
+7. Seeded case either:
+   - gets real seed entities
+   or
+   - surfaces strong pending detections clearly
+8. Timeline extraction only runs on valid text
+9. Financial extraction only runs on valid text
+10. Delete confirmation UI no longer overlaps text
+11. Blue box artifacts are gone
+
+========================================================
+FINAL SUMMARY
+========================================================
+
+Report:
+1. how wrapper / Google News extraction was fixed
+2. how seeded source quality was improved
+3. how seeded empty-case fallback now works
+4. whether minimal seed auto-promotion was added
+5. how timeline / money extraction was protected from junk text
+6. what delete UI spacing was fixed
+7. what files changed

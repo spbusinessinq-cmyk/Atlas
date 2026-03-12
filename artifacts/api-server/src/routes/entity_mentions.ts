@@ -44,7 +44,27 @@ router.post("/documents/:id/analyze", async (req, res) => {
     extractionMethod = "metadata-fallback";
   }
 
-  const extracted = extractEntities(text);
+  // Guard: don't run NER on failed/wrapper content
+  const isExtractionFailed = text.startsWith("[EXTRACTION_FAILED]");
+  const cleanText = text
+    .replace(/^\[EXTRACTION_INCOMPLETE\]\n/, "")
+    .replace(/^\[EXTRACTION_FAILED\]\n/, "")
+    .trim();
+
+  if (isExtractionFailed) {
+    return res.json({
+      documentId: docId,
+      mentionsCreated: 0,
+      timelineEventsCreated: 0,
+      financialSignalsCreated: 0,
+      mentions: [],
+      textLength: 0,
+      extractionMethod: "failed",
+      warning: "Document extraction failed (wrapper/junk page) — entity analysis skipped.",
+    });
+  }
+
+  const extracted = extractEntities(cleanText);
 
   // Delete old pending mentions for this document
   await db
@@ -77,7 +97,7 @@ router.post("/documents/:id/analyze", async (req, res) => {
   }
 
   // ── Timeline event extraction ───────────────────────────────────────────────
-  const timelineEvents = extractTimelineEvents(text);
+  const timelineEvents = extractTimelineEvents(cleanText);
   let timelineInserted = 0;
   for (const ev of timelineEvents) {
     try {
@@ -100,7 +120,7 @@ router.post("/documents/:id/analyze", async (req, res) => {
   }
 
   // ── Financial signal extraction ──────────────────────────────────────────────
-  const financialSignals = extractFinancialSignals(text);
+  const financialSignals = extractFinancialSignals(cleanText);
   let signalInserted = 0;
   for (const sig of financialSignals) {
     try {
