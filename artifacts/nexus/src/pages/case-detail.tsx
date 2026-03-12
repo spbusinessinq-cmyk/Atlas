@@ -739,27 +739,64 @@ function cleanDescription(desc: string | null | undefined): string {
   return desc.replace(/\[ATLAS-SEED:[^\]]+\]/, "").trim();
 }
 
-function SeedDiagnosticsCard({ diag }: { diag: SeedDiag }) {
+// Parse per-doc ATLAS-DIAG block from document rawText
+function parseDocDiag(rawText: string | null | undefined): {
+  status: string; chars: number; paras: number; strategy: string;
+  finalUrl?: string; rssUrl?: string; srcUrl?: string;
+  entities?: number; analysisRan?: boolean;
+} | null {
+  if (!rawText) return null;
+  const m = rawText.match(/\[ATLAS-DIAG:([^\]]+)\]/);
+  if (!m) return null;
+  const kv: Record<string, string> = {};
+  m[1].split("|").forEach((pair) => {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx > 0) kv[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
+  });
+  const dec = (v?: string) => { try { return v ? decodeURIComponent(v) : undefined; } catch { return v; } };
+  return {
+    status: kv.status || "failed",
+    chars: parseInt(kv.chars || "0"),
+    paras: parseInt(kv.paras || "0"),
+    strategy: kv.strategy || "unknown",
+    finalUrl: dec(kv.final_url),
+    rssUrl: dec(kv.rss_url),
+    srcUrl: dec(kv.src_url),
+    entities: kv.entities !== undefined ? parseInt(kv.entities) : undefined,
+    analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
+  };
+}
+
+function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: Document[] }) {
+  const [showDocs, setShowDocs] = React.useState(false);
   const usable = diag.ok + diag.partial;
   const blocked = diag.failed + diag.wrapper;
+
+  // Status badge styling
+  const statusStyle = (status: string) => {
+    if (status === "ok") return "bg-[#002200] text-green-400 border border-green-900";
+    if (status === "partial") return "bg-[#1a1000] text-amber-400 border border-amber-900";
+    if (status === "wrapper") return "bg-[#200010] text-red-400 border border-red-900";
+    return "bg-[#111] text-neutral-500 border border-neutral-800";
+  };
 
   let promotionNote: React.ReactNode = null;
   if (diag.promoted === 0 && diag.detected > 0) {
     promotionNote = (
-      <div className="mt-2 px-2 py-1.5 bg-[#1a0e00] border border-[#ff6b0020] text-[9px] font-mono text-amber-500 uppercase tracking-wide leading-relaxed">
-        No entities auto-promoted — {diag.detected} signal{diag.detected !== 1 ? "s" : ""} detected but none passed confidence/blocklist checks. Review pending detections.
+      <div className="px-3 pb-3 text-[9px] font-mono text-amber-500 uppercase tracking-wide bg-[#1a0e00] border-t border-[#ff6b0015] py-2">
+        ▲ NO ENTITIES PROMOTED — {diag.detected} signals detected but none passed confidence/blocklist checks. Review pending detections.
       </div>
     );
   } else if (diag.promoted === 0 && diag.detected === 0 && usable === 0) {
     promotionNote = (
-      <div className="mt-2 px-2 py-1.5 bg-[#0a0a0a] border border-[#ffffff0a] text-[9px] font-mono text-neutral-600 uppercase tracking-wide leading-relaxed">
-        All sources were blocked, paywalled, or JS-rendered. Add sources manually via Web Ingest.
+      <div className="px-3 pb-3 text-[9px] font-mono text-neutral-600 uppercase tracking-wide bg-[#0a0a0a] border-t border-[#ffffff06] py-2">
+        ✗ ALL SOURCES BLOCKED — No usable article text recovered. Add sources manually via Web Ingest.
       </div>
     );
   } else if (diag.fallback && diag.promoted > 0) {
     promotionNote = (
-      <div className="mt-2 px-2 py-1.5 bg-[#001a0a] border border-[#00ff6620] text-[9px] font-mono text-green-500/70 uppercase tracking-wide leading-relaxed">
-        Seed fallback active — {diag.promoted} entity{diag.promoted !== 1 ? "s" : ""} promoted at lower confidence threshold. Review and validate.
+      <div className="px-3 py-2 text-[9px] font-mono text-amber-500/70 uppercase tracking-wide bg-[#100a00] border-t border-[#ffffff06]">
+        ⚡ SEED FALLBACK — {diag.promoted} entity{diag.promoted !== 1 ? "s" : ""} promoted at lower confidence threshold. Validate before relying on graph.
       </div>
     );
   }
@@ -767,41 +804,121 @@ function SeedDiagnosticsCard({ diag }: { diag: SeedDiag }) {
   return (
     <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
       <div className="nexus-header-strip flex items-center gap-2">
-        <span className="nexus-label">SEED INTELLIGENCE REPORT</span>
-        <span className="font-mono text-[9px] text-neutral-600 ml-auto">AUTO-SEEDED</span>
+        <span className="nexus-label">SEED PIPELINE REPORT</span>
+        <button
+          onClick={() => setShowDocs((v) => !v)}
+          className="ml-auto font-mono text-[9px] text-neutral-500 hover:text-white uppercase tracking-wider border border-[#ffffff10] px-2 py-0.5 transition-colors"
+        >
+          {showDocs ? "HIDE DOC LOG" : "SHOW DOC LOG"}
+        </button>
       </div>
-      <div className="p-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-[#0a0e14] border border-[#ffffff08] p-2">
-          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Results Found</div>
-          <div className="font-mono text-lg font-bold text-white tabular-nums">{diag.total}</div>
-        </div>
-        <div className="bg-[#0a0e14] border border-[#ffffff08] p-2">
-          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Ingested</div>
-          <div className="font-mono text-lg font-bold text-blue-400 tabular-nums">{diag.ingested}</div>
-        </div>
-        <div className={cn("bg-[#0a0e14] border p-2", usable > 0 ? "border-[#00ff6620]" : "border-[#ffffff08]")}>
-          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Usable</div>
-          <div className={cn("font-mono text-lg font-bold tabular-nums", usable > 0 ? "text-green-400" : "text-neutral-600")}>{usable}</div>
-          {diag.ok > 0 && diag.partial > 0 && (
-            <div className="font-mono text-[8px] text-neutral-600">{diag.ok} full · {diag.partial} partial</div>
-          )}
-        </div>
-        <div className={cn("bg-[#0a0e14] border p-2", blocked > 0 ? "border-[#ff000015]" : "border-[#ffffff08]")}>
-          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Blocked</div>
-          <div className={cn("font-mono text-lg font-bold tabular-nums", blocked > 0 ? "text-red-500" : "text-neutral-600")}>{blocked}</div>
-          {diag.wrapper > 0 && <div className="font-mono text-[8px] text-neutral-600">{diag.wrapper} wrapper · {diag.failed} failed</div>}
-        </div>
-        <div className={cn("bg-[#0a0e14] border p-2", diag.detected > 0 ? "border-[#ffffff10]" : "border-[#ffffff08]")}>
-          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Detected</div>
-          <div className={cn("font-mono text-lg font-bold tabular-nums", diag.detected > 0 ? "text-amber-400" : "text-neutral-600")}>{diag.detected}</div>
-        </div>
-        <div className={cn("bg-[#0a0e14] border p-2", diag.promoted > 0 ? "border-[#00ff6630]" : "border-[#ffffff08]")}>
-          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Promoted</div>
-          <div className={cn("font-mono text-lg font-bold tabular-nums", diag.promoted > 0 ? "text-green-300" : "text-neutral-600")}>{diag.promoted}</div>
-          {diag.fallback && diag.promoted > 0 && <div className="font-mono text-[8px] text-amber-600">FALLBACK</div>}
-        </div>
+
+      {/* ── Summary stats grid ── */}
+      <div className="p-3 grid grid-cols-3 md:grid-cols-6 gap-2">
+        {[
+          { label: "Results", val: diag.total, color: "text-white" },
+          { label: "Ingested", val: diag.ingested, color: "text-blue-400" },
+          { label: "Full / Partial", val: `${diag.ok} / ${diag.partial}`, color: usable > 0 ? "text-green-400" : "text-neutral-600" },
+          { label: "Blocked", val: `${diag.wrapper}W · ${diag.failed}F`, color: blocked > 0 ? "text-red-400" : "text-neutral-600" },
+          { label: "Detected", val: diag.detected, color: diag.detected > 0 ? "text-amber-400" : "text-neutral-600" },
+          { label: "Promoted", val: diag.promoted + (diag.fallback ? " ⚡" : ""), color: diag.promoted > 0 ? "text-green-300" : "text-neutral-600" },
+        ].map(({ label, val, color }) => (
+          <div key={label} className="bg-[#0a0e14] border border-[#ffffff08] p-2">
+            <div className="font-mono text-[8px] text-neutral-600 uppercase mb-0.5">{label}</div>
+            <div className={cn("font-mono text-base font-bold tabular-nums", color)}>{val}</div>
+          </div>
+        ))}
       </div>
-      {promotionNote && <div className="px-3 pb-3">{promotionNote}</div>}
+
+      {promotionNote}
+
+      {/* ── Per-doc pipeline log ── */}
+      {showDocs && (
+        <div className="border-t border-[#ffffff08]">
+          <div className="px-3 py-1.5 font-mono text-[8px] text-neutral-600 uppercase tracking-widest bg-[#050709]">
+            DOCUMENT PIPELINE LOG
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full font-mono text-[10px]">
+              <thead>
+                <tr className="border-b border-[#ffffff08]">
+                  <th className="text-left px-3 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Source</th>
+                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Body</th>
+                  <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Chars</th>
+                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Strategy</th>
+                  <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Entities</th>
+                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">URL Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents.map((doc) => {
+                  const d = parseDocDiag(doc.rawText);
+                  const urlMode = d?.rssUrl
+                    ? "REAL URL ✓" // rssUrl exists means we have the redirect, and we used srcUrl
+                    : "DIRECT";
+                  const urlModeColor = d?.rssUrl ? "text-green-500" : "text-neutral-500";
+                  const fetchedDomain = (() => {
+                    try { return d?.finalUrl ? new URL(d.finalUrl).hostname.replace("www.", "") : (doc.sourceDomain || "—"); } catch { return doc.sourceDomain || "—"; }
+                  })();
+                  return (
+                    <tr key={doc.id} className="border-b border-[#ffffff04] hover:bg-[#ffffff03]">
+                      <td className="px-3 py-2 text-white max-w-[200px]">
+                        <div className="truncate">{doc.title.slice(0, 50)}</div>
+                        <div className="text-[9px] text-neutral-600 truncate">{fetchedDomain}</div>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <span className={cn("px-1.5 py-0.5 text-[8px] uppercase", statusStyle(d?.status || "failed"))}>
+                          {(d?.status || "?").toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums text-neutral-400">
+                        {d ? d.chars.toLocaleString() : "—"}
+                      </td>
+                      <td className="px-2 py-2 text-center text-neutral-500 uppercase text-[9px]">
+                        {d?.strategy === "json-ld" ? <span className="text-cyan-600">JSON-LD</span>
+                          : d?.strategy === "selector" ? <span className="text-blue-600">CSS</span>
+                          : d?.strategy === "paragraph-agg" ? <span className="text-blue-500">P-AGG</span>
+                          : d?.strategy ? d.strategy.toUpperCase() : "—"}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">
+                        {d?.entities !== undefined
+                          ? <span className={d.entities > 0 ? "text-amber-400" : "text-neutral-600"}>{d.entities}</span>
+                          : d?.analysisRan === false
+                            ? <span className="text-neutral-700">SKIP</span>
+                            : <span className="text-neutral-700">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <span className={cn("text-[9px] uppercase font-bold", urlModeColor)}>{urlMode}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* RSS vs Real URL proof for the first doc that has both */}
+          {(() => {
+            const firstWithRss = documents.find(d => parseDocDiag(d.rawText)?.rssUrl);
+            if (!firstWithRss) return null;
+            const d = parseDocDiag(firstWithRss.rawText)!;
+            const rssShort = d.rssUrl?.slice(0, 60) + "…";
+            const srcShort = d.srcUrl?.replace(/^https?:\/\//, "").slice(0, 60);
+            return (
+              <div className="border-t border-[#ffffff06] px-3 py-2 space-y-1 bg-[#050709]">
+                <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mb-1">URL RESOLUTION PROOF (sample doc)</div>
+                <div className="font-mono text-[9px]">
+                  <span className="text-neutral-600">RSS TOKEN → </span>
+                  <span className="text-red-500/60 break-all">{rssShort}</span>
+                </div>
+                <div className="font-mono text-[9px]">
+                  <span className="text-neutral-600">FETCHED → </span>
+                  <span className="text-green-500 break-all">{srcShort || d.finalUrl?.replace(/^https?:\/\//, "").slice(0, 60)}</span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }
@@ -832,7 +949,7 @@ function OverviewPanel({
   return (
     <div className="p-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
       {/* ── Seed Diagnostics Card — shown for auto-seeded cases ── */}
-      {isAutoSeeded && seedDiag && <SeedDiagnosticsCard diag={seedDiag} />}
+      {isAutoSeeded && seedDiag && <SeedDiagnosticsCard diag={seedDiag} documents={documents} />}
 
       {/* ── Case brief — only for non-seeded or seeded with clean text ── */}
       {descText && (

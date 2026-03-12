@@ -198,6 +198,17 @@ button:focus-visible {
   box-shadow: none !important;
 }
 
+/* ── ReactFlow selected-node blue outline suppression ── */
+/* React Flow applies a blue box-shadow to .react-flow__node when it enters
+   the "selected" state via its internal selection mechanism. Our custom nodes
+   handle their own selected-state styling, so we suppress the library default. */
+.react-flow__node.selected,
+.react-flow__node.selected:focus,
+.react-flow__node.selected:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* ── Input / textarea focus ring suppression (no browser blue glow) ── */
 input:focus,
 textarea:focus,

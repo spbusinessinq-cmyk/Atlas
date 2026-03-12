@@ -1,0 +1,164 @@
+ATLAS DEBUG RECOVERY PASS — PROVE THE SEED PIPELINE WORKS END TO END
+
+Do NOT do a cosmetic pass.
+Do NOT focus on styling.
+Do NOT add new panels unless needed for debugging.
+This pass is only about making the automatic case builder actually work and proving it with visible diagnostics.
+
+PRIMARY GOAL
+
+For a fresh seeded case, ATLAS must successfully do:
+
+create case
+→ search web
+→ resolve real article URLs
+→ fetch real article body
+→ extract usable text
+→ extract entities
+→ auto-promote safe seed entities
+→ populate graph
+→ show a non-empty case
+
+If any stage fails, ATLAS must clearly show where and why.
+
+==================================================
+1. ADD HARD SEED PIPELINE DEBUGGING
+==================================================
+
+For every seeded document, record and expose:
+
+- search result title
+- search result URL
+- resolved real article URL
+- final fetched URL
+- fetch success/failure
+- extraction strategy used
+- extracted char count
+- paragraph count
+- body status: OK / PARTIAL / FAILED / WRAPPER
+- whether entity extraction ran
+- entity count found
+- whether doc contributed to promotion
+- whether doc contributed to graph seeding
+
+Do not hide this behind vague summaries.
+
+==================================================
+2. ADD A CASE-LEVEL SEED DEBUG PANEL
+==================================================
+
+Inside every auto-seeded case, show a compact debug panel with:
+
+- search results found
+- docs attempted
+- docs fetched successfully
+- docs with usable body text
+- docs partial
+- docs failed
+- docs wrapper-blocked
+- total entities extracted
+- entities promoted
+- graph seeded yes/no
+
+If graph is empty, state exactly why.
+
+==================================================
+3. VERIFY THE GOOGLE NEWS RSS FIX IS ACTUALLY USED
+==================================================
+
+The code reportedly switched from the Google redirect token to the RSS source real URL.
+Prove that this is actually happening in the live pipeline.
+
+For each seeded doc, show:
+- RSS redirect URL
+- RSS source real URL
+- actual fetch target used
+
+If the pipeline is still fetching the redirect URL anywhere, fix it.
+
+==================================================
+4. DO NOT COUNT BAD DOCS AS SUCCESS
+==================================================
+
+A doc must only count as successful if:
+- real body text was extracted
+- char count passes threshold
+- content is not wrapper / nav / teaser junk
+
+Docs that are PARTIAL / FAILED / WRAPPER must not inflate the seeded case summary.
+
+==================================================
+5. FORCE A KNOWN-GOOD LIVE TEST
+==================================================
+
+Run the pipeline on ONE fresh test target and verify step by step.
+
+Use a target likely to produce real article bodies.
+Example:
+- Los Angeles homeless hotel contracts
+or
+- Highland Gardens Hotel Los Angeles
+
+Do not just run it in the background and summarize.
+Actually inspect the resulting case.
+
+==================================================
+6. REQUIRE A MINIMUM SUCCESS CONDITION
+==================================================
+
+This pass is not complete unless the fresh seeded case shows all of the following:
+
+- at least 1 successfully extracted article body
+- at least 1 document where analysis truly ran
+- at least 1 real entity promoted OR a clear explanation why none qualified
+- graph populated if promoted entities exist
+- seed debug panel shows all stage counts correctly
+
+==================================================
+7. FIX STALE / BAD DOC CONFUSION
+==================================================
+
+If old broken docs remain from earlier seed runs, make it clear in the UI which docs were created before the fix vs after the fix.
+
+If necessary, show:
+- ingested timestamp
+- extraction version / strategy
+- body status
+
+The user must be able to tell whether they are looking at old broken docs or newly processed docs.
+
+==================================================
+8. REMOVE FAKE SUCCESS LANGUAGE
+==================================================
+
+Do not say:
+- “ingested 6 sources and detected 6 signals”
+unless those sources truly yielded usable extraction.
+
+Case summaries must reflect actual success, not attempted work.
+
+==================================================
+9. BLUE BOX / FOCUS ARTIFACT
+==================================================
+
+Determine whether the blue box is:
+- app CSS
+- React Flow
+- Replit canvas overlay
+- browser focus artifact
+
+If it is not inside the app, stop trying to fix it with app CSS and note that clearly.
+
+==================================================
+10. FINAL REPORT
+==================================================
+
+At the end, report:
+
+- exact root cause of the current failure
+- whether the live pipeline was using real article URLs or not
+- how many docs in the fresh test case were truly usable
+- whether entity extraction ran successfully
+- whether promotion ran successfully
+- whether graph seeding succeeded
+- which files were changed

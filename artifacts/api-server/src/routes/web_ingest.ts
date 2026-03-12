@@ -21,6 +21,7 @@ const router: IRouter = Router();
 export interface WebSearchResult {
   title: string;
   url: string;
+  rssLink?: string;       // Original Google News redirect URL (for debugging)
   sourceDomain: string;
   snippet: string;
   publishDate: string;
@@ -211,16 +212,17 @@ function parseRssItems(xml: string, query = ""): WebSearchResult[] {
         : "unknown";
 
     // Use the real article URL when available; fall back to the RSS link
-    const url = (realSourceUrl && !realSourceUrl.includes("news.google.com"))
-      ? realSourceUrl
-      : rawLink;
+    const usingRealUrl = !!(realSourceUrl && !realSourceUrl.includes("news.google.com"));
+    const url = usingRealUrl ? realSourceUrl! : rawLink;
+    // Preserve the original RSS redirect link for debugging purposes
+    const rssLink = usingRealUrl ? rawLink : undefined;
 
     const contentType: "web-article" | "pdf" = (url || "").toLowerCase().includes(".pdf")
       ? "pdf"
       : "web-article";
 
     if (title && url) {
-      results.push({ title, url, sourceDomain, snippet, publishDate: pubDate, contentType });
+      results.push({ title, url, rssLink, sourceDomain, snippet, publishDate: pubDate, contentType });
     }
   }
 
@@ -499,9 +501,13 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
 /**
  * Encodes extraction diagnostics as a compact prefix in the rawText field so
  * the frontend can display them without a DB schema change.
- * Format: [ATLAS-DIAG:status=ok|chars=4523|paras=12|sel=article|strategy=selector]\n
+ * Format: [ATLAS-DIAG:status=ok|chars=4523|paras=12|sel=article|strategy=selector|...]\n
  */
-function encodeDiagPrefix(result: ExtractionResult, finalUrl?: string): string {
+function encodeDiagPrefix(
+  result: ExtractionResult,
+  finalUrl?: string,
+  extra?: { rssUrl?: string; srcUrl?: string; entities?: number; analysisRan?: boolean }
+): string {
   const parts = [
     `status=${result.status}`,
     `chars=${result.charCount}`,
@@ -510,6 +516,10 @@ function encodeDiagPrefix(result: ExtractionResult, finalUrl?: string): string {
     `strategy=${result.strategy}`,
   ];
   if (finalUrl) parts.push(`final_url=${encodeURIComponent(finalUrl)}`);
+  if (extra?.rssUrl) parts.push(`rss_url=${encodeURIComponent(extra.rssUrl)}`);
+  if (extra?.srcUrl) parts.push(`src_url=${encodeURIComponent(extra.srcUrl)}`);
+  if (extra?.entities !== undefined) parts.push(`entities=${extra.entities}`);
+  if (extra?.analysisRan !== undefined) parts.push(`analysis_ran=${extra.analysisRan ? 1 : 0}`);
   return `[ATLAS-DIAG:${parts.join("|")}]\n`;
 }
 
@@ -524,13 +534,21 @@ export function parseAtlasDiag(rawText: string): {
   sel: string;
   strategy: string;
   finalUrl?: string;
+  rssUrl?: string;
+  srcUrl?: string;
+  entities?: number;
+  analysisRan?: boolean;
 } | null {
   const m = rawText.match(/^\[ATLAS-DIAG:([^\]]+)\]/);
   if (!m) return null;
   const kv: Record<string, string> = {};
   m[1].split("|").forEach((pair) => {
-    const [k, v] = pair.split("=");
-    if (k && v !== undefined) kv[k] = v;
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx > 0) {
+      const k = pair.slice(0, eqIdx);
+      const v = pair.slice(eqIdx + 1);
+      kv[k] = v;
+    }
   });
   return {
     status: (kv.status as "ok" | "partial" | "failed" | "wrapper") || "failed",
@@ -539,6 +557,10 @@ export function parseAtlasDiag(rawText: string): {
     sel: kv.sel || "unknown",
     strategy: kv.strategy || "unknown",
     finalUrl: kv.final_url ? decodeURIComponent(kv.final_url) : undefined,
+    rssUrl: kv.rss_url ? decodeURIComponent(kv.rss_url) : undefined,
+    srcUrl: kv.src_url ? decodeURIComponent(kv.src_url) : undefined,
+    entities: kv.entities !== undefined ? parseInt(kv.entities) : undefined,
+    analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
   };
 }
 
@@ -901,6 +923,8 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       let rawText = result.snippet || result.title;
       let docExtractionStatus: "ok" | "partial" | "failed" | "wrapper" = "failed";
 
+      const debugExtra = { rssUrl: result.rssLink, srcUrl: result.url };
+
       try {
         const articleResp = await fetch(result.url, {
           headers: {
@@ -918,17 +942,26 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           const html = await articleResp.text();
           const extracted = extractArticleText(html, rawText);
           if (isWrapperOrJunk(html, finalUrl, extracted.text)) {
-            const diagPrefix = encodeDiagPrefix({ ...extracted, status: "failed" as const, strategy: "fallback" as const }, finalUrl);
+            const diagPrefix = encodeDiagPrefix(
+              { ...extracted, status: "failed" as const, strategy: "fallback" as const },
+              finalUrl,
+              { ...debugExtra, analysisRan: false }
+            );
             rawText = `${diagPrefix}[WRAPPER_BLOCKED]\n${result.snippet || result.title}`;
             docExtractionStatus = "wrapper";
           } else {
-            const diagPrefix = encodeDiagPrefix(extracted, finalUrl);
+            const diagPrefix = encodeDiagPrefix(extracted, finalUrl, debugExtra);
             rawText = diagPrefix + extracted.text;
             docExtractionStatus = extracted.status === "ok" ? "ok" : extracted.status === "partial" ? "partial" : "failed";
           }
         }
       } catch {
-        const diagPrefix = encodeDiagPrefix({ text: result.snippet || result.title, status: "failed", paragraphCount: 0, charCount: (result.snippet || result.title).length, selectorUsed: "none", strategy: "fallback" });
+        const fallbackExtra = { ...debugExtra, analysisRan: false };
+        const diagPrefix = encodeDiagPrefix(
+          { text: result.snippet || result.title, status: "failed", paragraphCount: 0, charCount: (result.snippet || result.title).length, selectorUsed: "none", strategy: "fallback" },
+          undefined,
+          fallbackExtra
+        );
         rawText = `${diagPrefix}[FETCH_FAILED]\n${result.snippet || result.title}`;
         docExtractionStatus = "failed";
       }
@@ -979,6 +1012,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       const textForAnalysis = cleanRawText(rawText);
       const entities = extractEntities(textForAnalysis);
 
+      let entityCountForDoc = 0;
       for (const m of entities) {
         if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
         try {
@@ -993,9 +1027,23 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
             startPos: m.startPos,
             endPos: m.endPos,
           });
+          entityCountForDoc++;
         } catch {
           // Skip duplicate/constraint errors
         }
+      }
+
+      // ── Patch rawText to add entity count and analysis_ran into the ATLAS-DIAG block ──
+      // This lets the frontend prove exactly what each doc contributed.
+      const updatedRawText = rawText.replace(
+        /(\[ATLAS-DIAG:[^\]]+)\]/,
+        (_, inner) => `${inner}|entities=${entityCountForDoc}|analysis_ran=1]`
+      );
+      if (updatedRawText !== rawText) {
+        await db.update(documentsTable)
+          .set({ rawText: updatedRawText })
+          .where(eq(documentsTable.id, doc.id));
+        rawText = updatedRawText;
       }
     } catch (err) {
       console.error(`[ATLAS SEED] Failed to ingest ${result.url}:`, err);

@@ -207,11 +207,11 @@ function DocumentRow({
           </div>
           <div className="flex items-center gap-2 text-[9px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
             <span className="truncate max-w-[140px]">
-              {doc.source || "UNKNOWN SOURCE"}
+              {(doc as ExtendedDoc).sourceDomain || doc.source || "UNKNOWN SOURCE"}
             </span>
             <span className="text-[#ffffff10]">·</span>
-            <span className="flex-shrink-0">
-              {formatDate(doc.uploadedAt).split(",")[0]}
+            <span className="flex-shrink-0 tabular-nums" title={`Ingested: ${formatDate(doc.uploadedAt)}`}>
+              {formatDate(doc.uploadedAt)}
             </span>
           </div>
         </div>
@@ -408,7 +408,7 @@ export function DocumentViewer({
 // ─── Parse ATLAS-DIAG prefix ───────────────────────────────────────────────────
 
 function parseAtlasDiag(rawText: string) {
-  const m = rawText.match(/^\[ATLAS-DIAG:([^\]]+)\]/);
+  const m = rawText.match(/\[ATLAS-DIAG:([^\]]+)\]/);
   if (!m) return null;
   const kv: Record<string, string> = {};
   m[1].split("|").forEach((pair) => {
@@ -416,13 +416,18 @@ function parseAtlasDiag(rawText: string) {
     if (eqIdx === -1) return;
     kv[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
   });
+  const dec = (v?: string) => { try { return v ? decodeURIComponent(v) : undefined; } catch { return v; } };
   return {
     status: (kv.status as "ok" | "partial" | "failed" | "wrapper") || "failed",
     chars: parseInt(kv.chars || "0"),
     paras: parseInt(kv.paras || "0"),
     sel: kv.sel || "unknown",
     strategy: kv.strategy || "unknown",
-    finalUrl: kv.final_url ? decodeURIComponent(kv.final_url) : undefined,
+    finalUrl: dec(kv.final_url),
+    rssUrl: dec(kv.rss_url),
+    srcUrl: dec(kv.src_url),
+    entities: kv.entities !== undefined ? parseInt(kv.entities) : undefined,
+    analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
   };
 }
 
@@ -731,8 +736,8 @@ export function DocumentInspector({
             )}
             <div>
               INGESTED:{" "}
-              <span className="text-neutral-400">
-                {formatDate(doc.uploadedAt).split(",")[0]}
+              <span className="text-neutral-400 tabular-nums">
+                {formatDate(doc.uploadedAt)}
               </span>
             </div>
             <div>
@@ -762,15 +767,37 @@ export function DocumentInspector({
                 wrapper: "text-red-400",
               };
               return (
-                <div>
-                  BODY:{" "}
-                  <span className={statusColors[inspStatus] ?? "text-neutral-400"}>
-                    {inspStatus === "ok" ? `OK — ${diagInspector?.chars.toLocaleString() ?? "?"} chars`
-                      : inspStatus === "partial" ? `PARTIAL — ${diagInspector?.chars.toLocaleString() ?? "?"} chars`
-                      : inspStatus === "wrapper" ? "WRAPPER BLOCKED"
-                      : "FAILED"}
-                  </span>
-                </div>
+                <>
+                  <div>
+                    BODY:{" "}
+                    <span className={statusColors[inspStatus] ?? "text-neutral-400"}>
+                      {inspStatus === "ok" ? `OK — ${diagInspector?.chars.toLocaleString() ?? "?"} chars, ${diagInspector?.paras ?? "?"} ¶`
+                        : inspStatus === "partial" ? `PARTIAL — ${diagInspector?.chars.toLocaleString() ?? "?"} chars`
+                        : inspStatus === "wrapper" ? "WRAPPER BLOCKED"
+                        : "FAILED"}
+                    </span>
+                  </div>
+                  {diagInspector?.strategy && (
+                    <div>
+                      EXTRACT:{" "}
+                      <span className="text-neutral-400 uppercase">{diagInspector.strategy}</span>
+                    </div>
+                  )}
+                  {diagInspector?.entities !== undefined && (
+                    <div>
+                      ENTITIES:{" "}
+                      <span className={diagInspector.entities > 0 ? "text-amber-500" : "text-neutral-600"}>
+                        {diagInspector.entities} detected
+                      </span>
+                    </div>
+                  )}
+                  {diagInspector?.rssUrl && (
+                    <div>
+                      URL SRC:{" "}
+                      <span className="text-green-700 text-[8px] break-all">REAL URL ✓</span>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>
