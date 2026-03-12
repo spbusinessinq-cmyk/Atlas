@@ -124,19 +124,26 @@ const SKIP_NAMES = new Set([
 // (also includes wrapper-page injection artifacts from WRAPPER_ENTITY_BLOCKLIST)
 const MEDIA_SOURCE_BLOCKLIST = new Set([
   "Google News", "Google", "Google LLC", "Google Search", "News Google",
-  "Associated Press", "Reuters", "Bloomberg",
+  "Associated Press", "The Associated Press", "AP", "Reuters", "Bloomberg",
   "Yahoo News", "Yahoo Finance", "Yahoo",
+  // Wire / PR services
+  "PRNewswire", "PR Newswire", "Business Wire", "BusinessWire", "Newswire",
+  "GlobeNewswire", "Globe Newswire", "PR Newswire Association",
   // Wrapper / junk page artifacts
   "JavaScript", "Sign In", "Log In", "Subscribe", "Continue", "Accept",
   "Enable JavaScript", "Cookie", "Cookies", "Privacy Policy",
   "Terms of Service", "More", "Share", "Close", "Skip",
   "Loading", "Please Wait", "Redirect", "Follow",
+  "Breaking News", "Editors Note", "Editor's Note", "Advertisement",
+  "Sponsored Content", "Paid Post", "Advertorial", "In Partnership",
   "MSN", "MSN News", "Bing News", "Bing",
   "Apple News", "Apple",
-  "Facebook", "Twitter", "Instagram", "YouTube",
+  "Facebook", "Twitter", "Instagram", "YouTube", "TikTok", "LinkedIn",
   "Wikipedia", "Wikimedia",
-  "The Associated Press",
-  "Dow Jones", "Hearst",
+  "Dow Jones", "Hearst", "Gannett", "McClatchy",
+  // Generic content fragments
+  "Read More", "Full Story", "Click Here", "Learn More", "See More",
+  "Related Articles", "Latest News", "Top Stories", "More Stories",
 ]);
 
 // Sports / entertainment noise that should not surface in investigative cases
@@ -444,6 +451,7 @@ export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
 
 export interface ExtractedFinancialSignal {
   amountRaw: string;
+  amountDisplay: string;
   normalizedAmount: number | null;
   currency: string;
   signalType: string;
@@ -451,34 +459,55 @@ export interface ExtractedFinancialSignal {
   entityName: string | null;
 }
 
-const MONEY_PATTERN = /(?:(?:US\$|£|€|\$)\s*[\d,]+(?:\.\d+)?\s*(?:million|billion|trillion|thousand|M|B|K|mn|bn)?|[\d,]+(?:\.\d+)?\s*(?:million|billion|trillion|M|B|bn|mn)\s*(?:US\s*)?(?:dollar|pound|euro)?s?)/gi;
+// Robust money pattern — matches:
+//   $2 billion  $1.3B  $400 million  $75M  $250,000  USD 2 billion  £500,000
+// Groups: (1) currency symbol/word, (2) number, (3) scale word/letter
+const MONEY_PATTERN = /(?:(USD|US\$|\$|£|€|GBP|EUR)\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMKT])\b|(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMK])\b(?:\s*(?:USD|US dollars?|dollars?))?|(USD|US\$|\$|£|€)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?))/gi;
+
+// Keywords that must appear near a financial figure for it to be considered a signal
+const FINANCIAL_PROXIMITY_PATTERN = /\b(funding|grant|budget|investment|contract|appropriation|allocation|spending|award(?:ed)?|payment|program\s+fund|invest(?:ed|ment)|financed?|contributed?|donated?|subsidized?|reimburse|revenue|cost|price|worth|valued?\s+at|deal\s+worth|committed?|pledged?)\b/i;
 
 const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
-  { regex: /\b(?:contract(?:ed?|s)?|contracted?)\b/i, type: "CONTRACT" },
-  { regex: /\b(?:grant(?:ed?|s)?|grants?)\b/i, type: "GRANT" },
-  { regex: /\b(?:fund(?:ed?|ing|s)?|funded)\b/i, type: "FUNDING" },
-  { regex: /\b(?:appropriat(?:ed?|ion|ions)?)\b/i, type: "APPROPRIATION" },
-  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?)\b/i, type: "PAYMENT" },
-  { regex: /\b(?:award(?:ed?|s)?|rewarded?)\b/i, type: "AWARD" },
-  { regex: /\b(?:receiv(?:ed?|ing|s)?|received)\b/i, type: "PAYMENT" },
+  { regex: /\b(?:contract(?:ed?|s)?|sole.source|no.bid)\b/i, type: "CONTRACT" },
+  { regex: /\b(?:grant(?:ed?|s)?|subgrant)\b/i, type: "GRANT" },
+  { regex: /\b(?:fund(?:ed?|ing|s)?|financed?)\b/i, type: "FUNDING" },
+  { regex: /\b(?:appropriat(?:ed?|ion|ions)?|budget(?:ed?)?|allocated?|allocation)\b/i, type: "APPROPRIATION" },
+  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?|reimburse)\b/i, type: "PAYMENT" },
+  { regex: /\b(?:award(?:ed?|s)?|won)\b/i, type: "AWARD" },
+  { regex: /\b(?:invest(?:ed?|ment|ing)|invested)\b/i, type: "INVESTMENT" },
 ];
 
-function normalizeAmount(raw: string): { amount: number | null; currency: string } {
+// Parse the raw money match and return normalized value + display string
+function normalizeAmount(raw: string): { amount: number | null; currency: string; display: string } {
   let currency = "USD";
-  if (raw.includes("£")) currency = "GBP";
-  if (raw.includes("€")) currency = "EUR";
+  let currencySymbol = "$";
+  if (/£|GBP/i.test(raw)) { currency = "GBP"; currencySymbol = "£"; }
+  else if (/€|EUR/i.test(raw)) { currency = "EUR"; currencySymbol = "€"; }
 
-  const cleaned = raw.replace(/[£€$,\s]/gi, "").toLowerCase();
-  const numStr = cleaned.replace(/(?:million|billion|trillion|thousand|m|b|k|mn|bn|dollar|pound|euros?)/gi, "").trim();
+  // Strip currency symbols/words and commas, keep digits and decimal
+  const numericPart = raw.replace(/USD|US\$|GBP|EUR|[$£€,\s]/gi, "").toLowerCase();
+  const scaleMatch = /\b(billion|million|thousand|trillion|bn|mn|tr|[bmkt])\b/i.exec(numericPart);
+  const numStr = numericPart.replace(/(?:billion|million|thousand|trillion|bn|mn|tr|[bmkt])/gi, "").trim();
   const base = parseFloat(numStr);
-  if (isNaN(base)) return { amount: null, currency };
+  if (isNaN(base) || base <= 0) return { amount: null, currency, display: raw };
 
   let multiplier = 1;
-  if (/billion|bn/i.test(raw)) multiplier = 1_000_000_000;
-  else if (/million|mn|m\b/i.test(raw)) multiplier = 1_000_000;
-  else if (/thousand|k\b/i.test(raw)) multiplier = 1_000;
+  let scaleLabel = "";
+  if (scaleMatch) {
+    const s = scaleMatch[1].toLowerCase();
+    if (s === "billion" || s === "bn" || s === "b") { multiplier = 1_000_000_000; scaleLabel = "B"; }
+    else if (s === "million" || s === "mn" || s === "m") { multiplier = 1_000_000; scaleLabel = "M"; }
+    else if (s === "thousand" || s === "k" || s === "t") { multiplier = 1_000; scaleLabel = "K"; }
+    else if (s === "trillion" || s === "tr") { multiplier = 1_000_000_000_000; scaleLabel = "T"; }
+  }
 
-  return { amount: Math.round(base * multiplier * 100) / 100, currency };
+  const amount = Math.round(base * multiplier * 100) / 100;
+  // Human display: "$2B" or "$250,000"
+  const display = scaleLabel
+    ? `${currencySymbol}${base}${scaleLabel}`
+    : `${currencySymbol}${amount.toLocaleString()}`;
+
+  return { amount, currency, display };
 }
 
 function getSignalType(context: string): string {
@@ -496,25 +525,39 @@ export function extractFinancialSignals(text: string): ExtractedFinancialSignal[
   const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 10);
 
   for (const sentence of sentences) {
+    // Only emit signals when a financial keyword is nearby
+    if (!FINANCIAL_PROXIMITY_PATTERN.test(sentence)) continue;
+
     MONEY_PATTERN.lastIndex = 0;
     let match;
     while ((match = MONEY_PATTERN.exec(sentence)) !== null) {
       const amountRaw = match[0].trim();
-      if (seen.has(amountRaw)) continue;
-      seen.add(amountRaw);
+      if (!amountRaw || amountRaw.length < 2) continue;
 
-      const { amount, currency } = normalizeAmount(amountRaw);
-      if (amount !== null && amount < 1000) continue; // Skip trivial amounts
+      const { amount, currency, display } = normalizeAmount(amountRaw);
+      if (amount === null || amount < 1000) continue; // Skip trivial or unparseable amounts
+
+      const dedupKey = display;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
 
       const signalType = getSignalType(sentence);
-      const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 200);
+      const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
 
-      // Try to find a nearby proper noun (entity name)
+      // Find nearest proper noun in the sentence for entity linkage
       let entityName: string | null = null;
-      const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence.slice(0, match.index + amountRaw.length));
+      const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence);
       if (properNounMatch) entityName = properNounMatch[1];
 
-      signals.push({ amountRaw, normalizedAmount: amount, currency, signalType, eventSummary: summary, entityName });
+      signals.push({
+        amountRaw,
+        amountDisplay: display,
+        normalizedAmount: amount,
+        currency,
+        signalType,
+        eventSummary: summary,
+        entityName,
+      });
       if (signals.length >= 20) return signals;
     }
   }

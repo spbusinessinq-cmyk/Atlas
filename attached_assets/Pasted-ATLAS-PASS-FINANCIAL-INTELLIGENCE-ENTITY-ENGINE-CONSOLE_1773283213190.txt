@@ -1,0 +1,295 @@
+ATLAS PASS — FINANCIAL INTELLIGENCE + ENTITY ENGINE + CONSOLE DEPTH
+
+Upgrade the ATLAS investigation system by fixing financial extraction, strengthening entity intelligence, and improving the console interface depth.
+
+The current system functions but suffers from several issues:
+
+• Financial signals are broken (examples showing “USD , m” placeholders).
+• Entity extraction returns weak or irrelevant entities.
+• New investigations often produce no meaningful intelligence signals.
+• The UI feels flat like a normal web dashboard rather than a tactical intelligence console.
+
+This pass fixes those problems.
+
+PART 1 — FINANCIAL EXTRACTION ENGINE
+
+Replace the current financial detection logic with a robust money parser.
+
+The system must correctly detect amounts like:
+
+$2 billion
+$1.3B
+$400 million
+$75M
+$250,000
+$24.7 billion
+USD 2 billion
+USD 750 million
+
+The parser must extract the following structured data:
+
+amount
+currency
+scale (thousand / million / billion)
+normalized_value
+raw_phrase
+
+Examples:
+
+$2 billion → normalized_value = 2000000000
+$75M → normalized_value = 75000000
+$1.3B → normalized_value = 1300000000
+
+Do NOT create a financial signal unless the amount appears near investigative keywords.
+
+Keywords to check within nearby text:
+
+funding
+grant
+budget
+investment
+contract
+appropriation
+allocation
+spending
+award
+payment
+program funding
+
+Store financial signals as:
+
+amount
+normalized_value
+currency
+context_sentence
+source_document
+linked_entities
+
+PART 2 — ENTITY EXTRACTION ENGINE 2.0
+
+Replace the current entity pipeline with a scored extraction system.
+
+Each detected entity should be evaluated using multiple signals:
+
+frequency score
+context keyword score
+entity type priority
+cross-document presence
+keyword proximity
+
+Boost entities appearing near investigative keywords:
+
+contract
+fraud
+housing
+spending
+audit
+grant
+program
+authority
+department
+procurement
+corruption
+funding
+allocation
+
+Apply penalties to entities near noise contexts:
+
+sports
+entertainment
+celebrity
+awards
+film
+music
+television
+sports league
+
+PART 3 — ENTITY NOISE FILTER
+
+Block common news artifacts and useless entities.
+
+Ignore entities like:
+
+Associated Press
+Breaking News
+Editors Note
+Advertisement
+PRNewswire
+Newswire
+
+Also block common sports and entertainment noise.
+
+PART 4 — ENTITY NORMALIZATION
+
+Merge entities that refer to the same organization.
+
+Example:
+
+Los Angeles Housing Department
+LA Housing Department
+Housing Department
+
+These should resolve to one canonical entity.
+
+Normalization must detect:
+
+abbreviations
+minor spelling differences
+organization suffixes
+
+PART 5 — ENTITY TYPE PRIORITY
+
+Promote the most useful investigative entities.
+
+High priority entity types:
+
+government agency
+organization
+program
+fund
+authority
+contractor
+facility
+location
+
+Lower priority entity types:
+
+random individuals
+media personalities
+sports figures
+
+Persons should only be promoted if they appear in multiple documents.
+
+PART 6 — DOCUMENT SIGNAL SCORING
+
+Each document should receive a signal classification.
+
+Calculate score using:
+
+entity density
+financial mentions
+investigative keywords
+document length
+
+Classification levels:
+
+HIGH SIGNAL
+MEDIUM SIGNAL
+LOW SIGNAL
+
+Display this signal level in the document vault.
+
+PART 7 — FINANCIAL SIGNAL PANEL
+
+Upgrade the Flow Trace tab to show real financial intelligence.
+
+Each detected signal should show:
+
+amount
+context sentence
+linked entities
+source document
+
+Example display:
+
+$2 billion
+Retailer plans to invest an incremental $2 billion in 2026.
+Source: PR Newswire
+Linked Entity: Linc Housing
+
+PART 8 — DASHBOARD DEPTH REDESIGN
+
+The interface should feel like an intelligence console, not a flat webpage.
+
+Introduce visual depth using layered panels.
+
+Create three visual planes:
+
+shell frame
+control panel
+content surface
+
+Use slightly different background tones and subtle inner borders to create depth.
+
+PART 9 — TELEMETRY PANEL
+
+Replace the thin telemetry strip with a system status panel.
+
+Display:
+
+ATLAS CORE ONLINE
+DOSSIERS count
+ENTITY REGISTRY count
+DOCUMENT VAULT count
+TRIAGE QUEUE count
+
+Example:
+
+ATLAS CORE ONLINE
+DOSSIERS 03
+ENTITY REGISTRY 49
+DOCUMENT VAULT 78
+TRIAGE QUEUE 1638
+
+PART 10 — BOOT SCREEN
+
+Add a short system boot screen when the application loads.
+
+Display for about 2 seconds.
+
+Black background with subtle grid.
+
+Radar sweep animation behind the text.
+
+Boot messages:
+
+BOOTING ATLAS CORE
+LOADING INTELLIGENCE MODULES
+SYNCHRONIZING ENTITY REGISTRY
+INITIALIZING GRAPH ENGINE
+ATLAS CORE ONLINE
+
+Fade into the dashboard after the sequence finishes.
+
+PART 11 — GRAPH INTELLIGENCE
+
+Improve relationship scoring in the graph.
+
+Edge strength should consider:
+
+co-document presence
+financial linkage
+entity type compatibility
+keyword proximity
+
+Stronger edges should appear more prominently.
+
+PART 12 — CASE INTELLIGENCE SUMMARY
+
+Add an intelligence summary panel for each case.
+
+Example:
+
+CASE INTELLIGENCE
+
+8 documents ingested
+5 usable intelligence sources
+3 financial signals detected
+
+Primary entities:
+
+Linc Housing
+Los Angeles Housing Department
+Project Homekey
+
+FINAL OBJECTIVE
+
+After this upgrade ATLAS should produce:
+
+• stronger entity detection
+• real financial signals
+• fewer irrelevant entities
+• deeper tactical UI
+• more useful investigations
+
+The system should feel closer to an intelligence analysis platform rather than a standard web application.

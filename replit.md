@@ -64,7 +64,16 @@ The project is structured as a pnpm monorepo using Node.js 24 and TypeScript 5.9
     *   **Next Action Guidance:** Provides UI prompts for reviewing co-mention associations.
     *   **System Log:** Real-time event feed (`/logs` page) for document ingestion, web ingestion, analysis, and entity approval/rejection events.
 
-5.  **Console Refinement & Intelligence Hardening (Pass 15):**
+5.  **Financial Intelligence + Entity Engine + Console Depth (Pass 16):**
+    *   **Financial Extraction Engine Rewrite (Part 1):** New robust `MONEY_PATTERN` regex correctly detects `$2 billion`, `$1.3B`, `$400 million`, `$75M`, `$250,000`, `USD 2 billion` patterns. `normalizeAmount()` now handles B/M/K/T single-letter suffixes. Returns `amountDisplay` field (e.g. `$2B`, `$75M`) for clean UI rendering. `FINANCIAL_PROXIMITY_PATTERN` gate prevents false-positive signals — only sentences with financial keywords emit signals.
+    *   **FlowTrace Panel Upgrade (Part 7):** Now renders `amountDisplay` (not raw match) in green. Context sentence shown in monospace. Source label reads "SOURCE:". Signal type badge uses lowercase lookup.
+    *   **Entity Noise Filter Expansion (Parts 3):** `MEDIA_SOURCE_BLOCKLIST` expanded with PR wire services (PRNewswire, Business Wire, GlobeNewswire, Newswire), page artifact text (Breaking News, Editors Note, Advertisement, Sponsored Content), social platforms (TikTok, LinkedIn), and generic content fragments (Read More, Full Story, Top Stories).
+    *   **Document Signal Scoring (Part 6):** `computeDocSignalScore()` function rates each document HIGH/MEDIUM/LOW based on financial keyword hits, investigative keyword hits, context keyword density, document length, and entity count. Signal badge shown in Document Vault rows.
+    *   **Boot Screen (Part 10):** `BootScreen.tsx` added — full-screen black overlay with subtle red grid background, radar sweep animation, 5-line boot message sequence, and progress bar. Completes in ~2.35 seconds then fades out. Shows once per browser session (sessionStorage flag). `atlas-radar-sweep` and `atlas-boot-progress` CSS keyframes added to index.css.
+    *   **Dashboard System Status Panel (Parts 8, 9):** Three visual depth planes (`atlas-shell` → `atlas-control-panel` → `atlas-content-surface`) replace the thin telemetry strip. ATLAS CORE ONLINE header with pulsing green dot. Four metric cells: DOSSIERS / ENTITY REGISTRY / DOCUMENT VAULT / TRIAGE QUEUE — each with icon, label, large count, and contextual sub-label.
+    *   **Case Intelligence Summary (Part 12):** New CASE INTELLIGENCE panel added at top of OverviewPanel showing SOURCES INGESTED / ENTITY REGISTRY / FINANCIAL SIGNALS counts, plus PERSONS/ORGS breakdown, timeline events, usable sources count, and a PRIMARY ENTITIES chip row.
+
+6.  **Console Refinement & Intelligence Hardening (Pass 15):**
     *   **CSS Global Tightening:** `nexus-header-strip` reduced to `py-1.5`, `nexus-label` reduced to `text-[9px]`. Added `.nexus-row` utility class for ultra-compact console rows.
     *   **Dashboard Redesign:** 4-card metric grid replaced with a compact inline telemetry strip (DOSSIERS / ENTITIES / VAULT / PENDING). List-mode case cards rewritten as single-line dossier registry rows with status dot, CASE-ID, title, telemetry, chevron. Default view changed to list mode.
     *   **Document Vault Compact Rows:** Document row height reduced (py-1.5), icon shrunk to 5×5, text to xs, action buttons tightened.

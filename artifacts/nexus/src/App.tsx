@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,6 +13,7 @@ import EntityProfile from "@/pages/entity-profile";
 import DocumentLibrary from "@/pages/documents";
 import SystemLog from "@/pages/logs";
 import NotFound from "@/pages/not-found";
+import { BootScreen } from "@/components/BootScreen";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,9 +39,19 @@ function Router() {
 }
 
 function App() {
+  const [booted, setBooted] = useState(() => {
+    try { return sessionStorage.getItem("atlas-booted") === "1"; } catch { return true; }
+  });
+
+  const handleBootComplete = () => {
+    try { sessionStorage.setItem("atlas-booted", "1"); } catch { /* ignore */ }
+    setBooted(true);
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        {!booted && <BootScreen onComplete={handleBootComplete} />}
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Layout>
             <Router />

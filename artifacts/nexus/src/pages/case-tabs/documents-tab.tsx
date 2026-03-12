@@ -115,6 +115,12 @@ export default function DocumentsTab({
   );
 }
 
+const SIGNAL_BADGE: Record<"HIGH" | "MEDIUM" | "LOW", { text: string; cls: string }> = {
+  HIGH:   { text: "HIGH SIG",   cls: "text-green-500 border-green-500/40 bg-green-500/5" },
+  MEDIUM: { text: "MED SIG",    cls: "text-yellow-500 border-yellow-500/40 bg-yellow-500/5" },
+  LOW:    { text: "LOW SIG",    cls: "text-neutral-700 border-[#ffffff0d] bg-transparent" },
+};
+
 function DocumentRow({
   doc,
   caseId,
@@ -130,6 +136,9 @@ function DocumentRow({
 }) {
   const extDoc = doc as ExtendedDoc;
   const isWeb = extDoc.ingestMethod === "web";
+  const diag = extDoc.rawText ? (() => { try { return parseAtlasDiag(extDoc.rawText!); } catch { return null; } })() : null;
+  const signalScore = computeDocSignalScore(extDoc.rawText, diag?.entities);
+  const signalBadge = SIGNAL_BADGE[signalScore];
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -201,12 +210,15 @@ function DocumentRow({
             {doc.title}
           </div>
           <div className="flex items-center gap-2 text-[8px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
-            <span className="truncate max-w-[120px]">
+            <span className="truncate max-w-[100px]">
               {(doc as ExtendedDoc).sourceDomain || doc.source || "UNKNOWN"}
             </span>
             <span className="text-[#ffffff10]">·</span>
             <span className="flex-shrink-0 tabular-nums" title={`Ingested: ${formatDate(doc.uploadedAt)}`}>
               {formatDate(doc.uploadedAt).split(",")[0]}
+            </span>
+            <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${signalBadge.cls}`}>
+              {signalBadge.text}
             </span>
           </div>
         </div>
@@ -398,6 +410,35 @@ export function DocumentViewer({
       </div>
     </div>
   );
+}
+
+// ─── Document Signal Scoring ──────────────────────────────────────────────────
+
+const FINANCIAL_KW = /\$|USD|budget|funding|grant|contract|appropriation|invest|award|payment|spending|allocated/gi;
+const INVESTIGATIVE_KW = /fraud|corruption|kickback|bribery|embezzlement|laundering|whistleblower|subpoena|audit|misconduct|indictment|conviction|probe|oversight|accountability|procurement|no-bid|sole.source|shell company/gi;
+const INVESTIGATIVE_CONTEXT_KW = /contract|housing|homeless|shelter|program|authority|department|procurement|grant|budget|allocation|oversight|compliance|violation|lawsuit|investigation|permit|rezoning|development/gi;
+
+function computeDocSignalScore(rawText: string | null | undefined, entityCount?: number): "HIGH" | "MEDIUM" | "LOW" {
+  if (!rawText) return "LOW";
+  const text = rawText.slice(0, 5000); // Score based on first 5k chars
+  const len = text.length;
+
+  const financialHits = (text.match(FINANCIAL_KW) || []).length;
+  const investigativeHits = (text.match(INVESTIGATIVE_KW) || []).length;
+  const contextHits = (text.match(INVESTIGATIVE_CONTEXT_KW) || []).length;
+  const entCount = entityCount ?? 0;
+
+  // Score: financial (0-3) + investigative (0-3) + context (0-2) + entity density (0-2)
+  let score = 0;
+  score += Math.min(3, financialHits);
+  score += Math.min(3, investigativeHits * 2);
+  score += Math.min(2, contextHits);
+  score += len > 3000 ? 1 : 0;
+  score += entCount >= 5 ? 2 : entCount >= 2 ? 1 : 0;
+
+  if (score >= 7) return "HIGH";
+  if (score >= 3) return "MEDIUM";
+  return "LOW";
 }
 
 // ─── Parse ATLAS-DIAG prefix ───────────────────────────────────────────────────

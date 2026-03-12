@@ -1000,8 +1000,65 @@ function OverviewPanel({
   const descText = cleanDescription(caseData.description);
   const isAutoSeeded = caseData.tags?.includes("auto-seeded");
 
+  // Compute case intelligence summary
+  const usableDocs = (documents as any[]).filter((d: any) => {
+    const raw: string = d.rawText || "";
+    const hasDiag = raw.includes("[ATLAS-DIAG:");
+    if (!hasDiag) return raw.length > 100;
+    return !raw.includes("status=failed") && !raw.includes("status=wrapper");
+  });
+  const highSignalCount = financialSignals.length;
+  const primaryEntities = entities.filter((e) => e.type !== "location").slice(0, 3);
+
   return (
     <div className="p-3 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-max">
+      {/* ── Case Intelligence Summary ── */}
+      <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
+        <div className="nexus-header-strip">
+          <span className="nexus-label">CASE INTELLIGENCE</span>
+          {highSignalCount > 0 && (
+            <span className="font-mono text-[9px] text-green-500 pr-3">
+              {highSignalCount} FINANCIAL SIGNAL{highSignalCount !== 1 ? "S" : ""} DETECTED
+            </span>
+          )}
+        </div>
+        <div className="p-3 grid grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">SOURCES INGESTED</div>
+            <div className="font-mono text-2xl font-bold text-white tabular-nums">{documents.length.toString().padStart(2, "0")}</div>
+            <div className="font-mono text-[8px] text-neutral-600 uppercase">{usableDocs.length} USABLE</div>
+          </div>
+          <div className="space-y-1">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">ENTITY REGISTRY</div>
+            <div className="font-mono text-2xl font-bold text-cyan-400 tabular-nums">{entities.length.toString().padStart(2, "0")}</div>
+            <div className="font-mono text-[8px] text-neutral-600 uppercase">
+              {entities.filter(e => e.type === "person").length} PERSONS · {entities.filter(e => e.type !== "person" && e.type !== "location").length} ORGS
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">FINANCIAL SIGNALS</div>
+            <div className={`font-mono text-2xl font-bold tabular-nums ${highSignalCount > 0 ? "text-green-400" : "text-neutral-700"}`}>
+              {highSignalCount.toString().padStart(2, "0")}
+            </div>
+            <div className="font-mono text-[8px] text-neutral-600 uppercase">
+              {timeline.length} TIMELINE EVENTS
+            </div>
+          </div>
+        </div>
+        {primaryEntities.length > 0 && (
+          <div className="border-t border-[#ffffff06] px-3 pb-3">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-2 pt-2">PRIMARY ENTITIES</div>
+            <div className="flex flex-wrap gap-1.5">
+              {primaryEntities.map((e) => (
+                <span key={e.id} className="font-mono text-[9px] text-white uppercase px-2 py-0.5 border border-[#ffffff10] bg-[#0a0e14]">
+                  {e.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ── Seed Diagnostics Card — shown for auto-seeded cases ── */}
       {isAutoSeeded && seedDiag && <SeedDiagnosticsCard diag={seedDiag} documents={documents} />}
 
@@ -1193,26 +1250,28 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
                       className="p-3 border border-[#ffffff0d] bg-[#0a0e14] space-y-1.5"
                     >
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] ${SIGNAL_COLOR[sig.signalType] ?? "text-neutral-400"}`}>
+                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] ${SIGNAL_COLOR[sig.signalType?.toLowerCase()] ?? "text-neutral-400"}`}>
                           {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
                         </span>
                         {sig.entityName && (
-                          <span className="text-sm font-bold text-cyan-400 uppercase">
+                          <span className="font-mono text-[10px] text-cyan-400 uppercase tracking-wide">
                             {sig.entityName}
                           </span>
                         )}
-                        {sig.amountRaw && (
-                          <span className="ml-auto text-sm font-bold text-green-400 font-mono">
-                            {sig.currency || "USD"}&nbsp;{sig.amountRaw}
+                        {(sig.amountDisplay || sig.amountRaw) && (
+                          <span className="ml-auto text-base font-bold text-green-400 font-mono tabular-nums">
+                            {sig.amountDisplay || sig.amountRaw}
                           </span>
                         )}
                       </div>
                       {sig.eventSummary && (
-                        <p className="text-xs text-neutral-500 leading-relaxed">{sig.eventSummary}</p>
+                        <p className="text-[11px] text-neutral-400 leading-relaxed font-mono">
+                          {sig.eventSummary.length > 180 ? sig.eventSummary.slice(0, 180) + "…" : sig.eventSummary}
+                        </p>
                       )}
                       {sig.documentTitle && (
-                        <div className="font-mono text-[9px] text-neutral-700 uppercase">
-                          SRC: {sig.documentTitle}
+                        <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
+                          SOURCE: {sig.documentTitle}
                         </div>
                       )}
                     </div>

@@ -201,34 +201,65 @@ export default function Dashboard() {
       {/* Seed Launcher */}
       <SeedLauncher />
 
-      {/* Compact telemetry strip */}
-      <div className="border border-[#ffffff0a] bg-[#ffffff03] px-4 py-2 flex items-center gap-0 flex-wrap">
-        <div className="flex items-center gap-3 pr-4 mr-4 border-r border-[#ffffff08]">
-          <Briefcase className="w-3 h-3 text-red-600 flex-shrink-0" />
-          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">DOSSIERS</span>
-          <span className="font-mono text-sm font-bold text-red-500 tabular-nums">{totalCases.toString().padStart(2, "0")}</span>
-          <span className="font-mono text-[9px] text-neutral-700">·</span>
-          <span className="font-mono text-[9px] text-neutral-600 uppercase">{activeCases} ACTIVE</span>
+      {/* System Status Panel — three visual depth planes */}
+      <div className="atlas-shell mb-0">
+        {/* Shell header */}
+        <div className="atlas-control-panel flex items-center justify-between px-3 py-1.5 border-b border-[#ffffff07]">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="font-mono text-[9px] text-green-500 uppercase tracking-[0.2em]">ATLAS CORE</span>
+            <span className="font-mono text-[9px] text-green-700 uppercase tracking-widest">ONLINE</span>
+          </div>
+          <span className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">SYSTEM STATUS</span>
         </div>
-        <div className="flex items-center gap-3 pr-4 mr-4 border-r border-[#ffffff08]">
-          <Database className="w-3 h-3 text-cyan-600 flex-shrink-0" />
-          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">ENTITIES</span>
-          <span className="font-mono text-sm font-bold text-cyan-500 tabular-nums">{totalEntities.toString().padStart(2, "0")}</span>
-        </div>
-        <div className="flex items-center gap-3 pr-4 mr-4 border-r border-[#ffffff08]">
-          <Files className="w-3 h-3 text-neutral-500 flex-shrink-0" />
-          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">VAULT</span>
-          <span className="font-mono text-sm font-bold text-neutral-400 tabular-nums">{totalDocs.toString().padStart(2, "0")}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Cpu className="w-3 h-3 flex-shrink-0" style={{ color: pendingCount > 0 ? "#f97316" : "#404040" }} />
-          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">PENDING</span>
-          <span className={`font-mono text-sm font-bold tabular-nums ${pendingCount > 0 ? "text-orange-400" : "text-neutral-600"}`}>
-            {pendingCount.toString().padStart(2, "0")}
-          </span>
-          {pendingCount > 0 && (
-            <span className="font-mono text-[9px] text-orange-700 uppercase animate-pulse">TRIAGE REQUIRED</span>
-          )}
+        {/* Content surface — metric rows */}
+        <div className="atlas-content-surface grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[#ffffff06]">
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <Briefcase className="w-3.5 h-3.5 text-red-700 flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">DOSSIERS</div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="font-mono text-lg font-bold text-red-500 tabular-nums leading-none">
+                  {totalCases.toString().padStart(2, "0")}
+                </span>
+                {activeCases > 0 && (
+                  <span className="font-mono text-[8px] text-red-700 uppercase">{activeCases} ACTIVE</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <Database className="w-3.5 h-3.5 text-cyan-700 flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">ENTITY REGISTRY</div>
+              <div className="font-mono text-lg font-bold text-cyan-500 tabular-nums leading-none mt-0.5">
+                {totalEntities.toString().padStart(2, "0")}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <Files className="w-3.5 h-3.5 text-neutral-600 flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">DOCUMENT VAULT</div>
+              <div className="font-mono text-lg font-bold text-neutral-400 tabular-nums leading-none mt-0.5">
+                {totalDocs.toString().padStart(2, "0")}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <Cpu className="w-3.5 h-3.5 flex-shrink-0" style={{ color: pendingCount > 0 ? "#f97316" : "#404040" }} />
+            <div className="min-w-0">
+              <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">TRIAGE QUEUE</div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className={`font-mono text-lg font-bold tabular-nums leading-none ${pendingCount > 0 ? "text-orange-400" : "text-neutral-600"}`}>
+                  {pendingCount.toString().padStart(2, "0")}
+                </span>
+                {pendingCount > 0 && (
+                  <span className="font-mono text-[8px] text-orange-700 uppercase animate-pulse">REQUIRED</span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
