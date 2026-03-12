@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { documentsTable } from "@workspace/db/schema";
+import { documentsTable, entityMentionsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
@@ -134,7 +134,19 @@ router.post("/documents/upload", upload.single("file"), async (req, res) => {
 
 router.delete("/documents/:id", async (req, res) => {
   const id = parseInt(req.params.id);
+  const rows = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
+  const doc = rows[0];
+
+  await db.delete(entityMentionsTable).where(eq(entityMentionsTable.documentId, id));
   await db.delete(documentsTable).where(eq(documentsTable.id, id));
+
+  await logEvent(
+    "document_deleted",
+    `Document deleted: "${doc.title}"`,
+    { caseId: doc.caseId ?? undefined, documentId: id }
+  );
+
   res.status(204).send();
 });
 

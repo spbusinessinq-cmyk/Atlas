@@ -10,7 +10,7 @@ import {
   CaseStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronRight, LayoutGrid, List, Briefcase, Database, Files, Cpu, Zap, Search, CheckCircle, AlertTriangle } from "lucide-react";
+import { Plus, ChevronRight, LayoutGrid, List, Briefcase, Database, Files, Cpu, Zap, Search, CheckCircle, AlertTriangle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -341,75 +341,126 @@ function EmptyDossiers() {
 
 function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
   const s = STATUS_STYLES[c.status as CaseStatus] ?? STATUS_STYLES.open;
+  const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/cases/${c.id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: ["/api/cases"] });
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   return (
-    <Link href={`/cases/${c.id}`}>
-      <div
-        className={`group cursor-pointer nexus-card flex flex-col hover:border-[#dc262635] transition-all duration-200 relative`}
-      >
-        {/* Header strip */}
-        <div className="nexus-header-strip">
-          <div className={`flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider ${s.text}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-            {s.label}
-          </div>
-          <div className="font-mono text-[9px] text-neutral-700">
-            CASE-{c.id.toString().padStart(6, "0")}
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="p-3 flex-1 flex flex-col gap-1.5">
-          <h3 className="text-base font-bold text-white group-hover:text-red-400 transition-colors uppercase leading-tight tracking-tight">
-            {c.title}
-          </h3>
-          {c.description && (
-            <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed">
-              {c.description}
-            </p>
-          )}
-          {c.tags && c.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {c.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag}
-                  className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase"
-                >
-                  {tag}
-                </span>
-              ))}
-              {c.tags.length > 3 && (
-                <span className="px-1.5 py-0.5 text-[8px] font-mono text-neutral-800">
-                  +{c.tags.length - 3}
-                </span>
-              )}
+    <div className="relative group">
+      <Link href={`/cases/${c.id}`}>
+        <div
+          className={`cursor-pointer nexus-card flex flex-col hover:border-[#dc262635] transition-all duration-200 relative`}
+        >
+          {/* Header strip */}
+          <div className="nexus-header-strip">
+            <div className={`flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider ${s.text}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+              {s.label}
             </div>
-          )}
-        </div>
-
-        {/* Bottom telemetry */}
-        <div className="bg-[#00000040] border-t border-[#ffffff06] px-3 py-1.5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[9px] font-mono text-neutral-700 tabular-nums">
-            <span>
-              ENT <span className="text-neutral-500">{c.entityCount ?? 0}</span>
-            </span>
-            <span className="text-[#ffffff10]">·</span>
-            <span>
-              DOC <span className="text-neutral-500">{c.documentCount ?? 0}</span>
-            </span>
-            <span className="text-[#ffffff10]">·</span>
-            <span>
-              TL <span className="text-neutral-500">{c.timelineCount ?? 0}</span>
-            </span>
-            <span className="text-[#ffffff10]">·</span>
-            <span>
-              LNK <span className="text-neutral-500">{c.relationshipCount ?? 0}</span>
-            </span>
+            <div className="font-mono text-[9px] text-neutral-700">
+              CASE-{c.id.toString().padStart(6, "0")}
+            </div>
           </div>
-          <ChevronRight className="w-3.5 h-3.5 text-neutral-700 group-hover:text-red-500 transition-colors" />
+
+          {/* Body */}
+          <div className="p-3 flex-1 flex flex-col gap-1.5">
+            <h3 className="text-base font-bold text-white group-hover:text-red-400 transition-colors uppercase leading-tight tracking-tight pr-6">
+              {c.title}
+            </h3>
+            {c.description && (
+              <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed">
+                {c.description}
+              </p>
+            )}
+            {c.tags && c.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {c.tags.slice(0, 3).map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {c.tags.length > 3 && (
+                  <span className="px-1.5 py-0.5 text-[8px] font-mono text-neutral-800">
+                    +{c.tags.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom telemetry */}
+          <div className="bg-[#00000040] border-t border-[#ffffff06] px-3 py-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[9px] font-mono text-neutral-700 tabular-nums">
+              <span>
+                ENT <span className="text-neutral-500">{c.entityCount ?? 0}</span>
+              </span>
+              <span className="text-[#ffffff10]">·</span>
+              <span>
+                DOC <span className="text-neutral-500">{c.documentCount ?? 0}</span>
+              </span>
+              <span className="text-[#ffffff10]">·</span>
+              <span>
+                TL <span className="text-neutral-500">{c.timelineCount ?? 0}</span>
+              </span>
+              <span className="text-[#ffffff10]">·</span>
+              <span>
+                LNK <span className="text-neutral-500">{c.relationshipCount ?? 0}</span>
+              </span>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-neutral-700 group-hover:text-red-500 transition-colors" />
+          </div>
         </div>
+      </Link>
+
+      {/* Delete overlay — sits outside Link to avoid navigation */}
+      <div
+        className="absolute top-2 right-2 z-10"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      >
+        {confirmDelete ? (
+          <div className="flex items-center gap-1 border border-red-800/50 bg-[#0d0000]/90 px-1.5 py-1">
+            <span className="font-mono text-[8px] text-red-400 uppercase tracking-wider">DELETE?</span>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 py-0.5 hover:bg-red-500/20 transition-colors"
+            >
+              {isDeleting ? "…" : "YES"}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
+              className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase px-1 py-0.5"
+            >
+              NO
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+            className="opacity-0 group-hover:opacity-100 p-1 text-neutral-700 hover:text-red-500 transition-all"
+            title="Delete case"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }
 

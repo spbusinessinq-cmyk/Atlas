@@ -1,0 +1,300 @@
+ATLAS PASS 8 — STABILIZATION + BOARD CONTROL + GLASS UI
+
+System:
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+IMPORTANT
+Do NOT rewrite the system architecture.
+Do NOT remove existing APIs unless necessary.
+Improve reliability, investigation control, and visual polish.
+
+This pass focuses on:
+• fixing entity extraction bugs
+• adding delete / cleanup controls
+• improving graph control
+• removing canvas artifacts
+• upgrading UI to a glass-style intelligence interface
+
+====================================================
+1. CRITICAL BUG — GOOGLE NEWS ENTITY DETECTION
+====================================================
+
+Problem:
+When clicking ANALYZE on documents, entity extraction often produces a single entity:
+
+"Google News"
+
+This is incorrect and usually caused by:
+• parsing the Google News RSS wrapper instead of the article
+• extracting metadata instead of article body
+• failing to follow the redirect to the real source
+• incomplete HTML extraction
+
+Fix requirements:
+
+1. Detect Google News wrapper URLs.
+2. Resolve the original article URL when possible.
+3. Extract the real article body.
+
+If the body cannot be retrieved:
+- mark extraction as PARTIAL
+- do NOT generate entities from metadata blocks.
+
+Entity extraction should only run on real article text.
+
+====================================================
+2. DOCUMENT DELETE CONTROL
+====================================================
+
+Users must be able to delete documents.
+
+Add DELETE action to:
+
+Document Vault list
+Document inspector panel
+
+Delete flow:
+
+User clicks DELETE
+Confirmation dialog appears
+Document removed from database
+Associated entity mentions from that document removed
+Case counts update
+System Log records:
+
+DOCUMENT_DELETED
+
+Graph must update if entity mentions disappear.
+
+====================================================
+3. ENTITY DELETE CONTROL
+====================================================
+
+Users must be able to delete entities.
+
+Add DELETE action in:
+
+Entity Registry
+Entity dossier page
+Optional: graph node context menu
+
+When deleting an entity:
+
+Remove entity from registry
+Remove node from graph
+Remove suggested relationships tied to entity
+Update case counts
+Log:
+
+ENTITY_DELETED
+
+====================================================
+4. CASE CLEANUP / ARCHIVE
+====================================================
+
+Add ability to clean or remove a case.
+
+Implement either:
+
+ARCHIVE CASE
+or
+DELETE CASE
+
+Minimum requirements:
+
+User confirmation
+Remove case references from dashboard
+Prevent orphaned records
+
+Log:
+
+CASE_ARCHIVED
+or
+CASE_DELETED
+
+====================================================
+5. GRAPH CONTROL
+====================================================
+
+Improve Link Analysis graph usability.
+
+Users must be able to:
+
+Drag nodes freely
+Reposition nodes
+Zoom smoothly
+Pan smoothly
+
+Persist node positions.
+
+Preferred:
+store node positions per case.
+
+Fallback:
+store in localStorage by case ID.
+
+Add graph utilities:
+
+RESET LAYOUT
+FIT GRAPH
+
+Optional:
+toggle suggested links
+
+SHOW SUGGESTED LINKS
+HIDE SUGGESTED LINKS
+
+====================================================
+6. CASE CLEANUP TOOLS
+====================================================
+
+Add utilities for cleaning investigation clutter.
+
+Possible tools:
+
+Clear pending detections
+Bulk reject pending entities
+Reset graph layout
+Hide suggested links
+
+Do not accidentally remove approved evidence.
+
+====================================================
+7. BLUE BOX / CANVAS ARTIFACT FIX
+====================================================
+
+Users see bright blue outline boxes around some UI elements.
+
+Possible sources:
+
+React Flow focus ring
+Canvas container focus style
+Browser default outline
+Debug border styles
+
+Fix requirements:
+
+Remove the bright blue outlines.
+Replace with subtle ATLAS-style focus indicators.
+
+Example:
+
+soft cyan glow
+thin border highlight
+
+No large browser-style rectangles.
+
+====================================================
+8. UI UPGRADE — GLASS INTELLIGENCE INTERFACE
+====================================================
+
+Improve the visual design to feel closer to:
+
+Orion
+Black Dog
+modern intelligence dashboards
+
+Implement glass-style panels.
+
+Design rules:
+
+Background:
+deep charcoal / near-black
+
+Panels:
+semi-transparent glass panels
+
+Use:
+
+backdrop-filter: blur()
+soft edge glow
+thin cyan highlights
+subtle gradients
+
+Cards should feel layered.
+
+Keep existing ATLAS palette:
+
+cyan system highlights
+red action buttons
+orange warnings
+white typography
+
+Add soft hover transitions.
+
+====================================================
+9. DOCUMENT VAULT VISUAL IMPROVEMENTS
+====================================================
+
+Improve document list readability.
+
+Add:
+
+hover highlight
+source badges
+clear analyze status
+
+Example:
+
+ANALYZED
+PARTIAL
+PENDING
+
+Improve inspector panel spacing.
+
+====================================================
+10. WORKFLOW CLARITY
+====================================================
+
+Improve messaging in case overview.
+
+Examples:
+
+If documents exist but no entities approved:
+
+"Documents ingested. Review detections to promote entities into the graph."
+
+If graph contains suggested relationships only:
+
+"Graph currently shows suggested associations, not confirmed relationships."
+
+====================================================
+11. SYSTEM LOG EVENTS
+====================================================
+
+Add logs for:
+
+DOCUMENT_DELETED
+ENTITY_DELETED
+CASE_ARCHIVED / CASE_DELETED
+GRAPH_LAYOUT_RESET
+SUGGESTED_LINKS_TOGGLED
+
+====================================================
+12. TEST CHECKLIST
+====================================================
+
+Verify:
+
+1. analyze document extracts real entities
+2. Google News wrapper no longer appears
+3. document delete works
+4. entity delete removes graph node
+5. graph nodes draggable
+6. layout reset works
+7. blue focus boxes gone
+8. UI looks glass-like
+
+====================================================
+FINAL SUMMARY
+====================================================
+
+Report:
+
+1. how Google News extraction was fixed
+2. what delete controls were added
+3. how graph movement works
+4. what caused the blue box artifacts
+5. what UI glass improvements were implemented
+6. files modified

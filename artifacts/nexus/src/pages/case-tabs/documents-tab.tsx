@@ -38,6 +38,7 @@ import {
   ArrowLeft,
   Globe,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,9 @@ function DocumentRow({
   const extDoc = doc as ExtendedDoc;
   const isWeb = extDoc.ingestMethod === "web";
   const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const analyzeMutation = useAnalyzeDocument({
     mutation: {
       onSuccess: () => {
@@ -138,6 +142,19 @@ function DocumentRow({
       },
     },
   });
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/entity-mentions"] });
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   return (
     <div
@@ -235,6 +252,35 @@ function DocumentRow({
           >
             <Download className="w-3.5 h-3.5" />
           </a>
+        )}
+
+        {confirmDelete ? (
+          <div className="flex items-center gap-1 ml-1 border border-red-800/50 bg-red-950/30 px-1.5 py-1">
+            <span className="font-mono text-[8px] text-red-400 uppercase tracking-wider whitespace-nowrap">
+              DELETE?
+            </span>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 py-0.5 hover:bg-red-500/20 transition-colors"
+            >
+              {isDeleting ? "…" : "YES"}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase px-1 py-0.5 hover:bg-white/5 transition-colors"
+            >
+              NO
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="p-1.5 text-neutral-800 hover:text-red-500 transition-colors ml-1"
+            title="Delete document"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
     </div>

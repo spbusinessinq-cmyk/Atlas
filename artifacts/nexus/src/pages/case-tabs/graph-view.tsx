@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useRef } from "react";
 import {
   ReactFlow,
   Controls,
@@ -7,6 +7,8 @@ import {
   MarkerType,
   NodeMouseHandler,
   EdgeMouseHandler,
+  NodeDragHandler,
+  ReactFlowProvider,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -20,7 +22,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight } from "lucide-react";
+import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight, RotateCcw, Maximize2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
@@ -91,6 +93,28 @@ const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: numb
   LOW:    { stroke: "#06b6d4", opacity: 0.22, width: 1.0, label: "POSSIBLE ASSOC" },
 };
 
+function buildNodeStyle(color: string, isSelected: boolean) {
+  return {
+    background: isSelected ? "#0d1f2a" : "#090d12",
+    color: "#ffffff",
+    border: isSelected ? `2px solid ${color}` : `1px solid ${color}50`,
+    borderLeft: `3px solid ${color}`,
+    borderRadius: "0",
+    padding: "10px 16px",
+    fontFamily: "monospace",
+    fontSize: "11px",
+    width: 165,
+    textAlign: "left" as const,
+    textTransform: "uppercase" as const,
+    fontWeight: "bold",
+    letterSpacing: "0.05em",
+    boxShadow: isSelected
+      ? `0 0 18px ${color}50, 0 0 6px ${color}25`
+      : `0 0 6px ${color}18`,
+    outline: "none",
+  };
+}
+
 export default function GraphCanvas({
   entities,
   relationships,
@@ -101,6 +125,31 @@ export default function GraphCanvas({
   suggestedEdges = [],
   documentCount = 0,
 }: GraphCanvasProps) {
+  const posStorageKey = `atlas-graph-pos-${entities[0]?.caseId ?? "default"}`;
+  const rfRef = useRef<{ fitView: (opts?: object) => void } | null>(null);
+
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>(() => {
+    try {
+      const stored = localStorage.getItem(posStorageKey);
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  });
+
+  const [showSuggested, setShowSuggested] = useState(true);
+
+  const handleResetLayout = useCallback(() => {
+    setNodePositions({});
+    try { localStorage.removeItem(posStorageKey); } catch { /* ignore */ }
+  }, [posStorageKey]);
+
+  const onNodeDragStop: NodeDragHandler = useCallback((_evt, node) => {
+    setNodePositions((prev) => {
+      const updated = { ...prev, [node.id]: node.position };
+      try { localStorage.setItem(posStorageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
+  }, [posStorageKey]);
+
   const nodes = useMemo(() => {
     const radius = 260;
     const center = { x: 420, y: 300 };
@@ -108,34 +157,19 @@ export default function GraphCanvas({
       const angle = (i / entities.length) * 2 * Math.PI;
       const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
       const isSelected = entity.id === selectedEntityId;
+      const defaultPos = {
+        x: center.x + radius * Math.cos(angle),
+        y: center.y + radius * Math.sin(angle),
+      };
+      const pos = nodePositions[entity.id.toString()] || defaultPos;
       return {
         id: entity.id.toString(),
         data: { label: entity.name, type: entity.type },
-        position: {
-          x: center.x + radius * Math.cos(angle),
-          y: center.y + radius * Math.sin(angle),
-        },
-        style: {
-          background: isSelected ? "#0d1f2a" : "#090d12",
-          color: "#ffffff",
-          border: isSelected ? `2px solid ${color}` : `1px solid ${color}50`,
-          borderLeft: `3px solid ${color}`,
-          borderRadius: "0",
-          padding: "10px 16px",
-          fontFamily: "monospace",
-          fontSize: "11px",
-          width: 165,
-          textAlign: "left" as const,
-          textTransform: "uppercase" as const,
-          fontWeight: "bold",
-          letterSpacing: "0.05em",
-          boxShadow: isSelected
-            ? `0 0 18px ${color}50, 0 0 6px ${color}25`
-            : `0 0 6px ${color}18`,
-        },
+        position: pos,
+        style: buildNodeStyle(color, isSelected),
       };
     });
-  }, [entities, selectedEntityId]);
+  }, [entities, selectedEntityId, nodePositions]);
 
   const edges = useMemo(() => {
     const confirmed = relationships.map((rel) => {
@@ -168,6 +202,8 @@ export default function GraphCanvas({
         },
       };
     });
+
+    if (!showSuggested) return confirmed;
 
     const confirmedPairs = new Set(
       relationships.map(
@@ -206,7 +242,7 @@ export default function GraphCanvas({
       });
 
     return [...confirmed, ...suggested];
-  }, [relationships, selectedRelId, suggestedEdges]);
+  }, [relationships, selectedRelId, suggestedEdges, showSuggested]);
 
   const onEdgeClick: EdgeMouseHandler = useCallback(
     (_evt, edge) => {
@@ -274,31 +310,71 @@ export default function GraphCanvas({
 
   return (
     <div className="relative w-full h-full">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        colorMode="dark"
-        className="bg-[#000]"
-        onEdgeClick={onEdgeClick}
-        onNodeClick={onNodeClick}
-        onPaneClick={onPaneClick}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1}
-          color="#ffffff10"
-        />
-        <Controls
-          style={{
-            backgroundColor: "#0d1117",
-            border: "1px solid #ffffff1a",
-            borderRadius: "0",
-          }}
-        />
-      </ReactFlow>
+      <ReactFlowProvider>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          colorMode="dark"
+          className="bg-[#000] atlas-graph"
+          onEdgeClick={onEdgeClick}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          onNodeDragStop={onNodeDragStop}
+          onInit={(instance) => { rfRef.current = instance; }}
+          nodesDraggable={true}
+          panOnDrag={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          minZoom={0.2}
+          maxZoom={3}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            color="#ffffff10"
+          />
+          <Controls
+            style={{
+              backgroundColor: "#0d1117",
+              border: "1px solid #ffffff1a",
+              borderRadius: "0",
+            }}
+          />
+        </ReactFlow>
+      </ReactFlowProvider>
+
+      {/* Layout controls overlay */}
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+        {suggestedEdges.length > 0 && (
+          <button
+            onClick={() => setShowSuggested(!showSuggested)}
+            className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-cyan-500/40 text-neutral-500 hover:text-cyan-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
+            title={showSuggested ? "Hide suggested links" : "Show suggested links"}
+          >
+            {showSuggested ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            {showSuggested ? "HIDE SUGGESTED" : "SHOW SUGGESTED"}
+          </button>
+        )}
+        <button
+          onClick={() => rfRef.current?.fitView({ padding: 0.2, duration: 400 })}
+          className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-cyan-500/40 text-neutral-500 hover:text-cyan-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
+          title="Fit graph to view"
+        >
+          <Maximize2 className="w-3 h-3" />
+          FIT
+        </button>
+        <button
+          onClick={handleResetLayout}
+          className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-red-500/40 text-neutral-500 hover:text-red-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
+          title="Reset node layout"
+        >
+          <RotateCcw className="w-3 h-3" />
+          RESET
+        </button>
+      </div>
 
       {/* ── Graph stats (top-left) ── */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2 pointer-events-none">

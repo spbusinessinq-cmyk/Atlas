@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useGetEntity } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   FileText,
@@ -13,6 +14,7 @@ import {
   Clock,
   ChevronRight,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { logEvent as sendLog } from "@/lib/log-event";
@@ -85,7 +87,10 @@ export default function EntityProfile() {
   const { id } = useParams();
   const entityId = parseInt(id || "0", 10);
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const { data: profile, isLoading } = useGetEntity(entityId);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const entity = profile?.entity;
   const relationships: any[] = (profile as any)?.relationships || [];
@@ -129,6 +134,20 @@ export default function EntityProfile() {
   const color = TYPE_HEX[entity.type] || TYPE_HEX.other;
   const typeClass = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
 
+  const handleEntityDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/entities/${entity.id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: ["/api/entities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cases"] });
+      const returnTo = entity.caseId ? `/cases/${entity.caseId}` : "/entities";
+      navigate(returnTo);
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
   const handleExpand = (query: string) => {
     if (!entity.caseId) return;
     sendLog("info", `Expansion triggered: ${query}`, {
@@ -169,9 +188,37 @@ export default function EntityProfile() {
           <div className="nexus-panel rounded-none">
             <div className="nexus-header-strip">
               <span className="nexus-label">// CLEARANCE: INTERNAL</span>
-              <span className="font-mono text-[10px] text-neutral-600">
-                ID:{entity.id.toString().padStart(8, "0")}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-neutral-600">
+                  ID:{entity.id.toString().padStart(8, "0")}
+                </span>
+                {confirmDelete ? (
+                  <div className="flex items-center gap-1 border border-red-800/50 bg-red-950/30 px-1.5 py-0.5">
+                    <span className="font-mono text-[8px] text-red-400 uppercase tracking-wider">EXPUNGE?</span>
+                    <button
+                      onClick={handleEntityDelete}
+                      disabled={isDeleting}
+                      className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 hover:bg-red-500/20 transition-colors"
+                    >
+                      {isDeleting ? "…" : "CONFIRM"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase px-1"
+                    >
+                      CANCEL
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="p-0.5 text-neutral-700 hover:text-red-500 transition-colors"
+                    title="Expunge entity"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="p-5">
               <div className="flex items-start gap-4 mb-4">

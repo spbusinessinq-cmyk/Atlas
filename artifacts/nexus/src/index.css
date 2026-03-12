@@ -179,3 +179,55 @@ button:focus-visible {
 .atlas-radar-sweep {
   animation: radar-sweep 3.5s ease-in-out infinite;
 }
+
+/* ── ReactFlow focus ring suppression ── */
+.react-flow__node:focus,
+.react-flow__node:focus-visible,
+.react-flow__node-default:focus,
+.react-flow__node-default:focus-visible,
+.react-flow__handle:focus,
+.react-flow__handle:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Glass morphism utilities ── */
+.atlas-glass {
+  background: rgba(9, 13, 18, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.atlas-glass-red {
+  background: rgba(20, 5, 5, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+}
+
+.atlas-glass-cyan {
+  background: rgba(0, 18, 20, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(6, 182, 212, 0.18);
+}
+
+.atlas-glow-red {
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.12), 0 0 6px rgba(220, 38, 38, 0.06);
+}
+
+.atlas-glow-cyan {
+  box-shadow: 0 0 24px rgba(6, 182, 212, 0.12), 0 0 6px rgba(6, 182, 212, 0.06);
+}
+
+.atlas-scanline {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  pointer-events: none;
+}

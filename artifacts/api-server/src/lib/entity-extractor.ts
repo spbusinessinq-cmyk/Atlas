@@ -120,6 +120,20 @@ const SKIP_NAMES = new Set([
   "Good", "Long", "Big", "Small", "Large", "Little",
 ]);
 
+// Media/aggregator entities that are sources, not investigative subjects
+const MEDIA_SOURCE_BLOCKLIST = new Set([
+  "Google News", "Google", "Google LLC",
+  "Associated Press", "Reuters", "Bloomberg",
+  "News Google", "Google Search",
+  "Yahoo News", "Yahoo Finance", "Yahoo",
+  "MSN", "MSN News", "Bing News", "Bing",
+  "Apple News", "Apple",
+  "Facebook", "Twitter", "Instagram", "YouTube",
+  "Wikipedia", "Wikimedia",
+  "The Associated Press",
+  "Dow Jones", "Hearst",
+]);
+
 function isValidName(name: string): boolean {
   if (!name || name.length < 3 || name.length > 80) return false;
   const words = name.trim().split(/\s+/);
@@ -127,6 +141,8 @@ function isValidName(name: string): boolean {
   if (words.length === 1 && SKIP_NAMES.has(words[0])) return false;
   // Must have at least one letter
   if (!/[a-zA-Z]/.test(name)) return false;
+  // Block media aggregator false positives
+  if (MEDIA_SOURCE_BLOCKLIST.has(name)) return false;
   return true;
 }
 

@@ -8,6 +8,7 @@ import {
   entityMentionsTable,
 } from "@workspace/db/schema";
 import { eq, or, and, inArray, ilike } from "drizzle-orm";
+import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
 
@@ -227,7 +228,22 @@ router.put("/entities/:id", async (req, res) => {
 
 router.delete("/entities/:id", async (req, res) => {
   const id = parseInt(req.params.id);
+  const rows = await db.select().from(entitiesTable).where(eq(entitiesTable.id, id));
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
+  const entity = rows[0];
+
+  await db
+    .delete(relationshipsTable)
+    .where(or(eq(relationshipsTable.entityAId, id), eq(relationshipsTable.entityBId, id)));
+
   await db.delete(entitiesTable).where(eq(entitiesTable.id, id));
+
+  await logEvent(
+    "entity_deleted",
+    `Entity deleted: ${entity.name} [${entity.type.replace(/_/g, " ").toUpperCase()}]`,
+    { caseId: entity.caseId ?? undefined, entityId: id }
+  );
+
   res.status(204).send();
 });
 
