@@ -14,46 +14,15 @@ export interface ExtractedMention {
 // ── Investigative entity classification ───────────────────────────────────────
 
 const ORG_SUFFIXES = [
-  "Hotel",
-  "Hotels",
-  "Authority",
-  "Department",
-  "Dept",
-  "Office",
-  "Program",
-  "Shelter",
-  "Shelters",
-  "Housing",
-  "Commission",
-  "Committee",
-  "Bureau",
-  "Foundation",
-  "Agency",
-  "Services",
-  "Institute",
-  "Center",
-  "Corporation",
-  "Group",
-  "Inc",
-  "LLC",
-  "Corp",
-  "Associates",
-  "Coalition",
-  "Initiative",
-  "Council",
-  "Task Force",
-  "Partnership",
-  "Network",
-  "Alliance",
-  "Collaborative",
+  "Hotel", "Hotels", "Authority", "Department", "Dept", "Office", "Program",
+  "Shelter", "Shelters", "Housing", "Commission", "Committee", "Bureau",
+  "Foundation", "Agency", "Services", "Institute", "Center", "Corporation",
+  "Group", "Inc", "LLC", "Corp", "Associates", "Coalition", "Initiative",
+  "Council", "Task Force", "Partnership", "Network", "Alliance", "Collaborative",
   "Project",
 ];
 
-const ORG_PREFIXES = [
-  "Project",
-  "Operation",
-  "Program",
-];
+const ORG_PREFIXES = ["Project", "Operation", "Program"];
 
 const GOV_PATTERNS: { pattern: RegExp; type: string; confidence: number }[] = [
   { pattern: /\b(Department of [A-Z][a-zA-Z\s]{2,40}?)(?=[,.\n]|\s+(?:said|has|will|is|was|are|announced))/g, type: "government_agency", confidence: 0.82 },
@@ -64,34 +33,29 @@ const GOV_PATTERNS: { pattern: RegExp; type: string; confidence: number }[] = [
   { pattern: /\b([A-Z]{2,7})\b/g, type: "government_agency", confidence: 0.52 },
 ];
 
-// Build suffix-based org detector regex — each word must start with a capital letter
-// to avoid greedily matching sentence fragments like "Los Angeles awarded Hotel"
+// Build suffix-based org detector regex
 const suffixPattern = new RegExp(
   `\\b([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+){0,4}\\s+(?:${ORG_SUFFIXES.join("|")}))\\b`,
   "g"
 );
 
-// Build prefix-based org detector regex (e.g. "Project Homekey", "Operation X")
+// Build prefix-based org detector regex
 const prefixPattern = new RegExp(
   `\\b(?:${ORG_PREFIXES.join("|")})\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)?)\\b`,
   "g"
 );
 
-// Multi-word title case phrase (2-5 words, each capitalized, not sentence start)
-// Captures things like "Highland Gardens Hotel", "Los Angeles", "John Smith"
+// Multi-word title case phrase (2-5 words)
 const titleCasePhrase = /(?<!\.\s)(?<![A-Z])\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z]{1,}){1,4})\b/g;
 
 function classifyTitleCasePhrase(name: string): { type: string; confidence: number } {
   const lower = name.toLowerCase();
-  // Has an org suffix
   if (ORG_SUFFIXES.some((s) => lower.endsWith(s.toLowerCase()))) {
     return { type: "organization", confidence: 0.78 };
   }
-  // Has a prefix keyword
   if (ORG_PREFIXES.some((p) => lower.startsWith(p.toLowerCase()))) {
     return { type: "organization", confidence: 0.75 };
   }
-  // Looks like a full name (FirstName LastName pattern)
   const words = name.split(" ");
   if (words.length === 2 && words.every((w) => /^[A-Z][a-z]+$/.test(w))) {
     return { type: "person", confidence: 0.65 };
@@ -99,28 +63,24 @@ function classifyTitleCasePhrase(name: string): { type: string; confidence: numb
   if (words.length === 3 && words.every((w) => /^[A-Z][a-z]+$/.test(w))) {
     return { type: "person", confidence: 0.60 };
   }
-  // Multi-word proper noun — could be location or org
   if (words.length >= 2) {
     return { type: "organization", confidence: 0.58 };
   }
   return { type: "organization", confidence: 0.50 };
 }
 
-// Noise filter — skip these common false positives
+// ── Noise / blocklist sets ────────────────────────────────────────────────────
+
 const SKIP_NAMES = new Set([
-  "The", "This", "That", "These", "Those", "There",
-  "Their", "They", "When", "Where", "Which", "While",
-  "With", "From", "Into", "Upon", "After", "Before",
-  "About", "Under", "Over", "Also", "More", "Just",
-  "Have", "Been", "Said", "Says", "Will", "Were",
-  "More", "Some", "Many", "Most", "Such", "Each",
-  "Both", "Home", "City", "State", "County", "Street",
-  "Avenue", "Road", "North", "South", "East", "West",
-  "Los", "San", "New", "Old", "First", "Last", "High",
-  "Good", "Long", "Big", "Small", "Large", "Little",
-  // Generic nouns that are never investigative subjects on their own
-  "Members", "Officials", "Residents", "Voters", "Taxpayers",
-  "People", "Staff", "Team", "Board", "Panel", "Group",
+  "The", "This", "That", "These", "Those", "There", "Their", "They",
+  "When", "Where", "Which", "While", "With", "From", "Into", "Upon",
+  "After", "Before", "About", "Under", "Over", "Also", "More", "Just",
+  "Have", "Been", "Said", "Says", "Will", "Were", "Some", "Many", "Most",
+  "Such", "Each", "Both", "Home", "City", "State", "County", "Street",
+  "Avenue", "Road", "North", "South", "East", "West", "Los", "San",
+  "New", "Old", "First", "Last", "High", "Good", "Long", "Big", "Small",
+  "Large", "Little", "Members", "Officials", "Residents", "Voters",
+  "Taxpayers", "People", "Staff", "Team", "Board", "Panel", "Group",
   "Leader", "Director", "Manager", "Officer", "Official",
   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
   "January", "February", "March", "April", "June", "July",
@@ -129,18 +89,26 @@ const SKIP_NAMES = new Set([
   "Update", "Report", "Story", "Article", "Column",
   "News", "Press", "Post", "Times", "Journal",
   "Click", "Watch", "Read", "Listen", "Share",
+  // Social / UI action words
+  "Email", "Facebook", "Twitter", "WhatsApp", "Reddit", "LinkedIn",
+  "Threads", "Instagram", "YouTube", "TikTok", "Pinterest", "Snapchat",
+  "Subscribe", "Unsubscribe", "Follow", "Unfollow", "Donate", "Support",
+  "Menu", "Search", "Login", "Logout", "Register", "Account",
+  "Opinion", "Obituaries", "Weather", "Horoscope", "Crossword",
+  "Newsletter", "Newsletters", "Watch Live", "Live Updates",
+  "Copied", "Copied!", "Close", "Skip", "Continue", "Accept",
+  "Top Stories", "Latest News", "Advertisement", "Sponsored",
+  // Generic title fragments
+  "President", "Governor", "Senator", "Mayor", "Secretary", "Chairman",
+  "The Studio", "The Pitt", "The Network", "The Board", "The Panel",
 ]);
 
-// Media/aggregator entities that are sources, not investigative subjects
-// (also includes wrapper-page injection artifacts from WRAPPER_ENTITY_BLOCKLIST)
 const MEDIA_SOURCE_BLOCKLIST = new Set([
   "Google News", "Google", "Google LLC", "Google Search", "News Google",
   "Associated Press", "The Associated Press", "AP", "Reuters", "Bloomberg",
   "Yahoo News", "Yahoo Finance", "Yahoo",
-  // Wire / PR services
   "PRNewswire", "PR Newswire", "Business Wire", "BusinessWire", "Newswire",
   "GlobeNewswire", "Globe Newswire", "PR Newswire Association",
-  // Wrapper / junk page artifacts
   "JavaScript", "Sign In", "Log In", "Subscribe", "Continue", "Accept",
   "Enable JavaScript", "Cookie", "Cookies", "Privacy Policy",
   "Terms of Service", "More", "Share", "Close", "Skip",
@@ -150,75 +118,283 @@ const MEDIA_SOURCE_BLOCKLIST = new Set([
   "MSN", "MSN News", "Bing News", "Bing",
   "Apple News", "Apple",
   "Facebook", "Twitter", "Instagram", "YouTube", "TikTok", "LinkedIn",
+  "WhatsApp", "Reddit", "Threads", "Pinterest", "Snapchat",
   "Wikipedia", "Wikimedia",
   "Dow Jones", "Hearst", "Gannett", "McClatchy",
-  // Generic content fragments
   "Read More", "Full Story", "Click Here", "Learn More", "See More",
   "Related Articles", "Latest News", "Top Stories", "More Stories",
-  // Press release noise
   "Contact Information", "Media Contact", "Investor Relations",
   "Forward Looking", "Safe Harbor", "About Us", "Our Mission",
   "Copyright", "All Rights Reserved", "Terms", "Privacy",
   "Question Period", "Power Play", "Every Press", "Press Release",
   "For Immediate Release", "Media Inquiries",
-  // Social/UI fragments
   "Sign Up", "Log Out", "Get Started", "Get App", "Download",
   "Newsletter", "Email Alert", "Push Notification",
   "Comments", "Comment Section", "Reply", "Replies",
-  // Sports noise (generic)
   "Game Day", "Box Score", "Play By Play", "Play-By-Play",
   "Injury Report", "Practice Report", "Post Game", "Pre Game",
-  // Generic standalone things that sneak through NLP
   "National Security", "Public Safety", "Community Development",
   "Economic Development", "Strategic Plan", "Master Plan",
   "Best Practices", "Case Study", "White Paper",
+  // Share rail fragments
+  "Share Via", "Share via", "Copied!", "Close Extra Sharing Options",
+  "Email This", "Copy Link", "Print Article", "Save Article",
+  "Watch Now", "Listen Now", "Read Now", "Sign In To Continue",
+  "Create Account", "Manage Account", "Account Settings",
+  // Generic show/segment names that slip through NLP
+  "The Daily", "The Weekly", "The Morning", "The Evening",
+  "Morning Edition", "Evening Edition", "Weekend Edition",
+  "Good Morning", "Good Evening", "Today Show",
 ]);
 
-// Sports / entertainment noise that should not surface in investigative cases
 const SPORTS_ENTERTAINMENT_BLOCKLIST = new Set([
-  // Sports leagues / governing bodies
   "NFL", "NBA", "MLB", "NHL", "FIFA", "UEFA", "MLS", "PGA", "UFC",
   "ESPN", "Fox Sports", "NBC Sports", "CBS Sports", "TNT Sports",
-  // Generic sports noise
   "Super Bowl", "World Series", "NBA Finals", "Stanley Cup", "Champions League",
   "Playoffs", "Draft", "Trade Deadline", "Free Agency", "Hall of Fame",
-  // Entertainment industry
   "Grammy", "Oscar", "Emmy", "Tony", "Box Office", "Billboard",
-  "Hollywood", "Variety", "TMZ", "People Magazine", "Entertainment Weekly",
+  "Hollywood Reporter", "Variety", "TMZ", "People Magazine", "Entertainment Weekly",
 ]);
 
-// Terms that indicate the text is about sports/entertainment rather than investigation
-const SPORTS_CONTEXT_PATTERN = /\b(quarterback|touchdown|home run|three-pointer|field goal|penalty kick|slam dunk|grand slam|hat trick|free throw|overtime|halftime|roster|draft pick|season record|championship ring|playoff run|trade deadline|salary cap|front office|head coach|general manager as sports|batting average|earned run|yards per game)\b/i;
+// Common first names — single-occurrence person with only one of these is rejected
+const COMMON_FIRST_NAMES = new Set([
+  "james", "john", "robert", "michael", "william", "david", "richard", "joseph",
+  "thomas", "charles", "christopher", "daniel", "matthew", "anthony", "mark",
+  "donald", "steven", "paul", "andrew", "kenneth", "george", "joshua", "kevin",
+  "brian", "edward", "ronald", "timothy", "jason", "jeffrey", "ryan", "jacob",
+  "gary", "nicholas", "eric", "jonathan", "stephen", "larry", "justin", "scott",
+  "brandon", "benjamin", "samuel", "raymond", "gregory", "frank", "alexander",
+  "patrick", "jack", "dennis", "jerry", "tyler", "aaron", "henry", "douglas",
+  "peter", "adam", "nathan", "zachary", "walter", "kyle", "noah", "alan", "carl",
+  "ethan", "jeremy", "harold", "keith", "roger", "gerald", "christian", "terry",
+  "sean", "arthur", "austin", "wayne", "joe", "juan", "albert", "dylan", "roy",
+  "mary", "patricia", "jennifer", "linda", "barbara", "elizabeth", "susan",
+  "jessica", "sarah", "karen", "lisa", "nancy", "betty", "margaret", "sandra",
+  "ashley", "dorothy", "kimberly", "emily", "donna", "michelle", "carol",
+  "amanda", "melissa", "deborah", "stephanie", "rebecca", "sharon", "laura",
+  "cynthia", "kathleen", "amy", "angela", "shirley", "anna", "brenda",
+  "pamela", "emma", "nicole", "helen", "samantha", "katherine", "christine",
+  "debra", "rachel", "carolyn", "janet", "catherine", "heather", "diane",
+  "virginia", "julie", "joyce", "victoria", "olivia", "kelly", "christina",
+  "joan", "evelyn", "judith", "megan", "cheryl", "andrea", "hannah",
+  "jacqueline", "martha", "gloria", "teresa", "sara", "janice", "ann",
+  "alice", "jean", "doris", "julia", "grace", "judy", "abigail", "marie",
+  "denise", "amber", "danielle", "brittany", "diana", "natalie", "brittney",
+  "ken", "bob", "bill", "jim", "tom", "nick", "mike", "chris", "kate",
+  "sue", "dan", "pat", "alex", "matt", "ben", "sam", "max", "emma", "kate",
+]);
 
-// Terms that indicate strong investigative relevance — boost entities found near these
-const INVESTIGATIVE_CONTEXT_PATTERN = /\b(contract|procurement|corruption|fraud|bribery|kickback|embezzlement|investigation|audit|misconduct|indictment|plea|conviction|settlement|fine|penalty|lobbying|donation|campaign finance|oversight|accountability|subpoena|whistleblower|grant|appropriation|budget|housing|shelter|homeless|development|rezoning|permit|violation|lawsuit|regulatory|compliance|conflict of interest|no.bid|sole.source|shell company|offshore|wire transfer|money laundering)\b/i;
+// ── Seed Intent Classification ─────────────────────────────────────────────────
 
-// Returns true if the entity's context is predominantly sports/entertainment noise
-function isSportsEntertainmentContext(context: string): boolean {
-  const sportsMatches = (context.match(SPORTS_CONTEXT_PATTERN) || []).length;
-  const investigativeMatches = (context.match(INVESTIGATIVE_CONTEXT_PATTERN) || []).length;
-  return sportsMatches > 0 && investigativeMatches === 0;
+export type SeedIntent =
+  | "policy_government"
+  | "finance_funding"
+  | "housing_homelessness"
+  | "education_university"
+  | "crime_corruption"
+  | "entertainment_film"
+  | "sports"
+  | "legal_lawsuit"
+  | "general";
+
+/**
+ * Classify the seed target into a primary investigative intent.
+ * Used to apply topic alignment scoring and suppression rules.
+ */
+export function classifySeedIntent(target: string): SeedIntent {
+  const t = target.toLowerCase();
+
+  if (/\b(lawsuit|sue|legal|court|indictment|appeal|filing|case|trial|charged?|verdict|settl)\b/.test(t))
+    return "legal_lawsuit";
+  if (/\b(fraud|corrupt|bribery|kickback|embezzl|money.laundering|indictment|audit|oversight|misconduct|probe)\b/.test(t))
+    return "crime_corruption";
+  if (/\b(shelter|homeless|housing|unhoused|tent|encampment|affordable.housing|voucher)\b/.test(t))
+    return "housing_homelessness";
+  if (/\b(university|college|campus|student|tuition|enrollment|academia|professor|faculty)\b/.test(t))
+    return "education_university";
+  if (/\b(fund|grant|budget|appropriation|contract|spending|allocation|subsidy|tax.credit|incentive|invest)\b/.test(t))
+    return "finance_funding";
+  if (/\b(film|movie|studio|hollywood|box.office|script|director|actor|actress|cinema|production.company)\b/.test(t))
+    return "entertainment_film";
+  if (/\b(nfl|nba|mlb|nhl|sports?|team|player|coach|season|draft|roster|athletic)\b/.test(t))
+    return "sports";
+  if (/\b(government|policy|legislation|bill|senator|congress|assembly|mayor|governor|department|agency|office|federal|municipal|state|county)\b/.test(t))
+    return "policy_government";
+
+  return "general";
 }
 
-// Boost factor for entities found near strong investigative terms
-function getInvestigativeBoost(context: string): number {
-  const matches = (context.match(INVESTIGATIVE_CONTEXT_PATTERN) || []).length;
-  if (matches >= 3) return 0.10;
-  if (matches >= 1) return 0.05;
-  return 0;
+// ── Body Text Cleaning ─────────────────────────────────────────────────────────
+
+// Lines containing 3+ of these social/nav/share keywords are nav/boilerplate
+const SHARE_NAV_KEYWORDS = [
+  "share", "email", "facebook", "twitter", "whatsapp", "reddit", "linkedin",
+  "threads", "copy", "copied", "print", "subscribe", "sign in", "log in",
+  "menu", "search", "newsletter", "close", "skip", "advertisement",
+  "sponsored", "opinion", "obituaries", "weather", "watch live", "live updates",
+  "listen", "donate", "follow us", "sign up", "create account", "manage account",
+  "cookie", "privacy", "terms", "copyright", "all rights reserved",
+];
+
+// Full-line boilerplate patterns — lines matching these are stripped
+const BOILERPLATE_LINE_PATTERNS = [
+  /^(share|email|facebook|x|whatsapp|reddit|linkedin|threads|copied!?)$/i,
+  /^close\s*(extra\s*sharing\s*options)?$/i,
+  /^(top stories|latest news|breaking news|advertisement|sponsored content)$/i,
+  /^(watch live|live updates|listen|subscribe|sign in|log in|menu)$/i,
+  /^(opinion|obituaries?|weather|newsletter|newsletters|crossword)$/i,
+  /^(read more|learn more|see more|full story|click here|more stories)$/i,
+  /^(follow us on|share via|print article|save article|copy link)$/i,
+  /^\s*(?:©|copyright)\s+\d{4}/i,
+  /^(terms of service|privacy policy|cookie policy|all rights reserved)/i,
+  /^(comments?|reply|replies|leave a comment|join the discussion)$/i,
+  /^(sign up for|subscribe to|get the|download the)\s+/i,
+  /^(\d{1,2}[\/:]\d{1,2}(?:[\/:]\d{2,4})?\s*(?:am|pm)?)\s*$/i, // bare timestamps
+  /^[•·▸→|]+\s*$/, // bare bullets/separators
+  /^[-—_]{3,}$/, // horizontal rules
+  /^[\s\u00a0]*$/, // whitespace-only
+];
+
+export interface CleanBodyResult {
+  cleaned: string;
+  rawChars: number;
+  cleanedChars: number;
+  removedLines: number;
+  boilerplateRatio: number;
 }
 
-function isValidName(name: string): boolean {
+/**
+ * Strip share-rail, nav, social fragment, and boilerplate lines from body text.
+ * Returns cleaned text + stats for doc-level quality assessment.
+ */
+export function cleanBodyText(text: string): CleanBodyResult {
+  const rawChars = text.length;
+  const lines = text.split(/\r?\n/);
+  const keptLines: string[] = [];
+  let removedLines = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Hard boilerplate patterns — strip immediately
+    if (BOILERPLATE_LINE_PATTERNS.some((rx) => rx.test(trimmed))) {
+      removedLines++;
+      continue;
+    }
+
+    // Count share/nav keyword density on this line
+    const lineL = trimmed.toLowerCase();
+    let kwHits = 0;
+    for (const kw of SHARE_NAV_KEYWORDS) {
+      if (lineL.includes(kw)) kwHits++;
+    }
+    if (kwHits >= 3) {
+      removedLines++;
+      continue;
+    }
+
+    // Short lines with only action verbs / UI text
+    if (trimmed.length <= 25) {
+      const isUIText = /^(close|open|back|next|prev|previous|more|less|all|none|ok|cancel|submit|send|save|edit|delete|remove|add|view|show|hide|expand|collapse|toggle|sort|filter|search|reset|clear|load|refresh|reload)$/i.test(trimmed);
+      if (isUIText) { removedLines++; continue; }
+    }
+
+    keptLines.push(line);
+  }
+
+  const cleaned = keptLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const cleanedChars = cleaned.length;
+  const boilerplateRatio = rawChars > 0 ? (rawChars - cleanedChars) / rawChars : 0;
+
+  return { cleaned, rawChars, cleanedChars, removedLines, boilerplateRatio };
+}
+
+// ── Context Window Scoring ────────────────────────────────────────────────────
+
+const INVESTIGATIVE_CONTEXT_PATTERN = /\b(contract|procurement|corruption|fraud|bribery|kickback|embezzlement|investigation|audit|misconduct|indictment|plea|conviction|settlement|fine|penalty|lobbying|donation|campaign.finance|oversight|accountability|subpoena|whistleblower|grant|appropriation|budget|housing|shelter|homeless|development|rezoning|permit|violation|lawsuit|regulatory|compliance|conflict.of.interest|no.bid|sole.source|shell.company|offshore|wire.transfer|money.laundering|spending|allocation|program|authority|department|agency|federal|municipal|county|administration|funding|subsidy|tax.credit|incentive|grantee|awardee)\b/i;
+
+const ENTERTAINMENT_NOISE_PATTERN = /\b(season|episode|actor|actress|watch|box.office|trailer|celebrity|red.carpet|concert|award.show|film.premiere|streaming|director as film|producer as film|casting|audition|screen.test|stunt|cameo|cameos|co.star|co-star)\b/i;
+
+const SPORTS_NOISE_PATTERN = /\b(quarterback|touchdown|home.run|three.pointer|field.goal|slam.dunk|grand.slam|hat.trick|free.throw|overtime|halftime|roster|draft.pick|season.record|championship.ring|playoff.run|trade.deadline|salary.cap|head.coach|batting.average|earned.run|yards.per.game|game.score|box.score|play.by.play|injury.report|practice|scrimmage)\b/i;
+
+/**
+ * Score ±120 char context window around an entity mention.
+ * Returns [boost (0-0.15), penaltyFactor (0.0-1.0), reason]
+ */
+function scoreContextWindow(context: string): { boost: number; penaltyFactor: number; reason: string } {
+  const invMatches = (context.match(INVESTIGATIVE_CONTEXT_PATTERN) || []).length;
+  const entMatches = (context.match(ENTERTAINMENT_NOISE_PATTERN) || []).length;
+  const sportsMatches = (context.match(SPORTS_NOISE_PATTERN) || []).length;
+
+  let boost = 0;
+  let penaltyFactor = 1.0;
+  let reason = "";
+
+  if (invMatches >= 3) { boost = 0.15; reason = "strong-inv-context"; }
+  else if (invMatches >= 1) { boost = 0.07; reason = "inv-context"; }
+
+  if (sportsMatches >= 2 && invMatches === 0) { penaltyFactor = 0.45; reason = "sports-noise"; }
+  else if (entMatches >= 2 && invMatches === 0) { penaltyFactor = 0.50; reason = "entertainment-noise"; }
+  else if ((sportsMatches >= 1 || entMatches >= 1) && invMatches === 0) { penaltyFactor = 0.70; reason = `soft-${sportsMatches ? "sports" : "entertainment"}-noise`; }
+
+  return { boost, penaltyFactor, reason };
+}
+
+// ── Entity Validity ────────────────────────────────────────────────────────────
+
+// Title fragments that are never investigative entities on their own
+const TITLE_FRAGMENT_PATTERNS = [
+  /^(?:the\s+)?(?:president|governor|senator|secretary|mayor|chairman|chairwoman|director|commissioner|minister|chancellor|chief|speaker|attorney\s+general|district\s+attorney)\s*$/i,
+  /^(?:the\s+)?(?:studio|network|channel|outlet|platform|publication|newspaper|magazine)\s*$/i,
+  /^(?:the\s+)?(?:city|state|county|country|nation|government|administration)\s*$/i,
+];
+
+// Show / entertainment segment names that sneak through NLP
+const SHOW_SEGMENT_PATTERNS = [
+  /\b((?:the\s+)?(?:daily|weekly|morning|evening|nightly|weekend)\s+(?:show|brief|brief|digest|roundup|update|edition|report))\b/i,
+  /\b(?:good\s+(?:morning|evening|night)|today\s+show|meet\s+the\s+press|face\s+the\s+nation|state\s+of\s+the\s+union)\b/i,
+  /\b(?:inside|behind|outside|above|beyond)\s+[A-Z][a-z]+\b/,
+];
+
+function isEntityPrecisionValid(name: string, entityType: string): boolean {
+  const lower = name.toLowerCase().trim();
+  const words = lower.split(/\s+/);
+
+  // Reject possessives
+  if (/['']s\s*$/.test(name)) return false;
+
+  // Reject single common first names (person type only)
+  if (entityType === "person" && words.length === 1 && COMMON_FIRST_NAMES.has(lower)) return false;
+
+  // Reject single-word person if it's in skip names
+  if (words.length === 1 && SKIP_NAMES.has(name)) return false;
+
+  // Reject title fragments
+  if (TITLE_FRAGMENT_PATTERNS.some((rx) => rx.test(name))) return false;
+
+  // Reject show/segment names
+  if (SHOW_SEGMENT_PATTERNS.some((rx) => rx.test(name))) return false;
+
+  // Reject generic single-word nouns that aren't names
+  const GENERIC_NOUNS = new Set([
+    "funding", "budget", "program", "project", "policy", "report", "review",
+    "plan", "study", "survey", "analysis", "impact", "result", "outcome",
+    "issue", "problem", "solution", "response", "reaction", "action",
+    "announcement", "statement", "proposal", "request", "award", "grant",
+  ]);
+  if (words.length === 1 && GENERIC_NOUNS.has(lower)) return false;
+
+  return true;
+}
+
+function isValidName(name: string, entityType = "organization"): boolean {
   if (!name || name.length < 3 || name.length > 80) return false;
   const words = name.trim().split(/\s+/);
-  // Single-word names with only 1 word and it's in the skip list
   if (words.length === 1 && SKIP_NAMES.has(words[0])) return false;
-  // Must have at least one letter
   if (!/[a-zA-Z]/.test(name)) return false;
-  // Block media aggregator false positives
   if (MEDIA_SOURCE_BLOCKLIST.has(name)) return false;
-  // Block sports/entertainment noise
   if (SPORTS_ENTERTAINMENT_BLOCKLIST.has(name)) return false;
+  if (!isEntityPrecisionValid(name, entityType)) return false;
   return true;
 }
 
@@ -246,7 +422,6 @@ export async function extractTextFromFile(filePath: string): Promise<string> {
 
   if (ext === ".pdf") {
     try {
-      // pdf-parse v2 API: new PDFParse({ data: buffer }).getText()
       const { PDFParse } = await import("pdf-parse");
       const buffer = fs.readFileSync(absPath);
       const parser = new PDFParse({ data: buffer });
@@ -269,6 +444,14 @@ export async function extractTextFromFile(filePath: string): Promise<string> {
   }
 }
 
+function getContext(text: string, name: string, idx?: number): string {
+  const pos = idx !== undefined ? idx : text.indexOf(name);
+  if (pos === -1) return name;
+  const start = Math.max(0, pos - 120);
+  const end = Math.min(text.length, pos + name.length + 120);
+  return text.slice(start, end).replace(/\s+/g, " ").trim();
+}
+
 // Run NER on text using compromise.js + rule-based augmentation
 export function extractEntities(text: string): ExtractedMention[] {
   if (!text || text.trim().length < 10) return [];
@@ -283,19 +466,13 @@ export function extractEntities(text: string): ExtractedMention[] {
     matchIndex?: number
   ) {
     const name = entityName.trim();
-    if (!isValidName(name)) return;
+    if (!isValidName(name, entityType)) return;
     if (seen.has(name.toLowerCase())) return;
     seen.add(name.toLowerCase());
     const ctx = getContext(text, name, matchIndex);
 
-    // Apply investigative boost: entities near strong investigative signals get higher confidence
-    const boost = getInvestigativeBoost(ctx);
-    let adjustedConf = Math.min(0.99, confidence + boost);
-
-    // Penalize entities found in sports/entertainment-heavy context with no investigative signal
-    if (isSportsEntertainmentContext(ctx)) {
-      adjustedConf = adjustedConf * 0.55; // heavy penalty — sink them below promotion thresholds
-    }
+    const { boost, penaltyFactor } = scoreContextWindow(ctx);
+    let adjustedConf = Math.min(0.99, (confidence + boost) * penaltyFactor);
 
     mentions.push({
       entityName: name,
@@ -332,7 +509,6 @@ export function extractEntities(text: string): ExtractedMention[] {
     while ((match = pattern.exec(text)) !== null) {
       const name = match[1].trim();
       const isAcronym = /^[A-Z]{2,7}$/.test(name);
-      // Skip very short or ambiguous acronyms unless likely investigative
       if (isAcronym && name.length < 3) continue;
       const actualConf = isAcronym ? Math.min(confidence, 0.56) : confidence;
       addMention(name, type, actualConf, match.index);
@@ -367,26 +543,17 @@ export function extractEntities(text: string): ExtractedMention[] {
       const name = match[1].trim();
       if (seen.has(name.toLowerCase())) continue;
       const words = name.split(" ");
-      if (words.length < 2) continue; // skip single words
+      if (words.length < 2) continue;
       const { type, confidence } = classifyTitleCasePhrase(name);
-      if (confidence < 0.55) continue; // skip low-confidence unknowns
+      if (confidence < 0.55) continue;
       addMention(name, type, confidence, match.index);
     }
   }
 
-  // Deduplicate and sort by confidence
   return mentions
     .filter((m, i, arr) => arr.findIndex((x) => x.entityName === m.entityName) === i)
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 60);
-}
-
-function getContext(text: string, name: string, idx?: number): string {
-  const pos = idx !== undefined ? idx : text.indexOf(name);
-  if (pos === -1) return name;
-  const start = Math.max(0, pos - 90);
-  const end = Math.min(text.length, pos + name.length + 90);
-  return text.slice(start, end).replace(/\s+/g, " ").trim();
 }
 
 // ── Timeline Event Extraction ─────────────────────────────────────────────────
@@ -410,13 +577,9 @@ const EVENT_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
 ];
 
 const DATE_PATTERNS = [
-  // Full dates: March 11, 2021 / March 11 / 11 March 2021
   /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?/gi,
-  // Month abbrevs: Jan 5, 2022
   /\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,?\s+\d{4})?/gi,
-  // In YEAR: "In 2022" / "by 2023" / "since 2019"
   /\b(?:in|by|since|after|before|during|throughout|from|as\s+of)\s+(?:20|19)\d{2}\b/gi,
-  // Standalone year: "2021" or "(2021)"
   /\b(?:20|19)\d{2}\b/g,
 ];
 
@@ -426,12 +589,10 @@ function extractDateFromSentence(sentence: string): string | null {
     const m = pat.exec(sentence);
     if (m) {
       const raw = m[0].trim();
-      // Normalize to a sortable string; prefer year-only as fallback
       try {
         const d = new Date(raw.replace(/^(?:in|by|since|after|before|during|from|as of)\s+/i, ""));
         if (!isNaN(d.getTime())) return d.toISOString();
       } catch { /* continue */ }
-      // If it's just a year, synthesize Jan 1
       const yearMatch = /\b((?:20|19)\d{2})\b/.exec(raw);
       if (yearMatch) return `${yearMatch[1]}-01-01T00:00:00.000Z`;
       return null;
@@ -453,7 +614,6 @@ export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
   const events: ExtractedTimelineEvent[] = [];
   const seen = new Set<string>();
 
-  // Split into sentences
   const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 20);
 
   for (const sentence of sentences) {
@@ -461,15 +621,13 @@ export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
     if (!dateStr) continue;
 
     const eventType = classifyEventType(sentence);
-
-    // Create a clean summary (truncate long sentences)
     const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 200);
     const key = `${dateStr.slice(0, 10)}-${summary.slice(0, 60)}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     events.push({ eventDate: dateStr, eventType, summary });
-    if (events.length >= 15) break; // Cap per document
+    if (events.length >= 15) break;
   }
 
   return events;
@@ -487,19 +645,12 @@ export interface ExtractedFinancialSignal {
   entityName: string | null;
 }
 
-// Robust money pattern — matches:
-//   $2 billion  $1.3B  $400 million  $75M  $250,000  USD 2 billion  £500,000
-// Groups: (1) currency symbol/word, (2) number, (3) scale word/letter
 const MONEY_PATTERN = /(?:(USD|US\$|\$|£|€|GBP|EUR)\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMKT])\b|(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMK])\b(?:\s*(?:USD|US dollars?|dollars?))?|(USD|US\$|\$|£|€)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?))/gi;
 
-// Keywords that must appear near a financial figure for it to be considered a signal
-// Deliberately excludes generic retail/consumer/ad-copy contexts
 const FINANCIAL_PROXIMITY_PATTERN = /\b(funding|grant|budget|investment|contract|appropriation|allocation|spending|award(?:ed)?|program\s+fund|invest(?:ed|ment)|financed?|subsidized?|reimburse|settlement|procurement|invoice|payout|disburse|obligated?|encumbered?)\b/i;
 
-// Patterns that indicate ad copy / retail / promo context — these REJECT a financial signal
 const FINANCIAL_AD_COPY_PATTERN = /\b(sale|discount|off|coupon|promo|deal\s+of\s+the\s+day|limited\s+time|buy\s+now|add\s+to\s+cart|checkout|free\s+shipping|starting\s+at|as\s+low\s+as|per\s+month|subscription|plan|retail|price\s+drop|save\s+up\s+to|starting\s+from|season\s+pass|ticket\s+price|admission|box\s+office|gross(?:ing)?|earned|opening\s+weekend|revenue\s+for\s+(?:the\s+)?film|record\s+(?:breaking\s+)?box\s+office)\b/i;
 
-// Sports contract fluff — reject unless query explicitly about sports finance
 const FINANCIAL_SPORTS_PATTERN = /\b(signing\s+bonus|contract\s+extension\s+for|salary\s+cap\s+hit|years?\s+deal|year\s+contract|nfl|nba|mlb|nhl|mls)\b/i;
 
 const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
@@ -512,14 +663,12 @@ const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
   { regex: /\b(?:invest(?:ed?|ment|ing)|invested)\b/i, type: "INVESTMENT" },
 ];
 
-// Parse the raw money match and return normalized value + display string
 function normalizeAmount(raw: string): { amount: number | null; currency: string; display: string } {
   let currency = "USD";
   let currencySymbol = "$";
   if (/£|GBP/i.test(raw)) { currency = "GBP"; currencySymbol = "£"; }
   else if (/€|EUR/i.test(raw)) { currency = "EUR"; currencySymbol = "€"; }
 
-  // Strip currency symbols/words and commas, keep digits and decimal
   const numericPart = raw.replace(/USD|US\$|GBP|EUR|[$£€,\s]/gi, "").toLowerCase();
   const scaleMatch = /\b(billion|million|thousand|trillion|bn|mn|tr|[bmkt])\b/i.exec(numericPart);
   const numStr = numericPart.replace(/(?:billion|million|thousand|trillion|bn|mn|tr|[bmkt])/gi, "").trim();
@@ -537,7 +686,6 @@ function normalizeAmount(raw: string): { amount: number | null; currency: string
   }
 
   const amount = Math.round(base * multiplier * 100) / 100;
-  // Human display: "$2B" or "$250,000"
   const display = scaleLabel
     ? `${currencySymbol}${base}${scaleLabel}`
     : `${currencySymbol}${amount.toLocaleString()}`;
@@ -552,7 +700,55 @@ function getSignalType(context: string): string {
   return "FUNDING";
 }
 
-// ── Document Relevance Scoring ────────────────────────────────────────────────
+export function extractFinancialSignals(text: string): ExtractedFinancialSignal[] {
+  if (!text || text.trim().length < 20) return [];
+
+  const signals: ExtractedFinancialSignal[] = [];
+  const seen = new Set<string>();
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 10);
+
+  for (const sentence of sentences) {
+    if (!FINANCIAL_PROXIMITY_PATTERN.test(sentence)) continue;
+    if (FINANCIAL_AD_COPY_PATTERN.test(sentence)) continue;
+    if (FINANCIAL_SPORTS_PATTERN.test(sentence)) continue;
+
+    MONEY_PATTERN.lastIndex = 0;
+    let match;
+    while ((match = MONEY_PATTERN.exec(sentence)) !== null) {
+      const amountRaw = match[0].trim();
+      if (!amountRaw || amountRaw.length < 2) continue;
+
+      const { amount, currency, display } = normalizeAmount(amountRaw);
+      if (amount === null || amount < 1000) continue;
+
+      const dedupKey = display;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+
+      const signalType = getSignalType(sentence);
+      const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
+
+      let entityName: string | null = null;
+      const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence);
+      if (properNounMatch) entityName = properNounMatch[1];
+
+      signals.push({
+        amountRaw,
+        amountDisplay: display,
+        normalizedAmount: amount,
+        currency,
+        signalType,
+        eventSummary: summary,
+        entityName,
+      });
+      if (signals.length >= 20) return signals;
+    }
+  }
+
+  return signals;
+}
+
+// ── Document Relevance Scoring 2.0 ────────────────────────────────────────────
 
 const DOC_INVESTIGATIVE_TITLE_TERMS = [
   "contract", "contracts", "grant", "grants", "funding", "budget", "audit",
@@ -562,7 +758,8 @@ const DOC_INVESTIGATIVE_TITLE_TERMS = [
   "records", "report", "subpoena", "misconduct", "indictment", "bribery",
   "kickback", "embezzlement", "ordinance", "whistleblower", "accountability",
   "invoice", "payments", "program", "department", "agency", "federal",
-  "county", "state", "city", "municipal", "commission",
+  "county", "state", "city", "municipal", "commission", "subsidy",
+  "tax credit", "incentive", "grantee", "awardee", "investigation",
 ];
 
 const DOC_PENALTY_TERMS = [
@@ -572,6 +769,8 @@ const DOC_PENALTY_TERMS = [
   "recipe", "lifestyle", "shopping", "travel", "horoscope",
   "review", "restaurant", "fitness", "wellness", "beauty",
   "sponsored", "advertisement", "newsletter", "subscribe",
+  "season finale", "episode", "actor", "actress", "streaming",
+  "film review", "album", "concert", "tour dates",
 ];
 
 const DOC_PR_WIRE_TERMS = [
@@ -594,23 +793,28 @@ const DOC_QUALITY_DOMAINS = [
 export interface DocRelevanceResult {
   score: number;
   priority: "PRIORITY_A" | "PRIORITY_B" | "LOW_SIGNAL" | "NOISE";
+  seedIntent: SeedIntent;
+  topicAlignment: "aligned" | "partial" | "mismatched" | "unknown";
+  mismatchReason: string;
   boosts: string[];
   penalties: string[];
 }
 
 /**
  * Score a document 0–100 for investigative relevance.
- * queryTerms should be the space-split words of the original seed target.
+ * seedIntent influences topic alignment scoring and hard suppressors.
  */
 export function computeDocRelevanceScore(
   bodyText: string,
   title: string,
   queryTerms: string[],
-  sourceDomain = ""
+  sourceDomain = "",
+  seedIntent: SeedIntent = "general"
 ): DocRelevanceResult {
   const boosts: string[] = [];
   const penalties: string[] = [];
-  let score = 50; // start neutral
+  let score = 50;
+  let mismatchReason = "";
 
   const titleL = title.toLowerCase();
   const bodyL = bodyText.toLowerCase();
@@ -635,7 +839,7 @@ export function computeDocRelevanceScore(
     if (titleL.includes(term)) { titleInvHits++; score += 3; }
     else if (bodyL.includes(term)) { bodyInvHits++; score += 0.8; }
   }
-  if (titleInvHits >= 2) boosts.push(`strong-investigative-title`);
+  if (titleInvHits >= 2) boosts.push("strong-investigative-title");
   if (bodyInvHits >= 5) { score += 5; boosts.push("high-inv-density"); }
 
   // ── Body quality ─────────────────────────────────────────────────────────
@@ -644,6 +848,11 @@ export function computeDocRelevanceScore(
   else if (bodyLen >= 500) { score += 3; boosts.push("medium-body"); }
   else if (bodyLen < 100) { score -= 15; penalties.push("near-empty-body"); }
   else if (bodyLen < 200) { score -= 8; penalties.push("short-body"); }
+
+  // ── Boilerplate penalty ────────────────────────────────────────────────────
+  const { boilerplateRatio } = cleanBodyText(bodyText);
+  if (boilerplateRatio > 0.5) { score -= 15; penalties.push(`boilerplate-${Math.round(boilerplateRatio * 100)}pct`); }
+  else if (boilerplateRatio > 0.3) { score -= 7; penalties.push("partial-boilerplate"); }
 
   // ── Domain quality ────────────────────────────────────────────────────────
   if (domainL) {
@@ -670,6 +879,79 @@ export function computeDocRelevanceScore(
   }
   if (penaltyHits >= 3) { score -= 8; penalties.push(`fluff-${penaltyHits}x`); }
 
+  // ── Seed intent topic alignment ────────────────────────────────────────────
+  // Check sports doc vs non-sports seed
+  const isSportsDoc = /\b(quarterback|touchdown|roster|playoff|salary.cap|draft.pick|batting.average|rushing.yards|game.score|nfl.nba.mlb|sports.scores?|standings|bracket)\b/i.test(bodyL + " " + titleL);
+  const isEntertainmentDoc = /\b(box.office|opening.weekend|film.review|celebrity.gossip|red.carpet|oscar|grammy|emmy|episode.recap|streaming.show)\b/i.test(bodyL + " " + titleL);
+
+  let topicAlignment: DocRelevanceResult["topicAlignment"] = "unknown";
+
+  if (seedIntent === "housing_homelessness") {
+    if (/\b(shelter|homeless|housing|unhoused|tent.city|affordable.housing|voucher|wrap.around|support.services|social.services)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "aligned"; score += 10; boosts.push("housing-aligned");
+    } else if (isSportsDoc) {
+      topicAlignment = "mismatched"; score -= 25; mismatchReason = "sports-in-housing-query";
+      penalties.push("sports-mismatch");
+    } else if (isEntertainmentDoc) {
+      topicAlignment = "mismatched"; score -= 20; mismatchReason = "entertainment-in-housing-query";
+      penalties.push("entertainment-mismatch");
+    } else { topicAlignment = "partial"; }
+  } else if (seedIntent === "education_university") {
+    if (/\b(university|college|campus|tuition|enrollment|academic|faculty|student|professor|research.program|grant.for)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "aligned"; score += 8; boosts.push("edu-aligned");
+    } else if (isSportsDoc && !/\b(university|college)\b/i.test(titleL)) {
+      topicAlignment = "mismatched"; score -= 22; mismatchReason = "sports-in-edu-query";
+      penalties.push("sports-mismatch");
+    } else { topicAlignment = "partial"; }
+  } else if (seedIntent === "entertainment_film") {
+    if (/\b(tax.credit|film.incentive|studio.fund|production.grant|film.budget|subsidy|incentive.program|film.commission|movie.deal|studio.deal)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "aligned"; score += 10; boosts.push("film-finance-aligned");
+    } else if (/\b(celebrity.gossip|red.carpet|dress|fashion|relationship|dating|breakup|romance|divorce)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "mismatched"; score -= 20; mismatchReason = "celeb-gossip-in-film-funding-query";
+      penalties.push("gossip-mismatch");
+    } else { topicAlignment = "partial"; }
+  } else if (seedIntent === "finance_funding" || seedIntent === "policy_government") {
+    if (isSportsDoc) {
+      topicAlignment = "mismatched"; score -= 22; mismatchReason = `sports-in-${seedIntent}-query`;
+      penalties.push("sports-mismatch");
+    } else if (isEntertainmentDoc) {
+      topicAlignment = "mismatched"; score -= 18; mismatchReason = `entertainment-in-${seedIntent}-query`;
+      penalties.push("entertainment-mismatch");
+    } else if (/\b(fund|grant|budget|contract|spend|appropriat|award|procurement|subsidy|incentive)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "aligned"; score += 8; boosts.push("finance-aligned");
+    } else { topicAlignment = "partial"; }
+  } else if (seedIntent === "legal_lawsuit") {
+    if (/\b(lawsuit|sued?|court|filing|complaint|indictment|appeal|verdict|settlement|attorney|plaintiff|defendant|judge|jury)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "aligned"; score += 8; boosts.push("legal-aligned");
+    } else if (isSportsDoc) {
+      topicAlignment = "mismatched"; score -= 15; mismatchReason = "sports-in-legal-query";
+      penalties.push("sports-mismatch");
+    } else { topicAlignment = "partial"; }
+  } else if (seedIntent === "crime_corruption") {
+    if (/\b(fraud|corrupt|bribery|kickback|embezzl|money.laundering|indictment|misconduct|probe|audit.finding|inspector.general)\b/i.test(bodyL + " " + titleL)) {
+      topicAlignment = "aligned"; score += 10; boosts.push("corruption-aligned");
+    } else if (isSportsDoc) {
+      topicAlignment = "mismatched"; score -= 20; mismatchReason = "sports-in-corruption-query";
+      penalties.push("sports-mismatch");
+    } else { topicAlignment = "partial"; }
+  } else if (seedIntent === "sports") {
+    // Sports seed — penalize finance-only docs with no sports context
+    topicAlignment = isSportsDoc ? "aligned" : "partial";
+    if (isSportsDoc) boosts.push("sports-aligned");
+  } else {
+    // General — no hard mismatch, just soft penalties
+    if (isSportsDoc && penaltyHits >= 2) { topicAlignment = "mismatched"; mismatchReason = "sports-general"; }
+    else if (isEntertainmentDoc && penaltyHits >= 2) { topicAlignment = "mismatched"; mismatchReason = "entertainment-general"; }
+    else { topicAlignment = "partial"; }
+  }
+
+  // ── Hard NOISE suppressors ────────────────────────────────────────────────
+  // If already mismatched and no seed term hits, force NOISE
+  if (topicAlignment === "mismatched" && titleQueryHits === 0 && bodyQueryHits < 2) {
+    score = Math.min(score, 15);
+    penalties.push("hard-mismatch-suppressed");
+  }
+
   // ── Clamp and bucket ─────────────────────────────────────────────────────
   const finalScore = Math.round(Math.max(0, Math.min(100, score)));
   let priority: DocRelevanceResult["priority"];
@@ -678,31 +960,38 @@ export function computeDocRelevanceScore(
   else if (finalScore >= 18) priority = "LOW_SIGNAL";
   else priority = "NOISE";
 
-  return { score: finalScore, priority, boosts, penalties };
+  return { score: finalScore, priority, seedIntent, topicAlignment, mismatchReason, boosts, penalties };
 }
 
-// ── Entity Name Normalization ─────────────────────────────────────────────────
+// ── Entity Name Normalization & Canonicalization ──────────────────────────────
 
-// Common org suffix variants to strip for canonical comparison
 const ORG_SUFFIX_CLEANUP = [
   /\s*,?\s*Inc\.?$/i, /\s*,?\s*LLC\.?$/i, /\s*,?\s*Corp\.?$/i,
   /\s*,?\s*Co\.?$/i, /\s*,?\s*Ltd\.?$/i, /\s*,?\s*L\.L\.C\.?$/i,
   /\s*,?\s*Incorporated$/i, /\s*,?\s*Corporation$/i, /\s*,?\s*Limited$/i,
 ];
 
-// Articles to strip from the start
+// Department/office variant normalization
+const ORG_VARIANT_CLEANUP: [RegExp, string][] = [
+  [/\bDept\b\.?/gi, "Department"],
+  [/\bSvcs\b\.?/gi, "Services"],
+  [/\bAuth\b\.?/gi, "Authority"],
+  [/\bComm\b\.?/gi, "Commission"],
+  [/\bAdmin\b\.?/gi, "Administration"],
+];
+
 const LEADING_ARTICLE = /^(?:The|A|An)\s+/i;
 
-/**
- * Return a normalized canonical form of an entity name for dedup / merge.
- * Does NOT change the display name — only used for comparison keys.
- */
 export function normalizeEntityName(name: string): string {
   let n = name.trim();
   // Strip possessives
   n = n.replace(/['']s\s*$/i, "").trim();
   // Strip leading articles
   n = n.replace(LEADING_ARTICLE, "");
+  // Normalize common department abbreviations
+  for (const [rx, replacement] of ORG_VARIANT_CLEANUP) {
+    n = n.replace(rx, replacement);
+  }
   // Strip common org suffixes
   for (const rx of ORG_SUFFIX_CLEANUP) n = n.replace(rx, "");
   // Collapse internal whitespace
@@ -711,7 +1000,20 @@ export function normalizeEntityName(name: string): string {
 }
 
 /**
- * Try to match a candidate name to one of the existing canonical names.
+ * Compute token overlap ratio between two normalized name strings.
+ * Returns 0.0–1.0 where 1.0 = full overlap.
+ */
+function tokenOverlap(a: string, b: string): number {
+  const tokA = new Set(a.split(/\s+/).filter(w => w.length > 2));
+  const tokB = new Set(b.split(/\s+/).filter(w => w.length > 2));
+  if (tokA.size === 0 || tokB.size === 0) return 0;
+  let shared = 0;
+  for (const t of tokA) { if (tokB.has(t)) shared++; }
+  return shared / Math.max(tokA.size, tokB.size);
+}
+
+/**
+ * Try to match a candidate name to an existing canonical name.
  * Returns the existing canonical display name if a match is found, else null.
  */
 export function resolveToCanonical(
@@ -725,62 +1027,14 @@ export function resolveToCanonical(
     if (normCandidate === normExisting) return existing;
     // One contains the other (acronym expansion or suffix variant)
     if (normExisting.includes(normCandidate) || normCandidate.includes(normExisting)) {
-      // Only merge if the shorter one is at least 4 chars (avoid "HCD" matching "CD")
       const shorter = normCandidate.length < normExisting.length ? normCandidate : normExisting;
       if (shorter.length >= 4) return existing;
     }
-  }
-  return null;
-}
-
-export function extractFinancialSignals(text: string): ExtractedFinancialSignal[] {
-  if (!text || text.trim().length < 20) return [];
-
-  const signals: ExtractedFinancialSignal[] = [];
-  const seen = new Set<string>();
-  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 10);
-
-  for (const sentence of sentences) {
-    // Only emit signals when a financial keyword is nearby
-    if (!FINANCIAL_PROXIMITY_PATTERN.test(sentence)) continue;
-    // Reject ad copy / retail / promo contexts
-    if (FINANCIAL_AD_COPY_PATTERN.test(sentence)) continue;
-    // Reject sports contract fluff
-    if (FINANCIAL_SPORTS_PATTERN.test(sentence)) continue;
-
-    MONEY_PATTERN.lastIndex = 0;
-    let match;
-    while ((match = MONEY_PATTERN.exec(sentence)) !== null) {
-      const amountRaw = match[0].trim();
-      if (!amountRaw || amountRaw.length < 2) continue;
-
-      const { amount, currency, display } = normalizeAmount(amountRaw);
-      if (amount === null || amount < 1000) continue; // Skip trivial or unparseable amounts
-
-      const dedupKey = display;
-      if (seen.has(dedupKey)) continue;
-      seen.add(dedupKey);
-
-      const signalType = getSignalType(sentence);
-      const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
-
-      // Find nearest proper noun in the sentence for entity linkage
-      let entityName: string | null = null;
-      const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence);
-      if (properNounMatch) entityName = properNounMatch[1];
-
-      signals.push({
-        amountRaw,
-        amountDisplay: display,
-        normalizedAmount: amount,
-        currency,
-        signalType,
-        eventSummary: summary,
-        entityName,
-      });
-      if (signals.length >= 20) return signals;
+    // High token overlap (≥ 60%)
+    const overlap = tokenOverlap(normCandidate, normExisting);
+    if (overlap >= 0.60 && normCandidate.length >= 8 && normExisting.length >= 8) {
+      return existing;
     }
   }
-
-  return signals;
+  return null;
 }

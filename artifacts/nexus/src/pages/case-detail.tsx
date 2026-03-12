@@ -768,11 +768,28 @@ interface SeedDiag {
   priorityB: number;
   detected: number;
   promoted: number;
+  promotedConfirmed: number;
+  promotedStrong: number;
+  heldCandidates: number;
+  suppressedNoise: number;
+  seedIntent: string;
   fallback: boolean;
   buildStatus: string;
   trustRating: string;
   nextQueries: string[];
 }
+
+const SEED_INTENT_LABELS: Record<string, string> = {
+  housing_homelessness: "HOUSING",
+  finance_funding: "FINANCE",
+  education_university: "EDUCATION",
+  crime_corruption: "CORRUPTION",
+  legal_lawsuit: "LEGAL",
+  entertainment_film: "FILM",
+  policy_government: "GOVERNMENT",
+  sports: "SPORTS",
+  general: "GENERAL",
+};
 
 function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
   if (!desc) return null;
@@ -799,6 +816,11 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     priorityB: n("priority_b"),
     detected: n("detected"),
     promoted: n("promoted"),
+    promotedConfirmed: n("promoted_confirmed"),
+    promotedStrong: n("promoted_strong"),
+    heldCandidates: n("held_candidates"),
+    suppressedNoise: n("suppressed_noise"),
+    seedIntent: kv["seed_intent"] || "general",
     fallback: kv["fallback"] === "1",
     buildStatus: kv["build_status"] || "unknown",
     trustRating: dec(kv["trust"]) || "UNKNOWN",
@@ -816,7 +838,7 @@ function parseDocDiag(rawText: string | null | undefined): {
   status: string; chars: number; paras: number; strategy: string;
   finalUrl?: string; rssUrl?: string; srcUrl?: string;
   entities?: number; analysisRan?: boolean;
-  score?: number; priority?: string;
+  score?: number; priority?: string; alignment?: string;
 } | null {
   if (!rawText) return null;
   const m = rawText.match(/\[ATLAS-DIAG:([^\]]+)\]/);
@@ -839,6 +861,7 @@ function parseDocDiag(rawText: string | null | undefined): {
     analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
     score: kv.score !== undefined ? parseInt(kv.score) : undefined,
     priority: kv.priority,
+    alignment: kv.alignment,
   };
 }
 
@@ -854,6 +877,8 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
     if (status === "wrapper") return "bg-[#200010] text-red-400 border border-red-900";
     return "bg-[#111] text-neutral-500 border border-neutral-800";
   };
+
+  const intentLabel = SEED_INTENT_LABELS[diag.seedIntent] || diag.seedIntent.toUpperCase();
 
   let promotionNote: React.ReactNode = null;
   if (diag.promoted === 0 && diag.detected > 0) {
@@ -871,7 +896,7 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
   } else if (diag.fallback && diag.promoted > 0) {
     promotionNote = (
       <div className="px-3 py-2 text-[9px] font-mono text-amber-500/70 uppercase tracking-wide bg-[#100a00] border-t border-[#ffffff06]">
-        ⚡ SEED FALLBACK — {diag.promoted} entity{diag.promoted !== 1 ? "s" : ""} promoted at lower confidence threshold. Validate before relying on graph.
+        ⚡ SEED FALLBACK — {diag.promoted} entity{diag.promoted !== 1 ? "s" : ""} promoted at T2_CANDIDATE threshold. Validate before relying on graph.
       </div>
     );
   }
@@ -880,6 +905,11 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
     <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
       <div className="nexus-header-strip flex items-center gap-2">
         <span className="nexus-label">SEED PIPELINE REPORT</span>
+        {diag.seedIntent && diag.seedIntent !== "general" && (
+          <span className="font-mono text-[8px] text-violet-400 border border-violet-900/40 bg-violet-500/5 px-1.5 py-0.5 uppercase tracking-widest">
+            {intentLabel}
+          </span>
+        )}
         <button
           onClick={() => setShowDocs((v) => !v)}
           className="ml-auto font-mono text-[9px] text-neutral-500 hover:text-white uppercase tracking-wider border border-[#ffffff10] px-2 py-0.5 transition-colors"
@@ -904,6 +934,26 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
           </div>
         ))}
       </div>
+
+      {/* ── Tier breakdown row ── */}
+      {(diag.promotedConfirmed > 0 || diag.promotedStrong > 0 || diag.heldCandidates > 0 || diag.suppressedNoise > 0) && (
+        <div className="border-t border-[#ffffff06] px-3 py-2 flex items-center gap-4 flex-wrap">
+          <span className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest">TRUST TIERS:</span>
+          {diag.promotedConfirmed > 0 && (
+            <span className="font-mono text-[9px] text-green-400 uppercase">{diag.promotedConfirmed} T1-CONFIRMED</span>
+          )}
+          {diag.promotedStrong > 0 && (
+            <span className="font-mono text-[9px] text-cyan-400 uppercase">{diag.promotedStrong} T1b-STRONG</span>
+          )}
+          {diag.heldCandidates > 0 && (
+            <span className="font-mono text-[9px] text-amber-500 uppercase">{diag.heldCandidates} CANDIDATES HELD</span>
+          )}
+          {diag.suppressedNoise > 0 && (
+            <span className="font-mono text-[9px] text-neutral-600 uppercase">{diag.suppressedNoise} SUPPRESSED</span>
+          )}
+        </div>
+      )}
+
       {/* ── Relevance quality row ── */}
       {(diag.priorityA > 0 || diag.priorityB > 0 || diag.noise > 0) && (
         <div className="border-t border-[#ffffff06] px-3 py-2 flex items-center gap-4 flex-wrap">
@@ -929,9 +979,10 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
                   <th className="text-left px-3 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Source</th>
                   <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Body</th>
                   <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Score</th>
+                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Align</th>
                   <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Chars</th>
-                  <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Entities</th>
-                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">URL Source</th>
+                  <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Ents</th>
+                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">URL</th>
                 </tr>
               </thead>
               <tbody>
@@ -965,6 +1016,18 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
                         {d?.score !== undefined ? (
                           <span className={cn("font-bold", priorityColor)}>
                             {d.score}<span className="text-[8px] opacity-60 ml-0.5">{priorityLabel}</span>
+                          </span>
+                        ) : <span className="text-neutral-700">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {d?.alignment ? (
+                          <span className={cn("text-[8px] uppercase font-mono",
+                            d.alignment === "aligned" ? "text-green-500" :
+                            d.alignment === "partial" ? "text-cyan-600" :
+                            d.alignment === "mismatched" ? "text-red-600" :
+                            "text-neutral-700"
+                          )}>
+                            {d.alignment === "aligned" ? "✓" : d.alignment === "mismatched" ? "✗" : d.alignment === "partial" ? "~" : "?"}
                           </span>
                         ) : <span className="text-neutral-700">—</span>}
                       </td>
@@ -1066,12 +1129,31 @@ function OverviewPanel({
     ? seedDiag.nextQueries
     : primaryEntities.slice(0, 2).flatMap(e => [`${e.name} contracts`, `${e.name} grant`]);
 
+  // ── Derive LIKELY THEMES from entity types + financial signals ────────────
+  const likelyThemes: string[] = [];
+  const seedIntent = seedDiag?.seedIntent || "general";
+  const intentLabel = SEED_INTENT_LABELS[seedIntent] || "";
+  if (intentLabel && seedIntent !== "general") likelyThemes.push(intentLabel);
+  if (moneyFlows.length > 0 || financialSignals.length > 0) likelyThemes.push("FINANCIAL");
+  const hasGovEntities = entities.some(e => e.type === "government_agency");
+  const hasPersonEntities = entities.some(e => e.type === "person");
+  if (hasGovEntities) likelyThemes.push("GOVERNMENT");
+  if (hasPersonEntities) likelyThemes.push("INDIVIDUALS");
+  if (timeline.length >= 3) likelyThemes.push("TIMELINE EVENTS");
+  // Unique + cap at 5
+  const uniqueThemes = [...new Set(likelyThemes)].slice(0, 5);
+
   return (
     <div className="p-3 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-max">
       {/* ── Case Intelligence Briefing ── */}
       <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
         <div className="nexus-header-strip">
           <span className="nexus-label">CASE INTELLIGENCE</span>
+          {seedIntent !== "general" && intentLabel && (
+            <span className="font-mono text-[8px] text-violet-400 border border-violet-900/40 bg-violet-500/5 px-1.5 py-0.5 uppercase tracking-widest">
+              {intentLabel}
+            </span>
+          )}
           <div className={cn("font-mono text-[9px] px-2 py-0.5 border uppercase tracking-widest mr-2", trustColor)}>
             {trustRating}
           </div>
@@ -1135,6 +1217,30 @@ function OverviewPanel({
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ── LIKELY THEMES ── */}
+        {uniqueThemes.length > 0 && (
+          <div className="border-t border-[#ffffff06] px-3 pb-2 pt-2">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-1.5">LIKELY THEMES</div>
+            <div className="flex flex-wrap gap-1.5">
+              {uniqueThemes.map((theme) => (
+                <span key={theme} className="font-mono text-[9px] uppercase px-2 py-0.5 border border-violet-900/30 bg-violet-500/5 text-violet-400">
+                  {theme}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Held candidates advisory ── */}
+        {seedDiag && seedDiag.heldCandidates > 0 && (
+          <div className="border-t border-[#ffffff06] px-3 py-2 flex items-center gap-2 bg-amber-500/3">
+            <span className="font-mono text-[8px] text-amber-600 uppercase tracking-widest">⚑</span>
+            <span className="font-mono text-[9px] text-amber-600 uppercase tracking-wide">
+              {seedDiag.heldCandidates} ENTITY CANDIDATE{seedDiag.heldCandidates !== 1 ? "S" : ""} HELD FOR REVIEW — approve or reject in the triage queue
+            </span>
           </div>
         )}
 
@@ -1520,7 +1626,21 @@ function DefaultInspector({
             <div className="border border-[#ffffff0a] bg-[#ffffff02]">
               <div className="px-2 py-1 font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] flex items-center justify-between">
                 <span>CASE HEALTH</span>
-                <span className={`${localTrustColor} text-[8px] font-bold`}>{localTrustRating}</span>
+                <div className="flex items-center gap-1.5">
+                  {(() => {
+                    const sd = parseSeedDiag(caseData.description);
+                    const si = sd?.seedIntent;
+                    if (si && si !== "general") {
+                      return (
+                        <span className="text-[8px] font-mono text-violet-500 border border-violet-900/30 px-1 uppercase">
+                          {SEED_INTENT_LABELS[si] || si}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <span className={`${localTrustColor} text-[8px] font-bold`}>{localTrustRating}</span>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-0">
                 {healthItems.map((item) => (

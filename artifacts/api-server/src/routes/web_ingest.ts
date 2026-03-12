@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import { parse as parseHtml } from "node-html-parser";
-import { extractEntities, computeDocRelevanceScore, normalizeEntityName, resolveToCanonical } from "../lib/entity-extractor";
+import { extractEntities, computeDocRelevanceScore, normalizeEntityName, resolveToCanonical, classifySeedIntent, cleanBodyText, type SeedIntent } from "../lib/entity-extractor";
 import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
@@ -877,18 +877,41 @@ router.post("/cases/seed", async (req, res) => {
   );
 });
 
+/** Build seed intent-aware query variations for RSS feed harvesting */
+function buildQueryVariations(target: string, intent: SeedIntent): string[] {
+  const base = target.trim();
+  switch (intent) {
+    case "housing_homelessness":
+      return [base, `${base} shelter contracts`, `${base} housing funding`, `${base} program audit`, `${base} accountability`];
+    case "finance_funding":
+      return [base, `${base} contracts`, `${base} grant award`, `${base} budget allocation`, `${base} procurement`];
+    case "education_university":
+      return [base, `${base} contracts`, `${base} funding`, `${base} audit investigation`, `${base} grant`];
+    case "crime_corruption":
+      return [base, `${base} investigation`, `${base} indictment`, `${base} fraud audit`, `${base} corruption charges`];
+    case "legal_lawsuit":
+      return [base, `${base} lawsuit`, `${base} court filing`, `${base} settlement`, `${base} legal action`];
+    case "entertainment_film":
+      return [base, `${base} tax credit`, `${base} film incentive funding`, `${base} production subsidy`, `${base} studio deal`];
+    case "policy_government":
+      return [base, `${base} contracts`, `${base} oversight audit`, `${base} program funding`, `${base} accountability`];
+    case "sports":
+      return [base, `${base} contract`, `${base} investigation`, `${base} finance`, `${base} deal`];
+    default:
+      return [base, `${base} investigation`, `${base} contracts`, `${base} funding`, `${base} program`];
+  }
+}
+
 async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   await logEvent("auto_ingest_started", `Auto-ingestion started for target: "${target}"`, { caseId });
 
+  const seedIntent = classifySeedIntent(target);
   const queryTerms = target.trim().split(/\s+/).filter(w => w.length > 2);
 
-  const queryVariations = [
-    target,
-    `${target} investigation`,
-    `${target} contracts`,
-    `${target} funding`,
-    `${target} program`,
-  ];
+  await logEvent("seed_intent_classified", `Seed intent: ${seedIntent} for target: "${target}"`, { caseId });
+
+  // Build intent-aware query variations to get high-quality aligned results
+  const queryVariations = buildQueryVariations(target, seedIntent);
 
   const allResults: (WebSearchResult & { _query: string })[] = [];
 
@@ -1035,25 +1058,34 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       if (docExtractionStatus === "ok") okDocIds.add(doc.id);
       const textForAnalysis = cleanRawText(rawText);
 
-      // ── Relevance scoring ────────────────────────────────────────────────
+      // ── Relevance scoring (seed intent–aware) ───────────────────────────
       const relevance = computeDocRelevanceScore(
-        textForAnalysis, result.title, queryTerms, result.sourceDomain
+        textForAnalysis, result.title, queryTerms, result.sourceDomain, seedIntent
       );
       if (relevance.priority === "PRIORITY_A") priorityADocs++;
       else if (relevance.priority === "PRIORITY_B") priorityBDocs++;
+
+      // Log topic alignment advisory for mismatched docs
+      if (relevance.topicAlignment === "mismatched" && relevance.mismatchReason) {
+        await logEvent(
+          "doc_topic_mismatch",
+          `Topic mismatch [${relevance.mismatchReason}] for "${result.title}" (score=${relevance.score})`,
+          { caseId, documentId: doc.id }
+        );
+      }
 
       // Skip entity extraction entirely for NOISE docs — they pollute the case
       if (relevance.priority === "NOISE") {
         noiseSkipped++;
         await logEvent(
           "doc_noise_skipped",
-          `NOISE doc skipped (score=${relevance.score}): "${result.title}" — entities not extracted`,
+          `NOISE doc skipped (score=${relevance.score}, align=${relevance.topicAlignment}): "${result.title}" — entities not extracted`,
           { caseId, documentId: doc.id }
         );
         // Patch the ATLAS-DIAG block with the relevance score even for noise docs
         const noisePatch = rawText.replace(
           /(\[ATLAS-DIAG:[^\]]+)\]/,
-          (_, inner) => `${inner}|score=${relevance.score}|priority=${relevance.priority}|analysis_ran=0]`
+          (_, inner) => `${inner}|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}|analysis_ran=0]`
         );
         if (noisePatch !== rawText) {
           await db.update(documentsTable).set({ rawText: noisePatch }).where(eq(documentsTable.id, doc.id));
@@ -1084,10 +1116,10 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         }
       }
 
-      // ── Patch rawText to add entity count, analysis_ran, and relevance score ──
+      // ── Patch rawText to add entity count, analysis_ran, relevance score, and alignment ──
       const updatedRawText = rawText.replace(
         /(\[ATLAS-DIAG:[^\]]+)\]/,
-        (_, inner) => `${inner}|entities=${entityCountForDoc}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}]`
+        (_, inner) => `${inner}|entities=${entityCountForDoc}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}]`
       );
       if (updatedRawText !== rawText) {
         await db.update(documentsTable)
@@ -1184,12 +1216,19 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     return Math.min(0.99, trust);
   }
 
-  // Auto-approve: trust score threshold
+  // ── Trust tier tracking ─────────────────────────────────────────────────
   const approvedEntityIds = new Map<string, number>(); // key → entity.id
+  let promotedConfirmedCount = 0;  // T1_CONFIRMED
+  let promotedStrongCount = 0;     // T1b_STRONG
+  let heldCandidates = 0;          // T2_CANDIDATE inserted as pending
+  let suppressedNoise = 0;         // HOLD — not inserted at all
 
   async function approveEntity(key: string, entry: EntryData, tier: string) {
     try {
       if (WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName)) return;
+
+      // Cap starter graph at 12 entities
+      if (approvedEntityIds.size >= 12) return;
 
       // Check for canonical resolution against already-promoted names
       const canonicalMatch = resolveToCanonical(entry.displayName, promotedEntityNames);
@@ -1215,6 +1254,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           .where(eq(entityMentionsTable.id, mentionId));
       }
 
+      if (tier === "T1_CONFIRMED") promotedConfirmedCount++;
+      else if (tier === "T1b_STRONG") promotedStrongCount++;
+
       const trustPct = (computeTrustScore(entry) * 100).toFixed(0);
       await logEvent(
         "entity_auto_approved",
@@ -1226,32 +1268,55 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // Tier 1: high trust, multi-doc (graph-quality)
+  // T1_CONFIRMED: multi-doc + high trust (graph-quality anchor entities)
   for (const [key, entry] of entityMap) {
     const trust = computeTrustScore(entry);
     if (trust >= 0.82 && entry.docIds.size >= 2) {
-      await approveEntity(key, entry, "T1");
+      await approveEntity(key, entry, "T1_CONFIRMED");
     }
   }
 
-  // Tier 1b: single-doc but very strong signals (title hit + money context + agency type)
+  // T1b_STRONG: single-doc but very strong signals (title hit + money context + agency type)
   if (approvedEntityIds.size < 3) {
     for (const [key, entry] of entityMap) {
       if (approvedEntityIds.has(key)) continue;
       const trust = computeTrustScore(entry);
       const strongSingleDoc = entry.titleHits >= 1 && (entry.moneyCtxHits >= 1 || entry.agencyBonus);
       if (trust >= 0.78 && strongSingleDoc) {
-        await approveEntity(key, entry, "T1b-STRONG");
+        await approveEntity(key, entry, "T1b_STRONG");
       }
     }
   }
 
-  // Tier 2 fallback: if zero entities approved, promote the safest single-doc candidates
+  // T2_CANDIDATE: single good doc, moderate trust — insert as pending (analyst review)
+  for (const [key, entry] of entityMap) {
+    if (approvedEntityIds.has(key)) continue;
+    const trust = computeTrustScore(entry);
+    if (trust >= 0.65 && !WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName)) {
+      heldCandidates++;
+      // Mentions already inserted as pending — no entity record created, stays in review queue
+      await logEvent(
+        "entity_candidate_held",
+        `[T2_CANDIDATE] Entity held for review: ${entry.displayName} [${entry.type}] — trust ${(trust * 100).toFixed(0)}%, ${entry.docIds.size} doc(s)`,
+        { caseId }
+      );
+    } else if (trust < 0.65) {
+      // HOLD: very low trust or blocked — suppress entirely
+      suppressedNoise++;
+      for (const mentionId of entry.mentionIds) {
+        await db.update(entityMentionsTable)
+          .set({ status: "rejected" })
+          .where(eq(entityMentionsTable.id, mentionId));
+      }
+    }
+  }
+
+  // T2_CANDIDATE fallback: if zero entities auto-approved, promote the top 3 candidates
   if (approvedEntityIds.size === 0 && validDocsIngested > 0) {
     const PREFERRED_TYPES = ["organization", "government_agency", "facility", "program", "location"];
 
-    const candidates = Array.from(entityMap.entries())
-      .filter(([, e]) => computeTrustScore(e) >= 0.65 && !WRAPPER_ENTITY_BLOCKLIST.has(e.displayName))
+    const fallbackCandidates = Array.from(entityMap.entries())
+      .filter(([, e]) => computeTrustScore(e) >= 0.60 && !WRAPPER_ENTITY_BLOCKLIST.has(e.displayName))
       .map(([key, entry]) => {
         const hasOkDoc = Array.from(entry.docIds).some((id) => okDocIds.has(id));
         const typeBonus = PREFERRED_TYPES.includes(entry.type) ? 1.5 : 0;
@@ -1261,16 +1326,16 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       .sort((a, b) => b.priority - a.priority);
 
     let fallbackCount = 0;
-    for (const { key, entry } of candidates) {
+    for (const { key, entry } of fallbackCandidates) {
       if (fallbackCount >= 3) break;
-      await approveEntity(key, entry, "T2-FALLBACK");
+      await approveEntity(key, entry, "T2_CANDIDATE");
       fallbackCount++;
     }
 
     if (fallbackCount > 0) {
       await logEvent(
         "seed_fallback_triggered",
-        `Seed fallback: promoted ${fallbackCount} entity candidate${fallbackCount !== 1 ? "s" : ""} — no high-confidence multi-doc entities qualified`,
+        `Seed fallback: promoted ${fallbackCount} T2_CANDIDATE${fallbackCount !== 1 ? "s" : ""} — no T1/T1b entities qualified`,
         { caseId }
       );
     } else if (allMentions.length > 0) {
@@ -1362,15 +1427,23 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     buildStatus = "failed"; trustRating = "EMPTY CASE";
   }
 
-  // ── Generate NEXT QUERIES based on promoted entities ─────────────────────
+  // ── Generate NEXT QUERIES based on promoted entities + seed intent ─────────
   const nextQueryBase = promotedEntityNames.slice(0, 3);
+  const intentSuffixes: Record<SeedIntent, string[]> = {
+    housing_homelessness: ["shelter contracts", "housing funding", "program accountability"],
+    finance_funding:      ["contracts", "budget allocation", "grant award"],
+    education_university: ["contracts", "funding audit", "grant"],
+    crime_corruption:     ["investigation", "indictment", "fraud charges"],
+    legal_lawsuit:        ["lawsuit", "court filing", "settlement"],
+    entertainment_film:   ["tax credit", "film incentive", "production deal"],
+    policy_government:    ["contracts", "oversight audit", "program funding"],
+    sports:               ["contract", "investigation", "finance"],
+    general:              ["contracts", "audit", "grant"],
+  };
+  const suffixes = intentSuffixes[seedIntent] ?? intentSuffixes.general;
   const nextQueryLines = nextQueryBase.length > 0
-    ? nextQueryBase.flatMap(name => [
-        `${name} contracts`,
-        `${name} budget`,
-        `${name} grant`,
-      ]).slice(0, 6)
-    : [`${target} contracts`, `${target} audit`, `${target} grant`];
+    ? nextQueryBase.flatMap(name => suffixes.map(s => `${name} ${s}`)).slice(0, 6)
+    : suffixes.map(s => `${target} ${s}`).slice(0, 6);
 
   // Build human-readable description
   const sourceWord = (n: number) => `${n} source${n !== 1 ? "s" : ""}`;
@@ -1379,8 +1452,10 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   let statusLine: string;
   if (entitiesApproved > 0) {
     const promotionNote = isFallback ? " via seed fallback" : "";
-    statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, extracted ${sourceWord(validDocsIngested)} with usable text, detected ${entityWord(totalDetected)}, and auto-promoted ${entitiesApproved} seed ${entitiesApproved !== 1 ? "entities" : "entity"}${promotionNote} to the case graph.`;
+    const confirmedNote = promotedConfirmedCount > 0 ? ` (${promotedConfirmedCount} confirmed, ${promotedStrongCount} strong)` : "";
+    statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, extracted ${sourceWord(validDocsIngested)} with usable text, detected ${entityWord(totalDetected)}, and auto-promoted ${entitiesApproved} seed ${entitiesApproved !== 1 ? "entities" : "entity"}${confirmedNote}${promotionNote} to the case graph.`;
     if (noiseSkipped > 0) statusLine += ` ${noiseSkipped} low-relevance document${noiseSkipped !== 1 ? "s" : ""} suppressed from entity extraction.`;
+    if (heldCandidates > 0) statusLine += ` ${heldCandidates} candidate${heldCandidates !== 1 ? "s" : ""} held for analyst review.`;
   } else if (totalDetected > 0) {
     statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, extracted ${sourceWord(validDocsIngested)} with usable text, and detected ${entityWord(totalDetected)} — none passed quality checks for auto-promotion. Review pending detections to manually approve entities.`;
   } else if (validDocsIngested > 0) {
@@ -1403,6 +1478,11 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     `priority_b=${priorityBDocs}`,
     `detected=${totalDetected}`,
     `promoted=${entitiesApproved}`,
+    `promoted_confirmed=${promotedConfirmedCount}`,
+    `promoted_strong=${promotedStrongCount}`,
+    `held_candidates=${heldCandidates}`,
+    `suppressed_noise=${suppressedNoise}`,
+    `seed_intent=${seedIntent}`,
     `fallback=${isFallback ? 1 : 0}`,
     `build_status=${buildStatus}`,
     `trust=${encodeURIComponent(trustRating)}`,

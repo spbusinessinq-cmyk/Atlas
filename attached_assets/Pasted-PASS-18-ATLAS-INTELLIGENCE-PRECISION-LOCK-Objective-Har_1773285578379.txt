@@ -1,0 +1,328 @@
+PASS 18 — ATLAS INTELLIGENCE PRECISION LOCK
+
+Objective:
+Harden ATLAS so auto-seeded investigations stay on-topic, suppress junk entities, promote only investigation-grade entities, and build cleaner starter cases. This pass is about PRECISION, not just extraction volume.
+
+NON-NEGOTIABLE OUTCOME:
+When I seed a case like:
+- “California shelter funding for homeless”
+- “Hollywood funding for movies”
+- “Ohio State University”
+ATLAS must:
+1. pull relevant docs,
+2. suppress broad-topic drift,
+3. extract only meaningful entities,
+4. auto-promote only strong investigative entities,
+5. generate a cleaner graph and brief.
+
+========================================
+PART 1 — SEED INTENT LOCKING
+========================================
+
+Problem:
+The seed pipeline drifts into loosely related articles because doc scoring is broad.
+
+Implement:
+1. Add a seed-intent classifier based on the original case target:
+   - policy / government
+   - finance / funding / grants / contracts
+   - education / university
+   - housing / homelessness
+   - crime / corruption / audit / fraud
+   - entertainment / film / studio
+   - sports
+2. Use that seed-intent to influence scoring:
+   - If seed intent is policy/funding/homelessness, heavily penalize entertainment/social/celebrity/sports docs.
+   - If seed intent is university but NOT sports, penalize athletics/roster/game coverage.
+   - If seed intent is studio funding, boost film incentives / tax credits / budget / grants / subsidy docs, penalize celeb gossip.
+3. Add a doc-level topic alignment score:
+   - + for title/body containing the main seed nouns and investigative terms
+   - - for topic mismatch categories
+4. Store this in doc diag:
+   - seed_intent
+   - topic_alignment
+   - mismatch_reason
+
+========================================
+PART 2 — HARD NOISE SUPPRESSION
+========================================
+
+Problem:
+ATLAS is still extracting garbage from share rails, nav clutter, sports blurbs, and generic publication fragments.
+
+Implement:
+1. Expand noise suppression in entity-extractor.ts:
+   hard blocklist for:
+   - share via
+   - copied!
+   - email
+   - facebook
+   - x
+   - whatsapp
+   - reddit
+   - linkedin
+   - threads
+   - close extra sharing options
+   - top stories
+   - latest news
+   - advertisement
+   - sponsored content
+   - opinion
+   - obituaries
+   - weather
+   - newsletters
+   - watch live
+   - live updates
+   - listen
+   - subscribe
+   - sign in
+   - menu
+   - archived content notices
+2. Add line-level/body cleaning before extraction:
+   - remove repeated nav/share lines
+   - remove lines with 3+ social/share keywords
+   - remove lines that are mostly UI/action verbs
+   - remove promo/footer boilerplate blocks
+3. Reject documents as NOISE if cleaned body quality drops below threshold:
+   - too few meaningful sentences
+   - too much boilerplate ratio
+4. Show cleaned/noise stats in diag:
+   - raw_chars
+   - cleaned_chars
+   - removed_lines
+   - boilerplate_ratio
+
+========================================
+PART 3 — ENTITY PRECISION RULES
+========================================
+
+Problem:
+Entities like “Ken”, “Diaz”, “Jackson’s”, “Power Play”, “Question Period”, “Google’s”, random sports names and single-fragment names are getting through.
+
+Implement:
+1. Add stronger entity validity rules:
+   Reject or heavily penalize:
+   - single common first names without surname/context
+   - possessive tokens (“Jackson’s”, “Google’s”)
+   - title fragments (“President”, “Governor”, “The Studio”, “The Pitt”)
+   - generic nouns extracted as org/person
+   - entertainment segment names / show titles / publication section names
+2. Add entity context windows:
+   For each mention, inspect ±120 chars around entity.
+   Boost if near:
+   - funding, grant, contract, budget, audit, investigation, program, department, authority, spending, allocation, procurement, fraud, corruption, subsidy, tax credit
+   Penalize if near:
+   - season, game, player, coach, scores, actor, actress, episode, watch, box office, trailer, celebrity, red carpet, concert
+3. Add title-to-entity alignment bonus:
+   If an entity appears in the title or subtitle, big boost.
+4. Add multi-doc consistency bonus:
+   Same canonical entity across multiple docs = higher trust.
+5. Add “seed-anchor” bonus:
+   Entities semantically close to original case target get extra trust.
+
+========================================
+PART 4 — CANONICALIZATION / MERGING
+========================================
+
+Problem:
+Variants like:
+- Angeles Housing Department’s
+- Housing Department
+- Los Angeles Housing Department
+get treated as separate or messy entities.
+
+Implement:
+1. Stronger canonicalization:
+   - strip possessives
+   - normalize punctuation
+   - collapse duplicate whitespace
+   - merge near-duplicates by token overlap and shared root noun
+2. Add alias handling:
+   - save aliases on entity record
+   - keep canonical display name stable
+3. Merge obvious institutional variants:
+   - Dept / Department
+   - Authority / Services Authority variants
+   - Project Homekey / Homekey when context is identical
+4. Do not merge people by first name only.
+5. Add debug fields:
+   - canonical_name
+   - aliases[]
+   - merge_reason
+
+========================================
+PART 5 — DOCUMENT RELEVANCE 2.0
+========================================
+
+Problem:
+The doc scoring is better, but still not strict enough.
+
+Implement:
+1. Rework computeDocRelevanceScore():
+   final score should combine:
+   - seed token match
+   - investigative keyword density
+   - financial/timeline signal presence
+   - title alignment
+   - domain quality
+   - topic alignment
+   - boilerplate penalty
+   - mismatch penalty
+2. Add hard suppressors:
+   - if sports mismatch and non-sports seed => NOISE
+   - if celebrity/entertainment mismatch and policy seed => NOISE
+   - if page is mostly listicle/opinion fluff => LOW_SIGNAL or NOISE
+3. Add clearer doc classes:
+   - PRIORITY_A
+   - PRIORITY_B
+   - LOW_SIGNAL
+   - NOISE
+   - BLOCKED
+4. In seed pipeline:
+   - only PRIORITY_A and PRIORITY_B should influence auto-promotion
+   - LOW_SIGNAL may be ingested but should not heavily influence entity trust
+   - NOISE should not feed entity extraction at all
+5. Surface class clearly in UI.
+
+========================================
+PART 6 — AUTO-PROMOTION TRUST ENGINE
+========================================
+
+Problem:
+Auto-promotion is still too willing in weak-topic environments.
+
+Implement:
+1. Only auto-promote entities when:
+   - canonical entity appears in 2+ usable docs
+   OR
+   - appears in title + high-confidence + strong context
+2. Require minimum doc quality:
+   - entity must be supported by PRIORITY_A/B docs
+3. Add trust tiers:
+   - T1 CONFIRMED
+   - T1b STRONG
+   - T2 CANDIDATE
+   - HOLD
+4. HOLD anything that is:
+   - single-fragment person
+   - sports/entertainment-only entity in nonmatching case
+   - generic institution fragment
+5. Update seed summary to show:
+   - promoted_confirmed
+   - promoted_strong
+   - held_candidates
+   - suppressed_noise
+
+========================================
+PART 7 — GRAPH HYGIENE
+========================================
+
+Problem:
+Graphs get spaghetti too quickly from weak co-mention logic.
+
+Implement:
+1. Only build starter graph from:
+   - promoted confirmed / strong entities
+2. Do not create co-mention edges from LOW_SIGNAL or NOISE docs
+3. Edge score must use:
+   - shared doc count
+   - doc quality
+   - type compatibility
+   - title co-occurrence bonus
+4. Hide weak edges by default
+5. Add graph starter cap:
+   - max 8–12 seed entities initially
+   - max strongest edges only
+Goal:
+Open a fresh seeded case and see a clean starter graph, not spaghetti.
+
+========================================
+PART 8 — CASE BRIEF / ANALYST BRIEFING
+========================================
+
+Problem:
+The case brief exists, but it needs to summarize more intelligently.
+
+Implement:
+1. Case brief should summarize:
+   - what the topic is
+   - strongest entities
+   - strongest financial signals
+   - strongest timeline signals
+   - probable investigation direction
+2. Add sections:
+   - PRIMARY SUBJECTS
+   - PRIMARY SIGNALS
+   - LIKELY THEMES
+   - NEXT QUERIES
+3. Suppress noisy entities from briefing.
+4. If case quality is weak, say so honestly:
+   - “ATLAS found sources but topic alignment was weak. Manual narrowing recommended.”
+
+========================================
+PART 9 — UI FOR INTELLIGENCE CONFIDENCE
+========================================
+
+Do NOT do a big redesign here.
+Only add intelligence clarity:
+
+1. In document vault rows show:
+   - PRIORITY_A / PRIORITY_B / LOW / NOISE badge
+2. In inspector show:
+   - topic alignment
+   - mismatch reason if any
+   - cleaned body stats
+3. In overview show:
+   - build status
+   - trust rating
+   - promoted vs held vs suppressed counts
+
+========================================
+PART 10 — TEST CASES (MUST PASS)
+========================================
+
+After implementing, test with these exact seed phrases:
+
+1. California shelter funding for homeless
+Expected:
+- housing / policy / spending docs
+- not random entertainment or sports
+- entities like agencies, programs, counties, departments
+- financial signals relevant to budgets/grants
+
+2. Hollywood funding for movies
+Expected:
+- tax credits, studio funding, grants, film incentives
+- not celeb gossip noise
+- not random entertainment personalities unless deeply tied to funding doc
+
+3. Ohio State University
+Expected:
+- university governance / budget / administration / investigations if available
+- sports stories should be heavily penalized unless seed explicitly implies athletics
+
+4. Donald Trump lawsuits
+Expected:
+- legal / court / indictment / appeals / filings / settlement docs
+- not random campaign gossip unless tied to lawsuits
+
+========================================
+FINAL OUTPUT REQUIRED
+========================================
+
+When done, provide:
+
+1. Files changed
+2. Exact scoring / trust rule summary
+3. Before vs after behavior summary
+4. Result of the 4 test cases above
+5. Confirm whether auto-building is now:
+   - usable
+   - strong
+   - or still needs one more hardening pass
+
+Important:
+Do not stop at partial edits.
+Implement the full pass end-to-end.
+Do not just improve visuals.
+This pass is about making ATLAS trustworthy.
