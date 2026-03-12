@@ -39,6 +39,7 @@ export type AdmissionRejectReason =
   | "LOW_CONFIDENCE"
   | "SHORT_FRAGMENT"
   | "ARTIFACT"           // merged-line artifact / stitched name
+  | "ARTIFACT_ENTITY"    // fails entity shape validation (too long, quotes, colons, bad format)
   | "NAV_RESIDUE"        // navigation / share-rail residue
   | "CROSS_STORY"        // cross-story / unrelated-article bleed
   | "ZONE_REJECT"        // appeared only in rejected zone (sidebar/footer/related)
@@ -311,19 +312,56 @@ export function isCrossStoryContamination(name: string, context: string): boolea
  * "MORE NEWS EAU CLAIRE CITY COUNCIL" or "NEXT MIKE CRAPO".
  */
 export function isNavigationResidue(name: string): boolean {
-  // Starts with nav prefix word (ALL CAPS or title case)
-  const upper = name.toUpperCase();
-  for (const nav of ["MORE NEWS", "NEXT ", "READ MORE", "WATCH ", "LISTEN ", "TOP STORIES", "RELATED ", "SIGN UP", "SUBSCRIBE"]) {
+  const upper = name.toUpperCase().trim();
+
+  // Exact nav phrases
+  const NAV_STARTS = [
+    "MORE NEWS", "NEXT ", "READ MORE", "WATCH ", "LISTEN ", "TOP STORIES",
+    "RELATED ", "SIGN UP", "SUBSCRIBE", "SHARE ", "VIDEO ", "LIVE UPDATES",
+    "IMAGE ANALYSIS", "BREAKING NEWS", "SPONSORED CONTENT", "ADVERTISEMENT",
+  ];
+  for (const nav of NAV_STARTS) {
     if (upper.startsWith(nav)) return true;
   }
 
-  // Contains newsroom chrome words anywhere
-  if (/\b(MORE NEWS|READ MORE|WATCH NOW|LISTEN NOW|COPY LINK|SHARE VIA|ADVERTISEMENT|SPONSORED)\b/i.test(name)) return true;
+  // Contains known chrome words anywhere
+  if (/\b(MORE NEWS|READ MORE|WATCH NOW|LISTEN NOW|COPY LINK|SHARE VIA|ADVERTISEMENT|SPONSORED|LIVE UPDATES|IMAGE ANALYSIS|VIDEO ANALYSIS)\b/i.test(name)) return true;
 
   // Ends with nav suffix
-  if (/\b(MORE|NEXT|SHARE|WATCH|LISTEN|READ|SIGN IN|LOG IN|SUBSCRIBE)\s*$/i.test(name)) return true;
+  if (/\b(MORE|NEXT|SHARE|WATCH|LISTEN|READ|SIGN IN|LOG IN|SUBSCRIBE|DONATE|FOLLOW US)\s*$/i.test(name)) return true;
+
+  // Pure nav single words (standalone)
+  if (/^(SHARE|VIDEO|WATCH|NEXT|MORE|FOLLOW|SUBSCRIBE|DONATE|MENU|SEARCH|CLOSE|SKIP)$/i.test(name.trim())) return true;
 
   return false;
+}
+
+// Institution suffix pattern for Condition C promotion
+export const INSTITUTION_PATTERN = /\b(Department|Agency|University|Committee|Court|Office|Administration|Council|Authority|Commission|Bureau|Division|Foundation|Institute|Ministry|Board|Program|Service|Center|Centre)\b/i;
+
+/**
+ * validateEntityShape — structural guard against garbage extraction.
+ * Returns null if valid, or a reason string if invalid.
+ */
+export function validateEntityShape(name: string, entityType: string): "ARTIFACT_ENTITY" | null {
+  const trimmed = name.trim();
+  const words = trimmed.split(/\s+/);
+
+  // Hard rules — apply to all types
+  if (words.length > 5) return "ARTIFACT_ENTITY";                          // >5 words → stitched garbage
+  if (/["'""]/.test(trimmed)) return "ARTIFACT_ENTITY";                    // contains quotes
+  if (/[;:]/.test(trimmed)) return "ARTIFACT_ENTITY";                      // contains colon or semicolon
+  if (words.length > 3 && trimmed === trimmed.toUpperCase()) return "ARTIFACT_ENTITY"; // ALL CAPS phrase >3 words
+
+  // Person-specific: must have at least 2 words
+  if (entityType === "person") {
+    if (words.length < 2) return "ARTIFACT_ENTITY";                        // single-word person (no last name)
+    // Each word must start with a capital letter (basic name structure)
+    const validName = words.every(w => /^[A-Z]/.test(w) || /^(de|van|von|le|la|al|el|ben|binti|bin)$/i.test(w));
+    if (!validName) return "ARTIFACT_ENTITY";
+  }
+
+  return null;
 }
 
 export interface DocContaminationResult {
@@ -652,6 +690,10 @@ export function shouldAdmitMention(
   // NAV_RESIDUE — entity name contains navigation residue
   if (isNavigationResidue(entityName))
     return { admit: false, rejectReason: "NAV_RESIDUE" };
+
+  // ARTIFACT_ENTITY — entity fails structural shape validation
+  const shapeError = validateEntityShape(entityName, entityType);
+  if (shapeError) return { admit: false, rejectReason: shapeError };
 
   // ARTIFACT — merged-line / stitched names
   if (isMergedLineArtifact(entityName))

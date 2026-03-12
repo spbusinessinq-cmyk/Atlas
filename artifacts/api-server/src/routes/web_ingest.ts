@@ -20,6 +20,7 @@ import {
   cleanBodyText,
   computeDocContaminationScore,
   shouldAdmitMention,
+  INSTITUTION_PATTERN,
   type SeedIntent,
   type EntityRole,
   type TopicRelevance,
@@ -1220,7 +1221,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   // ── Entity map constants ─────────────────────────────────────────────────
   const isSerious = ["crime_corruption","legal_lawsuit","policy_government",
     "housing_homelessness","finance_funding"].includes(seedIntent);
-  const GRAPH_CAP = isSerious ? 6 : 8; // tighter cap for serious seeds
+  const MAX_PROMOTED_ENTITIES = 5; // hard cap for all seeds
 
   // Group by normalized entity name for dedup/merge
   interface EntryData {
@@ -1408,19 +1409,38 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     return entry.bestTopic === "HIGH" || entry.bestTopic === "MEDIUM";
   }
 
-  // ── Trust tier tracking ─────────────────────────────────────────────────
+  // ── Promotion tracking ────────────────────────────────────────────────────
   const approvedEntityIds = new Map<string, number>(); // key → entity.id
-  let promotedConfirmedCount = 0;  // T1_CONFIRMED
-  let promotedStrongCount = 0;     // T1_STRONG_SINGLE_DOC
+  let promotedConfirmedCount = 0;  // Condition B (multi-doc)
+  let promotedStrongCount = 0;     // Condition A (lead+role)
   let heldCandidates = 0;          // T2_HELD — stays pending for analyst review
-  let suppressedNoise = 0;         // HOLD — rejected
+  let suppressedNoise = 0;         // hard-suppressed
+  let promotionCandidates = 0;     // entities that entered the promotion gate
+
+  // ── Promotion helper functions (Conditions A/B/C) ─────────────────────────
+  function meetsConditionA(entry: EntryData): boolean {
+    const inLeadZone = entry.titleDekLeadHit || entry.titleHits >= 1;
+    const roleBearing = isRoleBearing(entry);
+    const topicOk = entry.bestTopic === "HIGH" || entry.bestTopic === "MEDIUM";
+    const confOk = entry.maxConfidence >= 0.68;
+    return inLeadZone && roleBearing && topicOk && confOk;
+  }
+  function meetsConditionB(entry: EntryData): boolean {
+    const multiDoc = entry.docIds.size >= 2;
+    const topicOk = entry.bestTopic === "HIGH" || entry.bestTopic === "MEDIUM";
+    const confOk = entry.maxConfidence >= 0.60;
+    return multiDoc && topicOk && confOk;
+  }
+  function meetsConditionC(entry: EntryData): boolean {
+    return INSTITUTION_PATTERN.test(entry.displayName);
+  }
 
   async function approveEntity(key: string, entry: EntryData, tier: string) {
     try {
       if (WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName)) return;
 
-      // Cap graph at GRAPH_CAP entities (6 for serious, 8 for others)
-      if (approvedEntityIds.size >= GRAPH_CAP) return;
+      // Hard cap at MAX_PROMOTED_ENTITIES
+      if (approvedEntityIds.size >= MAX_PROMOTED_ENTITIES) return;
 
       // Check for canonical resolution against already-promoted names
       const canonicalMatch = resolveToCanonical(entry.displayName, promotedEntityNames);
@@ -1460,65 +1480,63 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // ── T1_CONFIRMED: multi-doc, quality zone, role/institution, good topic ────
-  // Hard requirements: 2+ docs, title/dek/lead hit in at least 1, quality doc, role-bearing, HIGH/MED topic, no contam-only
-  for (const [key, entry] of entityMap) {
-    const trust = computeTrustScore(entry);
-    const roleBearing = isRoleBearing(entry);
-    const goodTopic = hasGoodTopic(entry);
-    const multiDoc = entry.docIds.size >= 2;
-    const hasZoneHit = entry.titleDekLeadHit || entry.titleHits >= 1;
-    const qualityDoc = entry.qualityDocHit;
-    const notContamOnly = !entry.contamDocOnly;
+  // Count promotion candidates (all entities in map excluding contamDocOnly and blocklisted)
+  for (const [, entry] of entityMap) {
+    if (!WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName) && !entry.contamDocOnly && entry.bestTopic !== "OFF_TOPIC") {
+      promotionCandidates++;
+    }
+  }
 
-    if (trust >= 0.83 && multiDoc && hasZoneHit && roleBearing && goodTopic && qualityDoc && notContamOnly) {
+  // ── CONDITION B: Multi-document support (strongest signal — run first) ────
+  // Entity appears in 2+ docs, topic ≥ MEDIUM, confidence ≥ 0.60
+  for (const [key, entry] of entityMap) {
+    if (entry.contamDocOnly) continue;
+    if (!meetsConditionB(entry)) continue;
+    // Additional quality guard: must not be contam-only and must have at least one role-bearing signal OR institution pattern
+    const roleBearing = isRoleBearing(entry);
+    const instPattern = meetsConditionC(entry);
+    if (roleBearing || instPattern) {
       await approveEntity(key, entry, "T1_CONFIRMED");
     }
   }
 
-  // ── T1_STRONG_SINGLE_DOC: sparingly — must be title/dek/lead + strong role + PRIORITY_A + HIGH topic ──
-  // For serious seeds: extra strict — requires role weight ≥ 7 (attorney/official/defendant), not contam
-  if (approvedEntityIds.size < 3) {
+  // ── CONDITION A: Lead + Role (single-doc but in title/dek/lead, strong role) ──
+  // Only runs if we still have room under MAX_PROMOTED_ENTITIES
+  if (approvedEntityIds.size < MAX_PROMOTED_ENTITIES) {
     for (const [key, entry] of entityMap) {
       if (approvedEntityIds.has(key)) continue;
-      const trust = computeTrustScore(entry);
-      const goodTopic = hasGoodTopic(entry);
-      const titleDekLead = entry.titleDekLeadHit || entry.titleHits >= 1;
-      const notContamOnly = !entry.contamDocOnly;
+      if (entry.contamDocOnly) continue;
+      if (!meetsConditionA(entry)) continue;
 
       if (isSerious) {
-        // Serious seeds: must have strong role (≥ weight 7), PRIORITY_A, HIGH topic
+        // Serious seeds: require strong role weight or agency bonus, and priority-A doc
         const strongRole = isStrongRoleBearing(entry) || entry.agencyBonus;
-        const priorityA = entry.priorityADocHit;
-        const highTopic = entry.bestTopic === "HIGH";
-        if (trust >= 0.82 && titleDekLead && strongRole && priorityA && highTopic && notContamOnly) {
+        if (strongRole && entry.priorityADocHit && entry.bestTopic === "HIGH") {
           await approveEntity(key, entry, "T1_STRONG_SINGLE_DOC");
         }
       } else {
-        // Non-serious: allow institution role + quality doc + good topic
+        // Non-serious: institution role + quality doc sufficient
         const instRole = isInstitutionRole(entry);
         const qualityDoc = entry.qualityDocHit;
-        const hasHighTopic = entry.bestTopic === "HIGH";
-        const strongSignals = titleDekLead && (entry.moneyCtxHits >= 1 || entry.agencyBonus || qualityDoc);
-        if (trust >= 0.80 && strongSignals && instRole && hasHighTopic && notContamOnly) {
+        if ((instRole || (isRoleBearing(entry) && qualityDoc)) && hasGoodTopic(entry)) {
           await approveEntity(key, entry, "T1_STRONG_SINGLE_DOC");
         }
       }
     }
   }
 
-  // Relaxed T1_STRONG_SINGLE_DOC for non-serious: MEDIUM topic allowed if other signals very strong
-  if (!isSerious && approvedEntityIds.size < 2) {
+  // ── CONDITION C: Known institution pattern (Condition C standalone) ────────
+  // Allow well-known institutions even if they missed lead/multi-doc requirements
+  if (approvedEntityIds.size < MAX_PROMOTED_ENTITIES) {
     for (const [key, entry] of entityMap) {
       if (approvedEntityIds.has(key)) continue;
-      const trust = computeTrustScore(entry);
-      const roleBearing = isRoleBearing(entry);
-      const goodTopic = hasGoodTopic(entry);
-      const titleDekLead = entry.titleDekLeadHit || entry.titleHits >= 1;
-      const strongSignals = titleDekLead && (entry.moneyCtxHits >= 1 || entry.agencyBonus || entry.qualityDocHit);
-      const notContamOnly = !entry.contamDocOnly;
-      if (trust >= 0.82 && strongSignals && roleBearing && goodTopic && notContamOnly) {
-        await approveEntity(key, entry, "T1_STRONG_SINGLE_DOC");
+      if (entry.contamDocOnly) continue;
+      if (!meetsConditionC(entry)) continue;
+      // Must have at least MEDIUM topic and reasonable confidence
+      const topicOk = entry.bestTopic === "HIGH" || entry.bestTopic === "MEDIUM";
+      const confOk = entry.maxConfidence >= 0.62;
+      if (topicOk && confOk && entry.qualityDocHit) {
+        await approveEntity(key, entry, "T1_CONFIRMED");
       }
     }
   }
@@ -1996,18 +2014,31 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   // ── Compute build status / analyst trust rating ───────────────────────────
   const finalPromoted = approvedEntityIds.size;
   const usableDocCount = okDocs + partialDocs;
+
+  // Compute "docs supporting main entity" (entity with most docIds in promoted set)
+  let mainEntityDocSupport = 0;
+  for (const [key] of approvedEntityIds) {
+    const entry = entityMap.get(key);
+    if (entry && entry.docIds.size > mainEntityDocSupport) mainEntityDocSupport = entry.docIds.size;
+  }
+
+  // New diagnostic counters from rejection reasons
+  const artifactRejectedMentions = (pipelineRejectReasons["ARTIFACT"] ?? 0) + (pipelineRejectReasons["ARTIFACT_ENTITY"] ?? 0);
+  const shapeRejectedMentions = pipelineRejectReasons["ARTIFACT_ENTITY"] ?? 0;
+  const navRejectedMentions = pipelineRejectReasons["NAV_RESIDUE"] ?? 0;
+
   let buildStatus: string;
   let trustRating: string;
-  let autoBuildQuality: "STRONG" | "MODERATE" | "WEAK" | "FAILED" | "RECOVERED";
+  let autoBuildQuality: "STRONG" | "PROVISIONAL" | "MODERATE" | "WEAK" | "FAILED" | "RECOVERED";
 
-  if (promotedConfirmedCount >= 2 && priorityADocs >= 2 && usableDocCount >= 3 && !recoveryTriggered) {
+  if (finalPromoted >= 3 && mainEntityDocSupport >= 2 && !recoveryTriggered) {
     buildStatus = "summarized"; trustRating = "STRONG BUILD"; autoBuildQuality = "STRONG";
-  } else if (finalPromoted >= 2 && usableDocCount >= 2 && (priorityADocs + priorityBDocs) >= 1 && !recoveryTriggered) {
-    buildStatus = "graphed"; trustRating = "STRONG BUILD"; autoBuildQuality = "STRONG";
+  } else if (finalPromoted === 2 && !recoveryTriggered) {
+    buildStatus = "graphed"; trustRating = "PROVISIONAL BUILD"; autoBuildQuality = "PROVISIONAL";
   } else if (recoveryTriggered && finalPromoted >= 2) {
     buildStatus = "graphed"; trustRating = "RECOVERED BUILD"; autoBuildQuality = "RECOVERED";
   } else if (finalPromoted >= 1 && usableDocCount >= 2) {
-    buildStatus = "graphed"; trustRating = "MODERATE BUILD"; autoBuildQuality = "MODERATE";
+    buildStatus = "graphed"; trustRating = "WEAK BUILD"; autoBuildQuality = "WEAK";
   } else if (totalDetected > 0 && usableDocCount >= 1) {
     buildStatus = "analyzed"; trustRating = "DEGRADED BUILD"; autoBuildQuality = "WEAK";
   } else if (usableDocCount > 0) {
@@ -2079,9 +2110,11 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     const angleLine = `LIKELY ANGLE: ${intentAngle[seedIntent]}`;
     const qualityNote = autoBuildQuality === "STRONG"
       ? "ATLAS assembled a viable starter investigation graph from high-confidence aligned sources."
+      : autoBuildQuality === "PROVISIONAL"
+      ? "PROVISIONAL BUILD — two entities promoted. Additional sourcing recommended before drawing firm conclusions. Review held candidates in triage."
       : autoBuildQuality === "RECOVERED"
       ? `Build recovered via expanded search (${recoveryDocCount} additional sources). Graph quality is provisional — manual review of held entities strongly recommended. ${highContaminationDocs > 0 ? `${highContaminationDocs} high-contamination doc(s) restricted to lead-only extraction.` : ""}`
-      : "Auto-build completed with moderate confidence. Manual review of held candidates recommended to strengthen the graph.";
+      : "Auto-build completed. Manual review of held candidates recommended to strengthen the graph.";
     briefText = [
       `WHAT: Seed investigation into "${target}" [${seedIntent.replace(/_/g, " ").toUpperCase()}].`,
       actorLine, instLine, signalLine, angleLine, qualityNote,
@@ -2123,6 +2156,11 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     `promoted_strong=${promotedStrongCount}`,
     `held_candidates=${heldCandidates}`,
     `suppressed_noise=${suppressedNoise}`,
+    `promotion_candidates=${promotionCandidates}`,
+    `artifact_rejected=${artifactRejectedMentions}`,
+    `shape_rejected=${shapeRejectedMentions}`,
+    `nav_rejected=${navRejectedMentions}`,
+    `main_entity_doc_support=${mainEntityDocSupport}`,
     `seed_intent=${seedIntent}`,
     `fallback=${isFallback ? 1 : 0}`,
     `recovery_triggered=${recoveryTriggered ? 1 : 0}`,

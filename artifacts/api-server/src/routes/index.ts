@@ -12,6 +12,7 @@ import entityMentionsRouter from "./entity_mentions";
 import relationshipEvidenceRouter from "./relationship_evidence";
 import webIngestRouter from "./web_ingest";
 import systemLogRouter from "./system_log";
+import dossierRouter from "./dossier";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(eventsRouter);
 router.use(notesRouter);
 router.use(moneyFlowsRouter);
 router.use(systemLogRouter);
+router.use(dossierRouter);
 
 export default router;

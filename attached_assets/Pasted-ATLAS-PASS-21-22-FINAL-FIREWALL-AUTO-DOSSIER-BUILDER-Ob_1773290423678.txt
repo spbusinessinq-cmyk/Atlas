@@ -1,0 +1,315 @@
+ATLAS PASS 21–22 — FINAL FIREWALL + AUTO DOSSIER BUILDER
+
+Objective:
+Stabilize ATLAS entity extraction and enable full automatic investigation generation. 
+This pass installs a strict promotion firewall and builds the auto-dossier system.
+
+────────────────────────────────
+
+PASS 21 — ENTITY PROMOTION FIREWALL
+
+ATLAS must only promote clean investigative entities.
+
+Update web_ingest.ts promotion logic.
+
+An entity may ONLY be promoted if ONE condition is met.
+
+CONDITION A — Lead + Role
+
+• role detected (PERSON / ORG / GOV / COMPANY / AGENCY)
+• mention appears in TITLE, DEK, or LEAD
+• topic relevance ≥ 0.55
+• confidence ≥ 0.68
+
+CONDITION B — Multi-document support
+
+• entity appears in 2+ documents
+• topic relevance ≥ 0.50
+• confidence ≥ 0.60
+
+CONDITION C — Known institution pattern
+
+Allow if matching patterns like:
+
+Department of ___
+___ University
+___ Committee
+___ Court
+___ Agency
+___ Authority
+___ Administration
+___ Council
+___ Commission
+___ Office
+
+Examples:
+
+Department of Justice
+Harvard University
+House Oversight Committee
+Federal Election Commission
+
+────────────────────────────────
+
+ENTITY HARD REJECTION
+
+Reject entity immediately if ANY rule matches:
+
+• >5 words
+• contains quotes
+• contains colon or semicolon
+• ALL CAPS phrase longer than 3 words
+• navigation phrases:
+  NEXT
+  MORE NEWS
+  SHARE
+  RELATED
+  WATCH
+  READ MORE
+  IMAGE ANALYSIS
+  VIDEO
+  LIVE UPDATES
+• stitched names like:
+  STEVE BENEN JAMES COMER
+• merged location strings:
+  LOS ANGELESROANOKE
+• social share fragments
+
+Add rejection type:
+
+ARTIFACT_ENTITY
+
+────────────────────────────────
+
+ENTITY SHAPE VALIDATION
+
+Add validateEntityShape()
+
+Allowed formats:
+
+PERSON
+
+Firstname Lastname
+Firstname M Lastname
+
+ORGANIZATION
+
+Word Word
+Word Word Word
+
+INSTITUTION PATTERN
+
+(Department|Agency|University|Committee|Court|Office|Administration|Council|Authority)
+
+If format invalid → reject entity.
+
+────────────────────────────────
+
+PROMOTION LIMITS
+
+For investigative seeds:
+
+MAX_PROMOTED_ENTITIES = 5
+
+If more appear:
+
+sort by trustScore 
+keep top 5 only
+
+────────────────────────────────
+
+HONEST BUILD STATUS
+
+Update case health scoring.
+
+STRONG BUILD
+
+• ≥3 promoted entities
+• ≥2 docs supporting main entity
+
+PROVISIONAL BUILD
+
+• 2 promoted entities
+• weak multi-doc support
+
+WEAK BUILD
+
+• ≤1 promoted entity
+
+Never mark STRONG unless conditions met.
+
+────────────────────────────────
+
+GRAPH SANITY
+
+Graph nodes must ONLY use promoted entities.
+
+Edge creation rules:
+
+title co-mention → strong edge 
+multi-doc co-mention → medium edge 
+single-doc body mention → weak edge 
+
+Reject edges if either node rejected.
+
+────────────────────────────────
+
+DIAGNOSTICS
+
+Add new counters to ATLAS-SEED output:
+
+artifact_rejected_entities
+shape_rejected_entities
+nav_rejected_entities
+promotion_candidates
+final_promoted
+
+────────────────────────────────
+
+PASS 22 — AUTO DOSSIER BUILDER
+
+ATLAS should automatically generate a full investigation dossier from a single query.
+
+Example input:
+
+Funding for Trump campaign
+
+System workflow:
+
+1. Seed query ingestion
+2. Document collection
+3. Entity extraction
+4. Promotion firewall filtering
+5. Graph construction
+6. Timeline extraction
+7. Financial signal detection
+8. Dossier generation
+
+────────────────────────────────
+
+DOSSIER STRUCTURE
+
+Generate a structured investigation page.
+
+SECTION 1 — Case Summary
+
+Short paragraph explaining investigation topic.
+
+Example:
+
+"This investigation analyzes funding sources and financial pathways connected to the Trump campaign."
+
+────────────────────────────────
+
+SECTION 2 — Key Entities
+
+List promoted entities.
+
+Example:
+
+Donald Trump 
+Trump Campaign 
+Federal Election Commission 
+House Oversight Committee
+
+────────────────────────────────
+
+SECTION 3 — Entity Relationships
+
+Summarize connections detected in graph.
+
+Example:
+
+Trump Campaign → Federal Election Commission 
+Trump Campaign → Legal Payment Activity 
+Oversight Committee → Investigation Authority
+
+────────────────────────────────
+
+SECTION 4 — Document Evidence
+
+List supporting documents.
+
+Include:
+
+title 
+source 
+date 
+
+────────────────────────────────
+
+SECTION 5 — Timeline Signals
+
+Extract major events:
+
+legal filings 
+funding announcements 
+committee investigations 
+
+Display chronologically.
+
+────────────────────────────────
+
+SECTION 6 — Financial Signals
+
+Detect financial references:
+
+campaign donations 
+government grants 
+contracts 
+legal payments 
+
+Add to Flow Trace if detected.
+
+────────────────────────────────
+
+SECTION 7 — Investigative Angles
+
+ATLAS should propose 3–5 follow-up research directions.
+
+Example:
+
+• campaign legal fund spending 
+• PAC donation flows 
+• FEC filing analysis 
+• oversight committee activity
+
+────────────────────────────────
+
+SECTION 8 — Auto Query Expansion
+
+Generate next searches.
+
+Example:
+
+Trump campaign legal payments 
+Trump campaign FEC filings 
+Trump campaign donor records 
+Trump PAC spending
+
+────────────────────────────────
+
+DOSSIER GENERATION RULES
+
+Only promoted entities may appear.
+
+Rejected entities must NEVER appear in:
+
+• graph
+• summary
+• entity list
+• next queries
+
+────────────────────────────────
+
+FINAL RESULT
+
+After PASS 21–22 ATLAS should:
+
+• stop producing junk entities 
+• build clean investigative graphs 
+• generate automatic case dossiers 
+• reduce manual triage workload 
+• allow users to type a topic and instantly get a structured investigation
+
+END PASS

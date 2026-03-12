@@ -784,7 +784,12 @@ interface SeedDiag {
   finalPromoted: number;
   recoveryDocs: number;
   buildStatus: string;
-  autoBuildQuality: "STRONG" | "MODERATE" | "WEAK" | "FAILED" | "RECOVERED" | null;
+  autoBuildQuality: "STRONG" | "PROVISIONAL" | "MODERATE" | "WEAK" | "FAILED" | "RECOVERED" | null;
+  promotionCandidates: number;
+  artifactRejected: number;
+  shapeRejected: number;
+  navRejected: number;
+  mainEntityDocSupport: number;
   trustRating: string;
   nextQueries: string[];
 }
@@ -849,7 +854,12 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     finalPromoted: n("final_promoted"),
     recoveryDocs: n("recovery_docs"),
     buildStatus: kv["build_status"] || "unknown",
-    autoBuildQuality: (abq === "STRONG" || abq === "MODERATE" || abq === "WEAK" || abq === "FAILED" || abq === "RECOVERED") ? abq as SeedDiag["autoBuildQuality"] : null,
+    autoBuildQuality: (abq === "STRONG" || abq === "PROVISIONAL" || abq === "MODERATE" || abq === "WEAK" || abq === "FAILED" || abq === "RECOVERED") ? abq as SeedDiag["autoBuildQuality"] : null,
+    promotionCandidates: n("promotion_candidates"),
+    artifactRejected: n("artifact_rejected"),
+    shapeRejected: n("shape_rejected"),
+    navRejected: n("nav_rejected"),
+    mainEntityDocSupport: n("main_entity_doc_support"),
     trustRating: dec(kv["trust"]) || "UNKNOWN",
     nextQueries: nextQueriesRaw ? nextQueriesRaw.split("||").filter(Boolean) : [],
   };
@@ -1609,6 +1619,9 @@ function DefaultInspector({
   const queryClient = useQueryClient();
   const [ctrlMsg, setCtrlMsg] = React.useState<string | null>(null);
   const [ctrlWorking, setCtrlWorking] = React.useState(false);
+  const [dossier, setDossier] = React.useState<null | Record<string, any>>(null);
+  const [dossierLoading, setDossierLoading] = React.useState(false);
+  const [dossierExpanded, setDossierExpanded] = React.useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
@@ -1690,13 +1703,14 @@ function DefaultInspector({
                     if (!abq) return null;
                     const abqColor =
                       abq === "STRONG" ? "text-green-400 border-green-900/40" :
+                      abq === "PROVISIONAL" ? "text-sky-400 border-sky-900/40" :
                       abq === "MODERATE" ? "text-cyan-500 border-cyan-900/40" :
                       abq === "RECOVERED" ? "text-teal-400 border-teal-900/40" :
                       abq === "WEAK" ? "text-amber-600 border-amber-900/40" :
                       "text-red-700 border-red-900/40";
                     return (
                       <span className={`text-[8px] font-mono border px-1 uppercase ${abqColor}`}>
-                        {abq === "RECOVERED" ? "RECOVERED" : abq}
+                        {abq}
                       </span>
                     );
                   })()}
@@ -1930,6 +1944,127 @@ function DefaultInspector({
             >
               <span className="text-[10px]">⊗</span> REJECT ALL {pendingMentions} PENDING
             </button>
+          )}
+        </div>
+
+        {/* ── AUTO DOSSIER ── */}
+        <div className="space-y-1.5 pt-1">
+          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] pb-1 flex items-center justify-between">
+            <span>ATLAS DOSSIER</span>
+            {dossier && (
+              <button
+                onClick={() => setDossierExpanded(e => !e)}
+                className="text-[8px] font-mono text-neutral-600 hover:text-neutral-400 transition-colors uppercase"
+              >
+                {dossierExpanded ? "▲ COLLAPSE" : "▼ EXPAND"}
+              </button>
+            )}
+          </div>
+          {!dossier ? (
+            <button
+              disabled={dossierLoading}
+              onClick={async () => {
+                setDossierLoading(true);
+                try {
+                  const r = await fetch(`/api/cases/${caseId}/dossier`);
+                  const d = await r.json();
+                  setDossier(d);
+                  setDossierExpanded(true);
+                } catch { /* silent */ } finally { setDossierLoading(false); }
+              }}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-violet-900/40 text-violet-700 hover:text-violet-400 hover:border-violet-700/50 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
+            >
+              {dossierLoading ? "GENERATING..." : "⊕ GENERATE DOSSIER"}
+            </button>
+          ) : (
+            <div className="space-y-1.5">
+              {dossierExpanded && (() => {
+                const s = dossier.sections ?? {};
+                return (
+                  <div className="space-y-2 text-[9px] font-mono">
+                    {s.caseSummary && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-violet-700 uppercase tracking-widest">SUMMARY</div>
+                        <p className="text-neutral-500 leading-relaxed">{s.caseSummary}</p>
+                      </div>
+                    )}
+                    {s.keyEntities?.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-cyan-700 uppercase tracking-widest">KEY ENTITIES</div>
+                        <div className="space-y-0.5">
+                          {s.keyEntities.map((e: any) => (
+                            <div key={e.id} className="flex items-center justify-between">
+                              <span className="text-white uppercase">{e.name}</span>
+                              <span className="text-neutral-700 text-[8px]">{e.type.replace(/_/g, " ")} · {e.docCount}d</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {s.entityRelationships?.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-blue-700 uppercase tracking-widest">ENTITY CONNECTIONS</div>
+                        {s.entityRelationships.slice(0, 4).map((r: any, i: number) => (
+                          <div key={i} className="text-neutral-600 truncate">
+                            <span className="text-neutral-400">{r.entityAName}</span>
+                            <span className="text-neutral-700 mx-1">→</span>
+                            <span className="text-neutral-400">{r.entityBName}</span>
+                            <span className="text-neutral-800 ml-1 text-[8px]">{r.relationshipType?.replace(/_/g, " ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {s.timelineSignals?.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-amber-700 uppercase tracking-widest">TIMELINE SIGNALS</div>
+                        {s.timelineSignals.slice(0, 3).map((t: any, i: number) => (
+                          <div key={i} className="flex gap-1.5">
+                            <span className="text-neutral-700 flex-shrink-0">{t.date?.slice(0, 10) ?? "?"}</span>
+                            <span className="text-neutral-500 truncate">{t.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {s.financialSignals?.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-green-700 uppercase tracking-widest">FINANCIAL SIGNALS</div>
+                        {s.financialSignals.slice(0, 3).map((f: any, i: number) => (
+                          <div key={i} className="text-neutral-600 truncate">
+                            <span className="text-neutral-400">{f.entityName}</span>
+                            <span className="text-neutral-700 ml-1">— {f.context.slice(0, 60)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {s.investigativeAngles?.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-orange-700 uppercase tracking-widest">INVESTIGATIVE ANGLES</div>
+                        {s.investigativeAngles.map((a: any, i: number) => (
+                          <div key={i} className="text-neutral-600 flex gap-1">
+                            <span className="text-neutral-800">·</span>
+                            <span>{a.angle}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {s.nextQueries?.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[8px] text-neutral-600 uppercase tracking-widest">QUERY EXPANSION</div>
+                        {s.nextQueries.slice(0, 5).map((q: string, i: number) => (
+                          <div key={i} className="text-neutral-700 truncate">→ {q}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <button
+                onClick={() => { setDossier(null); setDossierExpanded(false); }}
+                className="w-full text-left font-mono text-[8px] text-neutral-800 hover:text-neutral-600 uppercase tracking-wider transition-colors"
+              >
+                ↺ REGENERATE
+              </button>
+            </div>
           )}
         </div>
 
