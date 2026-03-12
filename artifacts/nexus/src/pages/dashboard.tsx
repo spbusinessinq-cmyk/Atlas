@@ -356,14 +356,14 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
 
   if (viewMode === "list") {
     return (
-      <div className="group relative flex items-center border-b border-[#ffffff06] hover:bg-[#ffffff03] transition-colors">
-        <Link href={`/cases/${c.id}`} className="flex-1 min-w-0">
+      <div className="group relative flex items-center border-b border-[#ffffff06] hover:bg-[#ffffff03] transition-colors overflow-hidden">
+        <Link href={`/cases/${c.id}`} className="flex-1 min-w-0 pr-10">
           <div className="flex items-center gap-3 px-3 py-2 cursor-pointer">
             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
             <span className={`font-mono text-[9px] uppercase tracking-wider flex-shrink-0 w-14 ${s.text}`}>
               {s.label}
             </span>
-            <span className="font-mono text-[9px] text-neutral-700 flex-shrink-0 w-24 tabular-nums">
+            <span className="font-mono text-[9px] text-neutral-700 flex-shrink-0 w-24 tabular-nums hidden sm:inline">
               CASE-{c.id.toString().padStart(6, "0")}
             </span>
             <span className="font-mono text-xs text-white font-semibold uppercase truncate flex-1 group-hover:text-red-300 transition-colors tracking-tight">
@@ -388,12 +388,13 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
             <ChevronRight className="w-3 h-3 text-neutral-800 group-hover:text-red-600 transition-colors flex-shrink-0" />
           </div>
         </Link>
+        {/* Trash — absolutely positioned so it never shifts content */}
         <div
-          className="flex-shrink-0 px-2 flex items-center"
+          className="absolute right-0 top-0 bottom-0 flex items-center px-2"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
         >
           {confirmDelete ? (
-            <div className="flex items-center gap-1 border border-red-800/50 bg-[#0d0000]/90 px-1.5 py-1">
+            <div className="flex items-center gap-1 border border-red-800/50 bg-[#0a0000]/95 px-1.5 py-1">
               <span className="font-mono text-[8px] text-red-400 uppercase">DEL?</span>
               <button onClick={handleDelete} disabled={isDeleting} className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 hover:bg-red-500/20 transition-colors">
                 {isDeleting ? "…" : "Y"}

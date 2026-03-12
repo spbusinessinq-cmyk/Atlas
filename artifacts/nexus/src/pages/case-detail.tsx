@@ -763,17 +763,29 @@ interface SeedDiag {
   partial: number;
   failed: number;
   wrapper: number;
+  noise: number;
+  priorityA: number;
+  priorityB: number;
   detected: number;
   promoted: number;
   fallback: boolean;
+  buildStatus: string;
+  trustRating: string;
+  nextQueries: string[];
 }
 
 function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
   if (!desc) return null;
   const m = desc.match(/\[ATLAS-SEED:([^\]]+)\]/);
   if (!m) return null;
-  const parts = Object.fromEntries(m[1].split("|").map((p) => p.split("=")));
-  const n = (k: string) => parseInt(parts[k] ?? "0", 10) || 0;
+  const kv: Record<string, string> = {};
+  m[1].split("|").forEach((p) => {
+    const eq = p.indexOf("=");
+    if (eq > 0) { kv[p.slice(0, eq)] = p.slice(eq + 1); }
+  });
+  const n = (k: string) => parseInt(kv[k] ?? "0", 10) || 0;
+  const dec = (v?: string) => { try { return v ? decodeURIComponent(v) : ""; } catch { return v ?? ""; } };
+  const nextQueriesRaw = dec(kv.next_queries);
   return {
     searched: n("searched"),
     total: n("total"),
@@ -782,9 +794,15 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     partial: n("partial"),
     failed: n("failed"),
     wrapper: n("wrapper"),
+    noise: n("noise"),
+    priorityA: n("priority_a"),
+    priorityB: n("priority_b"),
     detected: n("detected"),
     promoted: n("promoted"),
-    fallback: parts["fallback"] === "1",
+    fallback: kv["fallback"] === "1",
+    buildStatus: kv["build_status"] || "unknown",
+    trustRating: dec(kv["trust"]) || "UNKNOWN",
+    nextQueries: nextQueriesRaw ? nextQueriesRaw.split("||").filter(Boolean) : [],
   };
 }
 
@@ -798,6 +816,7 @@ function parseDocDiag(rawText: string | null | undefined): {
   status: string; chars: number; paras: number; strategy: string;
   finalUrl?: string; rssUrl?: string; srcUrl?: string;
   entities?: number; analysisRan?: boolean;
+  score?: number; priority?: string;
 } | null {
   if (!rawText) return null;
   const m = rawText.match(/\[ATLAS-DIAG:([^\]]+)\]/);
@@ -818,6 +837,8 @@ function parseDocDiag(rawText: string | null | undefined): {
     srcUrl: dec(kv.src_url),
     entities: kv.entities !== undefined ? parseInt(kv.entities) : undefined,
     analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
+    score: kv.score !== undefined ? parseInt(kv.score) : undefined,
+    priority: kv.priority,
   };
 }
 
@@ -883,6 +904,15 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
           </div>
         ))}
       </div>
+      {/* ── Relevance quality row ── */}
+      {(diag.priorityA > 0 || diag.priorityB > 0 || diag.noise > 0) && (
+        <div className="border-t border-[#ffffff06] px-3 py-2 flex items-center gap-4 flex-wrap">
+          <span className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest">DOC QUALITY:</span>
+          {diag.priorityA > 0 && <span className="font-mono text-[9px] text-green-400 uppercase">{diag.priorityA} PRIORITY-A</span>}
+          {diag.priorityB > 0 && <span className="font-mono text-[9px] text-cyan-400 uppercase">{diag.priorityB} PRIORITY-B</span>}
+          {diag.noise > 0 && <span className="font-mono text-[9px] text-neutral-600 uppercase">{diag.noise} NOISE SUPPRESSED</span>}
+        </div>
+      )}
 
       {promotionNote}
 
@@ -898,8 +928,8 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
                 <tr className="border-b border-[#ffffff08]">
                   <th className="text-left px-3 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Source</th>
                   <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Body</th>
+                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Score</th>
                   <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Chars</th>
-                  <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Strategy</th>
                   <th className="text-right px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">Entities</th>
                   <th className="text-center px-2 py-1.5 text-neutral-600 uppercase tracking-wider font-normal">URL Source</th>
                 </tr>
@@ -907,13 +937,19 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
               <tbody>
                 {documents.map((doc) => {
                   const d = parseDocDiag(doc.rawText);
-                  const urlMode = d?.rssUrl
-                    ? "REAL URL ✓" // rssUrl exists means we have the redirect, and we used srcUrl
-                    : "DIRECT";
+                  const urlMode = d?.rssUrl ? "REAL URL ✓" : "DIRECT";
                   const urlModeColor = d?.rssUrl ? "text-green-500" : "text-neutral-500";
                   const fetchedDomain = (() => {
                     try { return d?.finalUrl ? new URL(d.finalUrl).hostname.replace("www.", "") : (doc.sourceDomain || "—"); } catch { return doc.sourceDomain || "—"; }
                   })();
+                  const priorityColor = d?.priority === "PRIORITY_A" ? "text-green-400" :
+                    d?.priority === "PRIORITY_B" ? "text-cyan-400" :
+                    d?.priority === "LOW_SIGNAL" ? "text-neutral-500" :
+                    d?.priority === "NOISE" ? "text-red-800" : "text-neutral-700";
+                  const priorityLabel = d?.priority === "PRIORITY_A" ? "A" :
+                    d?.priority === "PRIORITY_B" ? "B" :
+                    d?.priority === "LOW_SIGNAL" ? "L" :
+                    d?.priority === "NOISE" ? "N" : "—";
                   return (
                     <tr key={doc.id} className="border-b border-[#ffffff04] hover:bg-[#ffffff03]">
                       <td className="px-3 py-2 text-white max-w-[200px]">
@@ -925,14 +961,15 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
                           {(d?.status || "?").toUpperCase()}
                         </span>
                       </td>
+                      <td className="px-2 py-2 text-center tabular-nums">
+                        {d?.score !== undefined ? (
+                          <span className={cn("font-bold", priorityColor)}>
+                            {d.score}<span className="text-[8px] opacity-60 ml-0.5">{priorityLabel}</span>
+                          </span>
+                        ) : <span className="text-neutral-700">—</span>}
+                      </td>
                       <td className="px-2 py-2 text-right tabular-nums text-neutral-400">
                         {d ? d.chars.toLocaleString() : "—"}
-                      </td>
-                      <td className="px-2 py-2 text-center text-neutral-500 uppercase text-[9px]">
-                        {d?.strategy === "json-ld" ? <span className="text-cyan-600">JSON-LD</span>
-                          : d?.strategy === "selector" ? <span className="text-blue-600">CSS</span>
-                          : d?.strategy === "paragraph-agg" ? <span className="text-blue-500">P-AGG</span>
-                          : d?.strategy ? d.strategy.toUpperCase() : "—"}
                       </td>
                       <td className="px-2 py-2 text-right tabular-nums">
                         {d?.entities !== undefined
@@ -1005,28 +1042,48 @@ function OverviewPanel({
     const raw: string = d.rawText || "";
     const hasDiag = raw.includes("[ATLAS-DIAG:");
     if (!hasDiag) return raw.length > 100;
-    return !raw.includes("status=failed") && !raw.includes("status=wrapper");
+    return !raw.includes("status=failed") && !raw.includes("status=wrapper") &&
+           !raw.includes("priority=NOISE");
   });
   const highSignalCount = financialSignals.length;
-  const primaryEntities = entities.filter((e) => e.type !== "location").slice(0, 3);
+  const primaryEntities = entities.filter((e) => e.type !== "location").slice(0, 6);
+
+  // Compute trust rating
+  const trustRating = seedDiag?.trustRating || (
+    entities.length >= 3 && usableDocs.length >= 3 ? "STRONG BUILD" :
+    entities.length >= 1 && usableDocs.length >= 1 ? "MODERATE BUILD" :
+    usableDocs.length >= 1 ? "LOW CONFIDENCE" : "EMPTY CASE"
+  );
+  const trustColor =
+    trustRating === "STRONG BUILD" ? "text-green-400 border-green-900/50 bg-green-500/5" :
+    trustRating === "MODERATE BUILD" ? "text-cyan-400 border-cyan-900/50 bg-cyan-500/5" :
+    trustRating === "DEGRADED BUILD" ? "text-amber-400 border-amber-900/50 bg-amber-500/5" :
+    trustRating === "LOW CONFIDENCE" ? "text-amber-600 border-amber-900/30 bg-amber-500/3" :
+    "text-red-600 border-red-900/40 bg-red-500/5";
+
+  // Generate next queries from seedDiag or entities
+  const nextQueries = seedDiag?.nextQueries?.length
+    ? seedDiag.nextQueries
+    : primaryEntities.slice(0, 2).flatMap(e => [`${e.name} contracts`, `${e.name} grant`]);
 
   return (
     <div className="p-3 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-max">
-      {/* ── Case Intelligence Summary ── */}
+      {/* ── Case Intelligence Briefing ── */}
       <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
         <div className="nexus-header-strip">
           <span className="nexus-label">CASE INTELLIGENCE</span>
-          {highSignalCount > 0 && (
-            <span className="font-mono text-[9px] text-green-500 pr-3">
-              {highSignalCount} FINANCIAL SIGNAL{highSignalCount !== 1 ? "S" : ""} DETECTED
-            </span>
-          )}
+          <div className={cn("font-mono text-[9px] px-2 py-0.5 border uppercase tracking-widest mr-2", trustColor)}>
+            {trustRating}
+          </div>
         </div>
+        {/* ── Core stats row ── */}
         <div className="p-3 grid grid-cols-3 gap-3">
           <div className="space-y-1">
             <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">SOURCES INGESTED</div>
             <div className="font-mono text-2xl font-bold text-white tabular-nums">{documents.length.toString().padStart(2, "0")}</div>
-            <div className="font-mono text-[8px] text-neutral-600 uppercase">{usableDocs.length} USABLE</div>
+            <div className="font-mono text-[8px] text-neutral-600 uppercase">
+              {usableDocs.length} USABLE{seedDiag?.noise ? ` · ${seedDiag.noise} NOISE` : ""}
+            </div>
           </div>
           <div className="space-y-1">
             <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">ENTITY REGISTRY</div>
@@ -1045,13 +1102,50 @@ function OverviewPanel({
             </div>
           </div>
         </div>
+
+        {/* ── PRIMARY SIGNALS ── top financial signals as bullets */}
+        {financialSignals.length > 0 && (
+          <div className="border-t border-[#ffffff06] px-3 pb-3 pt-2 space-y-2">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">PRIMARY SIGNALS</div>
+            <div className="space-y-1">
+              {financialSignals.slice(0, 4).map((sig: any, i: number) => (
+                <div key={i} className="flex items-start gap-2 font-mono text-[9px]">
+                  <span className="text-green-600 flex-shrink-0">▸</span>
+                  <span className="text-green-400 font-bold flex-shrink-0">{sig.amountDisplay || sig.amountRaw}</span>
+                  <span className="text-neutral-500 leading-tight">{sig.eventSummary?.slice(0, 120)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── PRIMARY ENTITIES chips ── */}
         {primaryEntities.length > 0 && (
-          <div className="border-t border-[#ffffff06] px-3 pb-3">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-2 pt-2">PRIMARY ENTITIES</div>
+          <div className="border-t border-[#ffffff06] px-3 pb-2 pt-2">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-1.5">PRIMARY ENTITIES</div>
             <div className="flex flex-wrap gap-1.5">
               {primaryEntities.map((e) => (
-                <span key={e.id} className="font-mono text-[9px] text-white uppercase px-2 py-0.5 border border-[#ffffff10] bg-[#0a0e14]">
+                <span key={e.id} className={cn(
+                  "font-mono text-[9px] uppercase px-2 py-0.5 border bg-[#0a0e14]",
+                  e.type === "government_agency" ? "text-cyan-400 border-cyan-900/40" :
+                  e.type === "person" ? "text-amber-300 border-amber-900/30" :
+                  "text-white border-[#ffffff10]"
+                )}>
                   {e.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── NEXT QUERIES ── */}
+        {nextQueries.length > 0 && (
+          <div className="border-t border-[#ffffff06] px-3 pb-3 pt-2 space-y-1.5">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">NEXT QUERIES</div>
+            <div className="flex flex-wrap gap-1.5">
+              {nextQueries.slice(0, 6).map((q, i) => (
+                <span key={i} className="font-mono text-[9px] text-neutral-400 uppercase px-2 py-0.5 border border-[#ffffff08] bg-[#050709] hover:border-red-900/50 hover:text-red-300 transition-colors cursor-default">
+                  {q}
                 </span>
               ))}
             </div>
@@ -1402,16 +1496,32 @@ function DefaultInspector({
           const seedDiagRaw = parseSeedDiag(caseData.description);
           const usableDocs = seedDiagRaw ? (seedDiagRaw.ok + seedDiagRaw.partial) : documents.length;
           const blockedDocs = seedDiagRaw ? (seedDiagRaw.failed + seedDiagRaw.wrapper) : 0;
+          const noiseDocs = seedDiagRaw?.noise ?? 0;
+          const localTrustRating = seedDiagRaw?.trustRating || (
+            entities.length >= 3 && usableDocs >= 3 ? "STRONG BUILD" :
+            entities.length >= 1 && usableDocs >= 1 ? "MODERATE BUILD" :
+            usableDocs >= 1 ? "LOW CONFIDENCE" : "EMPTY CASE"
+          );
+          const localTrustColor =
+            localTrustRating === "STRONG BUILD" ? "text-green-400" :
+            localTrustRating === "MODERATE BUILD" ? "text-cyan-400" :
+            localTrustRating === "DEGRADED BUILD" ? "text-amber-400" :
+            localTrustRating === "LOW CONFIDENCE" ? "text-amber-600" :
+            "text-red-600";
           const healthItems = [
             { label: "DOCS", val: documents.length, color: documents.length > 0 ? "text-white" : "text-neutral-700" },
             { label: "USABLE", val: usableDocs, color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
             ...(blockedDocs > 0 ? [{ label: "BLOCKED", val: blockedDocs, color: "text-red-600" }] : []),
+            ...(noiseDocs > 0 ? [{ label: "NOISE", val: noiseDocs, color: "text-neutral-600" }] : []),
             { label: "ENTITIES", val: entities.length, color: entities.length > 0 ? "text-cyan-500" : "text-neutral-700" },
             ...(pendingMentions > 0 ? [{ label: "TRIAGE", val: pendingMentions, color: "text-orange-400" }] : []),
           ];
           return (
             <div className="border border-[#ffffff0a] bg-[#ffffff02]">
-              <div className="px-2 py-1 font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08]">CASE HEALTH</div>
+              <div className="px-2 py-1 font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] flex items-center justify-between">
+                <span>CASE HEALTH</span>
+                <span className={`${localTrustColor} text-[8px] font-bold`}>{localTrustRating}</span>
+              </div>
               <div className="grid grid-cols-2 gap-0">
                 {healthItems.map((item) => (
                   <div key={item.label} className="px-2 py-1.5 border-b border-r border-[#ffffff06]">

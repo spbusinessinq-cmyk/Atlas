@@ -1,0 +1,432 @@
+ATLAS PASS 17 — INTELLIGENCE HARDENING + INVESTIGATION QUALITY FIRST
+
+This pass is NOT a generic UI redesign pass.
+Do NOT flatten ATLAS further.
+Do NOT make it feel more like a SaaS admin dashboard.
+The new boot screen is good — KEEP IT.
+But the rest of the dashboard should stay tactical, dark, sharp, and intelligence-room oriented.
+Prioritize extraction quality, entity relevance, case usefulness, and analyst trust.
+
+PRIMARY GOAL:
+Make ATLAS produce stronger, more relevant investigations automatically.
+Right now the weakest point is intelligence quality:
+- weak / irrelevant entity pulls
+- money extraction still noisy
+- auto-build sometimes creates empty / low-trust cases
+- signal relevance is inconsistent
+- weak docs still pollute the queue
+Fix that first.
+
+======================================================================
+PART 1 — HARD RELEVANCE SCORING ENGINE
+======================================================================
+
+Create a true investigation relevance score per document.
+
+Each ingested document should get a numeric score from 0–100 using:
+- query term coverage
+- title relevance
+- body relevance
+- investigative keyword density
+- money keyword density
+- government / institution keyword density
+- local/location match
+- domain quality
+- body quality / extraction quality
+- sports / entertainment / fluff penalties
+- PR wire / press release penalty
+- duplicate / near-duplicate penalty
+
+Investigative boosts:
+- contract
+- grant
+- funding
+- budget
+- allocation
+- audit
+- probe
+- fraud
+- corruption
+- spending
+- shelter
+- housing
+- homelessness
+- procurement
+- invoice
+- nonprofit
+- agency
+- department
+- oversight
+- federal
+- county
+- state
+- lawsuit
+- records
+- report
+- program
+
+Negative penalties:
+- sports
+- game
+- coach
+- player
+- team
+- playoff
+- tournament
+- score
+- tv
+- box office
+- celebrity
+- entertainment
+- recipe
+- lifestyle
+- shopping
+- travel
+- review
+- horoscope
+- newsletter
+- sponsored
+- advertisement
+
+Add labels:
+- PRIORITY A
+- PRIORITY B
+- LOW SIGNAL
+- NOISE
+
+Do not allow LOW SIGNAL or NOISE docs to dominate seed cases.
+
+======================================================================
+PART 2 — ENTITY QUALITY FILTER 2.0
+======================================================================
+
+Current entity pulls are still too weak.
+Build a stronger entity promotion filter.
+
+Create entity trust scoring based on:
+- appears in title
+- appears in multiple docs
+- appears near money language
+- appears near program/agency keywords
+- appears near investigative verbs
+- appears as full multi-word proper noun
+- appears in high-score docs only
+- type compatibility with case topic
+
+Penalty / suppress:
+- single generic words
+- obvious article fragments
+- media artifacts
+- week/day/month names
+- sports names unless case topic is sports
+- quote fragments
+- press release filler
+- “google news”, “question period”, “power play”, “every press”, etc.
+- vague standalone nouns like “president”, “members”, “office”, “department” unless linked to a fuller name
+
+Add stronger anti-noise entity blocklists and phrase filters.
+
+Create a promoted_entity_score and use it for auto-build.
+
+======================================================================
+PART 3 — ENTITY NORMALIZATION / MERGE ENGINE
+======================================================================
+
+ATLAS needs to stop creating fractured duplicates.
+
+Examples of what should merge:
+- Los Angeles Homeless Services Authority
+- LAHSA
+- Los Angeles homeless services authority
+
+- California Department of Housing and Community Development
+- HCD
+
+- Project Homekey
+- Homekey
+
+Build normalization rules:
+- case-insensitive
+- punctuation-insensitive
+- acronym alias support
+- singular/plural cleanup
+- organization suffix cleanup
+- remove possessive artifacts
+- trim leading articles
+- unify whitespace
+
+Before promoting or graphing, try to resolve to canonical entity.
+Store:
+- canonical_name
+- aliases[]
+- confidence
+- merge_reason
+
+Do NOT over-merge people with organizations.
+
+======================================================================
+PART 4 — AUTO-BUILD INVESTIGATION ENGINE (REAL VERSION)
+======================================================================
+
+This is the main goal.
+
+When user creates a seed investigation, ATLAS should automatically:
+1. create case
+2. generate search variants
+3. search
+4. ingest top sources
+5. discard obvious junk
+6. analyze usable docs automatically
+7. score docs automatically
+8. score entities automatically
+9. promote strongest entities automatically
+10. create starter graph automatically
+11. generate case intelligence summary automatically
+
+This should happen with minimal manual work.
+
+Add a machine-readable case build status:
+- seeded
+- searching
+- ingested
+- analyzed
+- promoted
+- graphed
+- summarized
+
+Show whether auto-build succeeded or degraded.
+
+If no usable docs exist:
+- case should explicitly say BUILD DEGRADED
+- explain why
+- suggest next search actions
+- do NOT pretend the case is valid
+
+======================================================================
+PART 5 — CASE INTELLIGENCE SUMMARY 2.0
+======================================================================
+
+Upgrade the case summary so it reads like an analyst briefing, not placeholder text.
+
+Generate:
+- one-sentence overview
+- document quality summary
+- strongest entities
+- strongest financial signals
+- strongest timeline signals
+- likely themes
+- recommended next query directions
+
+Format should feel tactical and serious.
+
+Example shape:
+CASE INTELLIGENCE
+- 8 sources ingested
+- 6 usable intelligence documents
+- 14 candidate entities, 5 promoted
+- 3 financial signals
+- strongest theme: county / state shelter funding dispute
+
+PRIMARY SIGNALS
+- County considers adding “good neighbour clause” to contracts
+- $1.82M grant to shelter / housing capacity
+- state budget shows no new funding for key homelessness program
+
+NEXT QUERIES
+- [entity] contracts
+- [entity] budget
+- [entity] grant
+- [entity] audit
+- [entity] nonprofit payments
+
+======================================================================
+PART 6 — MONEY / FLOW EXTRACTION CLEANUP
+======================================================================
+
+Flow Trace is still polluted with irrelevant money text.
+
+Improve financial extraction with:
+- stronger proximity-to-investigative-keyword requirement
+- reject ad copy / promo / pricing language
+- reject sports contract fluff unless case topic is sports
+- reject product / retail / consumer nonsense
+- prefer program, budget, grant, contract, award, allocation, funding contexts
+
+Extract:
+- amount
+- amountDisplay
+- type (grant / funding / contract / settlement / allocation / budget / payment / salary / loan / transfer)
+- subject entity
+- counterparty entity
+- sentence context
+- source document
+- confidence
+
+If context is weak, do NOT promote it to Flow Trace.
+
+======================================================================
+PART 7 — CASE HEALTH / BUILD HEALTH PANEL
+======================================================================
+
+Add a real build health block for every case.
+
+Show:
+- results searched
+- docs ingested
+- usable docs
+- partial docs
+- blocked docs
+- analyzed docs
+- promoted entities
+- financial signals
+- timeline signals
+- duplicate entities merged
+- build status
+- analyst trust rating
+
+Trust rating examples:
+- STRONG BUILD
+- DEGRADED BUILD
+- LOW CONFIDENCE
+- EMPTY CASE
+
+This is important: ATLAS must openly admit when a build is weak.
+
+======================================================================
+PART 8 — RIGHT-RAIL TRIAGE PRIORITY
+======================================================================
+
+The right rail is too noisy.
+Make triage smarter.
+
+Sort pending mentions by:
+- doc score
+- entity score
+- case topic match
+- title proximity
+- multi-doc recurrence
+- money / contract / agency context
+
+Show strongest triage first.
+Weak junk should sink automatically.
+
+Add badges like:
+- HIGH CONF
+- MONEY CONTEXT
+- GOV LINK
+- MULTI-DOC
+- TITLE HIT
+- LOW TRUST
+
+======================================================================
+PART 9 — GRAPH QUALITY GATE
+======================================================================
+
+Do NOT allow graph population from junk entities.
+
+Only create graph nodes automatically if entity passes:
+- relevance threshold
+- normalization pass
+- case-topic alignment
+- not blocked
+- not duplicate
+- not generic fragment
+
+Suggested edges should use:
+- multi-doc co-mention strength
+- money co-occurrence
+- timeline co-occurrence
+- type compatibility
+- title-level co-occurrence bonus
+
+Suppress low-value spaghetti.
+The graph should start smaller but smarter.
+
+======================================================================
+PART 10 — KEEP THE BOOT / ROLL BACK BAD UI DRIFT
+======================================================================
+
+Keep:
+- boot screen
+- dark shell
+- tactical typography
+- sharp borders
+- red/cyan accents
+
+Do NOT continue generic web-app styling.
+Do NOT make it softer or friendlier.
+Do NOT widen panels unnecessarily.
+Do NOT flatten everything into plain admin rows.
+
+Minor UI corrections only:
+- active dossier trash icon must NOT overlap case id or card telemetry
+- preserve compact tactical spacing
+- keep dossier cards feeling like intel objects, not listicles
+- maintain console / command-center feel
+- keep depth via panel layering, not giant card padding
+
+======================================================================
+PART 11 — SEED FAILURE SAFETY
+======================================================================
+
+If search target is bad, ATLAS should not silently create trash.
+
+Examples:
+- one-letter seeds
+- malformed seeds
+- obvious nonsense
+- empty string
+- bad redirect-only result sets
+
+In these cases:
+- either prevent case creation
+- or create case with FAILED BUILD state and explicit reason
+
+No fake success.
+
+======================================================================
+PART 12 — ACCEPTANCE TESTS
+======================================================================
+
+Run and verify these seeds:
+
+1. California shelter funding for homeless
+Expected:
+- strong budget / funding / county / shelter results
+- usable docs
+- money signals
+- gov entities
+- promoted graph nodes
+
+2. Los Angeles studio funding
+Expected:
+- not sports pollution
+- not generic celebrity nonsense
+- improved doc filtering
+- if weak case, clearly marked degraded
+
+3. Ohio State University
+Expected:
+- avoid massive sports pollution unless clearly relevant
+- prioritize institution / funding / investigation / administration signals
+
+4. Highland Gardens Hotel Los Angeles
+Expected:
+- if weak source universe, case should admit degraded build rather than fake confidence
+
+======================================================================
+OUTPUT REQUIRED
+======================================================================
+
+After implementation provide:
+1. exact files changed
+2. exact new scoring rules
+3. exact auto-build flow
+4. examples of blocked docs/entities
+5. examples of promoted docs/entities
+6. whether each acceptance test passed or degraded
+7. any remaining known weakness
+
+Do not stop at partial implementation.
+Do not only describe the plan.
+Actually implement the full pass and verify it end-to-end.
