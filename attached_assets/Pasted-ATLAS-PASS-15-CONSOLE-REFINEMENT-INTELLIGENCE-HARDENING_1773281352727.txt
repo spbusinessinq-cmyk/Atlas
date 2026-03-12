@@ -1,0 +1,115 @@
+ATLAS PASS 15 — CONSOLE REFINEMENT + INTELLIGENCE HARDENING
+
+This pass is NOT about adding more random features. It is about making ATLAS feel tighter, more serious, more console-like, and more intelligent. Right now the system works, but the layout still feels too much like a web dashboard instead of an operations board like Orion / Black Dog. It also still promotes too much weak noise into the investigation flow.
+
+GOALS
+1. Make ATLAS feel like a dense intelligence console, not a webpage.
+2. Improve entity quality, graph quality, and case readability.
+3. Keep all existing functionality working.
+
+PART A — UI / DESIGN HARDENING
+
+Make the whole shell feel more like a command console / Palantir-lite / Orion hybrid:
+- tighten all panel spacing
+- reduce oversized card padding
+- reduce “dashboard card” feel
+- make the left rail narrower and denser
+- make the center workspace dominate visually
+- make the right rail slimmer and more compact
+- reduce dead empty space everywhere
+- unify border styles, line weights, and panel heights
+- keep glow subtle and tactical, not decorative
+- preserve ATLAS color language: red = destructive/action, cyan = intelligence/system, orange = warning/review, green = confirmed/ok
+
+Specific design changes:
+- dashboard case cards should look more like dossier slots / console modules, less like marketing cards
+- top metrics should feel embedded into the shell, not floating blocks
+- the case workspace should feel like one continuous intelligence surface
+- all tabs/sections should sit tighter to the shell grid
+- case overview / controls on right should feel more like a utility rail than a content column
+- headings should be sharper and more compact
+- standard body text should be slightly smaller and denser
+- mono text should be cleaner and easier to scan
+- make selected states clearer without using browser-style focus visuals
+- eliminate any remaining weird blue/focus/canvas boxes
+- make delete controls align cleanly and never overlap titles, case IDs, or row telemetry
+- document vault rows should feel like console file entries, not list cards
+- graph controls should match shell style exactly
+- make the whole system feel more “machine room” and less “web app”
+
+PART B — ENTITY / INTELLIGENCE HARDENING
+
+The intelligence layer needs to become stricter and smarter.
+
+Add normalization and quality rules so ATLAS reduces junk:
+- normalize duplicate / near-duplicate entities
+- merge obvious variants where safe
+- downrank weak single-word entities unless confidence is very high
+- heavily penalize sports/player/news fluff when the case topic is contracts, funding, housing, corruption, procurement, investigations, etc.
+- prefer these types for promotion: organization, government agency, facility, program, contract, funding entity, location of operational relevance
+- reduce promotion of random people unless they appear across multiple docs or near investigative terms
+- block common wrapper/boilerplate/news-template artifacts more aggressively
+- reduce bad extractions from press release junk and boilerplate tails
+
+Improve case intelligence:
+- generate a “core nodes” set for each case
+- highlight strongest entities first
+- only auto-promote higher quality nodes into graph seed
+- make suggested links smarter by weighting:
+  - shared docs
+  - investigative keywords
+  - repeated co-occurrence
+  - entity type compatibility
+- avoid graph explosion from weak co-mentions
+- rank graph edges by strength more clearly
+- allow graph to default to strongest cluster first instead of dumping everything visually
+
+Improve overview intelligence:
+- case brief should be cleaner and more useful
+- add a short “what this case is actually about” style summary
+- add a compact “seed quality” / “case health” block:
+  - usable docs
+  - blocked docs
+  - promoted entities
+  - pending review
+  - strongest cluster available
+- make Next Action smarter and more specific
+
+Improve document triage:
+- surface which documents are strongest for the case
+- rank docs by usefulness / extraction quality / signal density
+- show a compact “high value / medium value / low value” indicator or equivalent
+- if a document is mostly wrapper / partial / irrelevant, make that obvious fast
+
+Improve entity dossier quality:
+- make dossier pages feel more meaningful
+- emphasize strongest linked docs
+- emphasize highest-quality related signals
+- reduce noise in co-mentioned lists
+- show strongest relationship leads first
+
+PART C — KEEP CONTROL LAYER INTACT
+
+Do NOT break existing controls:
+- delete document
+- delete entity
+- delete relationship
+- reject mentions
+- purge failed docs
+- graph hide/reset/fit
+- seed launcher
+- document analyze flow
+
+PART D — IMPLEMENTATION STANDARD
+
+Do not just describe changes. Implement them.
+Keep the visual language dark, sharp, tactical, and console-like.
+Do not make it look soft, rounded, or consumer-app polished.
+Do not bloat the layout.
+Prioritize density, clarity, and control.
+
+When complete, ATLAS should feel:
+- more like Orion / Black Dog
+- less like a generic web dashboard
+- more selective and intelligent
+- more usable as a real investigation console

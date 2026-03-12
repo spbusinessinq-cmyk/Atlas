@@ -375,13 +375,40 @@ function CaseDetailInner({
       }
     });
 
-    return Array.from(pairData.values()).map((p) => ({
-      entityAId: p.entityAId,
-      entityBId: p.entityBId,
-      documentTitle: p.docTitle,
-      sharedDocCount: p.docCount,
-      score: p.docCount >= 3 ? "HIGH" : p.docCount >= 2 ? "MEDIUM" : "LOW",
-    }));
+    // Type compatibility bonus: certain type pairs have higher investigative relevance
+    const typeCompatibilityBonus = (typeA: string, typeB: string): number => {
+      const HIGH_VALUE_PAIRS: [string, string][] = [
+        ["person", "organization"],
+        ["person", "government_agency"],
+        ["organization", "government_agency"],
+        ["person", "company"],
+        ["organization", "company"],
+        ["government_agency", "company"],
+      ];
+      const sorted = [typeA, typeB].sort();
+      for (const [a, b] of HIGH_VALUE_PAIRS) {
+        const ps = [a, b].sort();
+        if (ps[0] === sorted[0] && ps[1] === sorted[1]) return 1;
+      }
+      return 0;
+    };
+
+    return Array.from(pairData.values()).map((p) => {
+      const eA = entities.find((e) => e.id === p.entityAId);
+      const eB = entities.find((e) => e.id === p.entityBId);
+      const typeBonus = eA && eB ? typeCompatibilityBonus(eA.type, eB.type) : 0;
+      const effectiveScore = p.docCount + typeBonus;
+      return {
+        entityAId: p.entityAId,
+        entityBId: p.entityBId,
+        documentTitle: p.docTitle,
+        sharedDocCount: p.docCount,
+        score: effectiveScore >= 3 ? "HIGH" : effectiveScore >= 2 ? "MEDIUM" : "LOW",
+      };
+    }).filter((e) => {
+      // Suppress LOW-score pairs with low doc count to prevent graph explosion
+      return e.sharedDocCount >= 1;
+    });
   }, [approvedMentions, relationships, entities, documents]);
 
   const workflowSteps = useMemo((): WorkflowStep[] => {
@@ -678,7 +705,7 @@ function CaseDetailInner({
       </main>
 
       {/* ──────── RIGHT INSPECTOR ──────── */}
-      <aside className="w-72 flex-shrink-0 border-l border-[#ffffff0d] hidden lg:flex flex-col overflow-hidden bg-[#040507]">
+      <aside className="w-64 flex-shrink-0 border-l border-[#ffffff0d] hidden lg:flex flex-col overflow-hidden bg-[#040507]">
         {activeSection === "graph" && selectedRel && (
           <LinkIntelPanel
             relationship={selectedRel}
@@ -974,7 +1001,7 @@ function OverviewPanel({
   const isAutoSeeded = caseData.tags?.includes("auto-seeded");
 
   return (
-    <div className="p-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
+    <div className="p-3 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-max">
       {/* ── Seed Diagnostics Card — shown for auto-seeded cases ── */}
       {isAutoSeeded && seedDiag && <SeedDiagnosticsCard diag={seedDiag} documents={documents} />}
 
@@ -994,17 +1021,17 @@ function OverviewPanel({
         </div>
         <div className="p-0">
           {entities.length === 0 ? (
-            <div className="px-4 py-6 font-mono text-[10px] text-neutral-700 text-center uppercase tracking-widest">
+            <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
               NO ENTITIES
             </div>
           ) : (
-            entities.slice(0, 8).map((e) => (
+            entities.slice(0, 10).map((e) => (
               <div
                 key={e.id}
-                className="px-3 py-2 border-b border-[#ffffff04] flex justify-between items-center"
+                className="px-3 py-1.5 border-b border-[#ffffff04] flex justify-between items-center"
               >
-                <span className="text-sm font-semibold text-white uppercase truncate">{e.name}</span>
-                <span className="text-[9px] font-mono text-neutral-600 ml-2 flex-shrink-0">
+                <span className="text-xs font-semibold text-white uppercase truncate">{e.name}</span>
+                <span className="text-[8px] font-mono text-neutral-700 ml-2 flex-shrink-0">
                   {e.type.replace(/_/g, " ").toUpperCase()}
                 </span>
               </div>
@@ -1019,25 +1046,25 @@ function OverviewPanel({
         </div>
         <div className="p-0">
           {documents.length === 0 ? (
-            <div className="px-4 py-6 font-mono text-[10px] text-neutral-700 text-center uppercase tracking-widest">
+            <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
               NO DOCUMENTS
             </div>
           ) : (
-            documents.slice(0, 8).map((d) => (
+            documents.slice(0, 10).map((d) => (
               <div
                 key={d.id}
                 onClick={() => onViewDocument?.(d)}
                 className={cn(
-                  "px-3 py-2 border-b border-[#ffffff04] flex flex-col transition-colors",
+                  "px-3 py-1.5 border-b border-[#ffffff04] flex items-center justify-between transition-colors",
                   onViewDocument
                     ? "cursor-pointer hover:bg-[#ffffff05] group"
                     : ""
                 )}
               >
-                <span className="text-sm text-white truncate group-hover:text-red-200 transition-colors">
+                <span className="text-xs text-neutral-300 truncate group-hover:text-white transition-colors flex-1">
                   {d.title}
                 </span>
-                <span className="text-[9px] font-mono text-neutral-600 mt-0.5">
+                <span className="text-[8px] font-mono text-neutral-700 flex-shrink-0 ml-2">
                   {formatDate(d.uploadedAt).split(",")[0]}
                 </span>
               </div>
@@ -1310,24 +1337,51 @@ function DefaultInspector({
         <span className="nexus-label">CASE OVERVIEW</span>
       </div>
 
-      <div className="flex-1 overflow-auto p-3 space-y-4">
+      <div className="flex-1 overflow-auto p-3 space-y-3">
+        {/* ── Case health block ── */}
+        {(() => {
+          const seedDiagRaw = parseSeedDiag(caseData.description);
+          const usableDocs = seedDiagRaw ? (seedDiagRaw.ok + seedDiagRaw.partial) : documents.length;
+          const blockedDocs = seedDiagRaw ? (seedDiagRaw.failed + seedDiagRaw.wrapper) : 0;
+          const healthItems = [
+            { label: "DOCS", val: documents.length, color: documents.length > 0 ? "text-white" : "text-neutral-700" },
+            { label: "USABLE", val: usableDocs, color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
+            ...(blockedDocs > 0 ? [{ label: "BLOCKED", val: blockedDocs, color: "text-red-600" }] : []),
+            { label: "ENTITIES", val: entities.length, color: entities.length > 0 ? "text-cyan-500" : "text-neutral-700" },
+            ...(pendingMentions > 0 ? [{ label: "TRIAGE", val: pendingMentions, color: "text-orange-400" }] : []),
+          ];
+          return (
+            <div className="border border-[#ffffff0a] bg-[#ffffff02]">
+              <div className="px-2 py-1 font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08]">CASE HEALTH</div>
+              <div className="grid grid-cols-2 gap-0">
+                {healthItems.map((item) => (
+                  <div key={item.label} className="px-2 py-1.5 border-b border-r border-[#ffffff06]">
+                    <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider">{item.label}</div>
+                    <div className={`font-mono text-base font-bold tabular-nums leading-tight ${item.color}`}>{item.val.toString().padStart(2, "0")}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {caseData.description && cleanDescription(caseData.description) && (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
               BRIEF
             </div>
-            <p className="text-sm text-neutral-300 leading-relaxed">
+            <p className="text-xs text-neutral-400 leading-relaxed">
               {cleanDescription(caseData.description)}
             </p>
           </div>
         )}
 
-        {caseData.tags && caseData.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {caseData.tags.map((tag) => (
+        {caseData.tags && caseData.tags.filter((t) => t !== "auto-seeded").length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {caseData.tags.filter((t) => t !== "auto-seeded").map((tag) => (
               <span
                 key={tag}
-                className="px-1.5 py-0.5 border border-[#ffffff0d] font-mono text-[9px] text-neutral-600 uppercase"
+                className="px-1.5 py-0.5 border border-[#ffffff0d] font-mono text-[8px] text-neutral-700 uppercase"
               >
                 {tag}
               </span>

@@ -64,7 +64,17 @@ The project is structured as a pnpm monorepo using Node.js 24 and TypeScript 5.9
     *   **Next Action Guidance:** Provides UI prompts for reviewing co-mention associations.
     *   **System Log:** Real-time event feed (`/logs` page) for document ingestion, web ingestion, analysis, and entity approval/rejection events.
 
-5.  **Graph & Case Control Hardening (Pass 14):**
+5.  **Console Refinement & Intelligence Hardening (Pass 15):**
+    *   **CSS Global Tightening:** `nexus-header-strip` reduced to `py-1.5`, `nexus-label` reduced to `text-[9px]`. Added `.nexus-row` utility class for ultra-compact console rows.
+    *   **Dashboard Redesign:** 4-card metric grid replaced with a compact inline telemetry strip (DOSSIERS / ENTITIES / VAULT / PENDING). List-mode case cards rewritten as single-line dossier registry rows with status dot, CASE-ID, title, telemetry, chevron. Default view changed to list mode.
+    *   **Document Vault Compact Rows:** Document row height reduced (py-1.5), icon shrunk to 5×5, text to xs, action buttons tightened.
+    *   **Case Health Block:** DefaultInspector (right inspector) now has a CASE HEALTH grid showing DOCS, USABLE, BLOCKED, ENTITIES, and TRIAGE counts. Uses seed diag data when available.
+    *   **Right Inspector Narrowed:** Right case inspector reduced from w-72 to w-64.
+    *   **OverviewPanel Compacted:** Grid gap and padding reduced; entity/document list rows tighter.
+    *   **Entity Extractor Intelligence Hardening:** Added `SPORTS_ENTERTAINMENT_BLOCKLIST` blocking leagues, trophies, entertainment brands. Added `SPORTS_CONTEXT_PATTERN` and `INVESTIGATIVE_CONTEXT_PATTERN` regexes. Sports/entertainment context entities get 0.55× confidence penalty. Investigative context entities get +0.05–+0.10 confidence boost.
+    *   **Suggested Edge Scoring:** Type-compatibility bonus added — high-value investigative pairs (person+org, person+gov_agency, org+gov_agency, etc.) receive a +1 effective score boost toward HIGH rating.
+
+6.  **Graph & Case Control Hardening (Pass 14):**
     *   **Operator Actions (EntityIntelPanel):** REMOVE FROM GRAPH (client-side hide), DELETE FROM CASE (API cascade delete + reject mentions), DELETE GLOBALLY (all cases), REJECT ALL PENDING MENTIONS — all with inline confirmation UI.
     *   **Edge Controls (LinkIntelPanel):** DELETE EDGE button with confirmation, HIDE ALL SUGGESTED EDGES toggle.
     *   **Graph Filters:** HIDE ISOLATED (no confirmed edges) and HIDE LOW-DEG (≤1 confirmed edge) toggles on graph canvas; visible node count shown as N/Total.

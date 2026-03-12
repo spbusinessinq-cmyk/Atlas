@@ -188,7 +188,7 @@ export default function Dashboard() {
   const { data: entities } = useListEntities();
   const { data: documents } = useListDocuments();
   const { data: pending } = useListEntityMentions({ status: "pending" });
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
   const totalCases = cases?.length ?? 0;
   const activeCases = cases?.filter((c) => c.status === "active").length ?? 0;
@@ -196,107 +196,69 @@ export default function Dashboard() {
   const totalDocs = documents?.length ?? 0;
   const pendingCount = pending?.length ?? 0;
 
-  const metrics = [
-    {
-      icon: Briefcase,
-      label: "TOTAL DOSSIERS",
-      value: totalCases,
-      sub: `${activeCases} ACTIVE`,
-      color: "text-red-500",
-      borderColor: "border-red-500/20",
-      bgColor: "bg-red-500/5",
-    },
-    {
-      icon: Database,
-      label: "ENTITY REGISTRY",
-      value: totalEntities,
-      sub: "REGISTERED",
-      color: "text-cyan-500",
-      borderColor: "border-cyan-500/20",
-      bgColor: "bg-cyan-500/5",
-    },
-    {
-      icon: Files,
-      label: "DOCUMENT VAULT",
-      value: totalDocs,
-      sub: "INGESTED",
-      color: "text-neutral-400",
-      borderColor: "border-[#ffffff0d]",
-      bgColor: "bg-[#ffffff03]",
-    },
-    {
-      icon: Cpu,
-      label: "ATLAS PENDING",
-      value: pendingCount,
-      sub: "AWAITING TRIAGE",
-      color: pendingCount > 0 ? "text-orange-400" : "text-neutral-600",
-      borderColor: pendingCount > 0 ? "border-orange-500/25" : "border-[#ffffff0d]",
-      bgColor: pendingCount > 0 ? "bg-orange-500/5" : "bg-[#ffffff03]",
-    },
-  ];
-
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-0 max-w-7xl mx-auto">
       {/* Seed Launcher */}
       <SeedLauncher />
 
-      {/* Metric strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {metrics.map((m) => {
-          const Icon = m.icon;
-          return (
-            <div
-              key={m.label}
-              className={`border ${m.borderColor} ${m.bgColor} p-3 flex items-center gap-3`}
-            >
-              <Icon className={`w-5 h-5 ${m.color} flex-shrink-0`} />
-              <div className="min-w-0">
-                <div className={`text-2xl font-bold tabular-nums leading-none ${m.color}`}>
-                  {m.value.toString().padStart(2, "0")}
-                </div>
-                <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mt-1">
-                  {m.label}
-                </div>
-                <div className="font-mono text-[8px] text-neutral-600 uppercase">
-                  {m.sub}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#ffffff0d] pb-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-white uppercase">
-            ACTIVE DOSSIERS
-          </h1>
-          <p className="text-neutral-600 tracking-widest text-[9px] font-mono mt-0.5 uppercase">
-            CASE CONTROL
-          </p>
+      {/* Compact telemetry strip */}
+      <div className="border border-[#ffffff0a] bg-[#ffffff03] px-4 py-2 flex items-center gap-0 flex-wrap">
+        <div className="flex items-center gap-3 pr-4 mr-4 border-r border-[#ffffff08]">
+          <Briefcase className="w-3 h-3 text-red-600 flex-shrink-0" />
+          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">DOSSIERS</span>
+          <span className="font-mono text-sm font-bold text-red-500 tabular-nums">{totalCases.toString().padStart(2, "0")}</span>
+          <span className="font-mono text-[9px] text-neutral-700">·</span>
+          <span className="font-mono text-[9px] text-neutral-600 uppercase">{activeCases} ACTIVE</span>
+        </div>
+        <div className="flex items-center gap-3 pr-4 mr-4 border-r border-[#ffffff08]">
+          <Database className="w-3 h-3 text-cyan-600 flex-shrink-0" />
+          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">ENTITIES</span>
+          <span className="font-mono text-sm font-bold text-cyan-500 tabular-nums">{totalEntities.toString().padStart(2, "0")}</span>
+        </div>
+        <div className="flex items-center gap-3 pr-4 mr-4 border-r border-[#ffffff08]">
+          <Files className="w-3 h-3 text-neutral-500 flex-shrink-0" />
+          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">VAULT</span>
+          <span className="font-mono text-sm font-bold text-neutral-400 tabular-nums">{totalDocs.toString().padStart(2, "0")}</span>
         </div>
         <div className="flex items-center gap-3">
+          <Cpu className="w-3 h-3 flex-shrink-0" style={{ color: pendingCount > 0 ? "#f97316" : "#404040" }} />
+          <span className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">PENDING</span>
+          <span className={`font-mono text-sm font-bold tabular-nums ${pendingCount > 0 ? "text-orange-400" : "text-neutral-600"}`}>
+            {pendingCount.toString().padStart(2, "0")}
+          </span>
+          {pendingCount > 0 && (
+            <span className="font-mono text-[9px] text-orange-700 uppercase animate-pulse">TRIAGE REQUIRED</span>
+          )}
+        </div>
+      </div>
+
+      {/* Dossier registry header */}
+      <div className="border-x border-b border-[#ffffff0a] bg-[#ffffff02] px-3 py-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">DOSSIER REGISTRY</span>
+          <span className="font-mono text-[8px] text-neutral-800 uppercase">{cases?.length ?? 0} CASES</span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="flex bg-[#000] p-0.5 border border-[#ffffff0d] gap-0.5">
             <button
-              className={`p-1.5 transition-colors ${
+              className={`p-1 transition-colors ${
                 viewMode === "grid"
                   ? "bg-[#ffffff0d] text-white"
-                  : "text-neutral-600 hover:text-neutral-300"
+                  : "text-neutral-700 hover:text-neutral-400"
               }`}
               onClick={() => setViewMode("grid")}
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-3 h-3" />
             </button>
             <button
-              className={`p-1.5 transition-colors ${
+              className={`p-1 transition-colors ${
                 viewMode === "list"
                   ? "bg-[#ffffff0d] text-white"
-                  : "text-neutral-600 hover:text-neutral-300"
+                  : "text-neutral-700 hover:text-neutral-400"
               }`}
               onClick={() => setViewMode("list")}
             >
-              <List className="w-3.5 h-3.5" />
+              <List className="w-3 h-3" />
             </button>
           </div>
           <CreateCaseDialog />
@@ -304,9 +266,9 @@ export default function Dashboard() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="border-x border-b border-[#ffffff0a] divide-y divide-[#ffffff06]">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-40 animate-pulse bg-[#0d1117] border border-[#ffffff0d]" />
+            <div key={i} className="h-8 animate-pulse bg-[#ffffff02]" />
           ))}
         </div>
       ) : !cases || cases.length === 0 ? (
@@ -315,8 +277,8 @@ export default function Dashboard() {
         <div
           className={
             viewMode === "grid"
-              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-              : "space-y-2"
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3"
+              : "border-x border-b border-[#ffffff0a]"
           }
         >
           {cases.map((c) => (
@@ -361,13 +323,69 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
     }
   };
 
+  if (viewMode === "list") {
+    return (
+      <div className="group relative flex items-center border-b border-[#ffffff06] hover:bg-[#ffffff03] transition-colors">
+        <Link href={`/cases/${c.id}`} className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 px-3 py-2 cursor-pointer">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
+            <span className={`font-mono text-[9px] uppercase tracking-wider flex-shrink-0 w-14 ${s.text}`}>
+              {s.label}
+            </span>
+            <span className="font-mono text-[9px] text-neutral-700 flex-shrink-0 w-24 tabular-nums">
+              CASE-{c.id.toString().padStart(6, "0")}
+            </span>
+            <span className="font-mono text-xs text-white font-semibold uppercase truncate flex-1 group-hover:text-red-300 transition-colors tracking-tight">
+              {c.title}
+            </span>
+            {c.tags && c.tags.length > 0 && (
+              <div className="hidden md:flex items-center gap-1 flex-shrink-0">
+                {c.tags.filter((t) => t !== "auto-seeded").slice(0, 2).map((tag) => (
+                  <span key={tag} className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="hidden sm:flex items-center gap-2 text-[9px] font-mono text-neutral-700 tabular-nums flex-shrink-0">
+              <span>ENT <span className="text-neutral-500">{c.entityCount ?? 0}</span></span>
+              <span className="text-[#ffffff10]">·</span>
+              <span>DOC <span className="text-neutral-500">{c.documentCount ?? 0}</span></span>
+              <span className="text-[#ffffff10]">·</span>
+              <span>LNK <span className="text-neutral-500">{c.relationshipCount ?? 0}</span></span>
+            </div>
+            <ChevronRight className="w-3 h-3 text-neutral-800 group-hover:text-red-600 transition-colors flex-shrink-0" />
+          </div>
+        </Link>
+        <div
+          className="flex-shrink-0 px-2 flex items-center"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        >
+          {confirmDelete ? (
+            <div className="flex items-center gap-1 border border-red-800/50 bg-[#0d0000]/90 px-1.5 py-1">
+              <span className="font-mono text-[8px] text-red-400 uppercase">DEL?</span>
+              <button onClick={handleDelete} disabled={isDeleting} className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 hover:bg-red-500/20 transition-colors">
+                {isDeleting ? "…" : "Y"}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase px-1">N</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="opacity-0 group-hover:opacity-100 p-1 text-neutral-800 hover:text-red-600 transition-all"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative group">
       <Link href={`/cases/${c.id}`}>
-        <div
-          className={`cursor-pointer nexus-card flex flex-col hover:border-[#dc262635] transition-all duration-200 relative`}
-        >
-          {/* Header strip */}
+        <div className="cursor-pointer nexus-card flex flex-col hover:border-[#dc262635] transition-all duration-200 relative">
           <div className="nexus-header-strip">
             <div className={`flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider ${s.text}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
@@ -378,78 +396,50 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
             </div>
           </div>
 
-          {/* Body */}
-          <div className="p-3 flex-1 flex flex-col gap-1.5">
-            <h3 className="text-base font-bold text-white group-hover:text-red-400 transition-colors uppercase leading-tight tracking-tight pr-6">
+          <div className="p-2.5 flex-1 flex flex-col gap-1.5">
+            <h3 className="text-sm font-bold text-white group-hover:text-red-400 transition-colors uppercase leading-tight tracking-tight">
               {c.title}
             </h3>
             {c.description && (
-              <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed">
-                {c.description}
+              <p className="text-[11px] text-neutral-600 line-clamp-2 leading-relaxed">
+                {cleanDescriptionPreview(c.description)}
               </p>
             )}
-            {c.tags && c.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {c.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase"
-                  >
+            {c.tags && c.tags.filter((t) => t !== "auto-seeded").length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {c.tags.filter((t) => t !== "auto-seeded").slice(0, 3).map((tag) => (
+                  <span key={tag} className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase">
                     {tag}
                   </span>
                 ))}
-                {c.tags.length > 3 && (
-                  <span className="px-1.5 py-0.5 text-[8px] font-mono text-neutral-800">
-                    +{c.tags.length - 3}
-                  </span>
-                )}
               </div>
             )}
           </div>
 
-          {/* Bottom telemetry */}
-          <div className="bg-[#00000040] border-t border-[#ffffff06] px-3 py-1.5 flex items-center justify-between">
+          <div className="bg-[#00000040] border-t border-[#ffffff06] px-2.5 py-1.5 flex items-center justify-between">
             <div className="flex items-center gap-2 text-[9px] font-mono text-neutral-700 tabular-nums">
-              <span>
-                ENT <span className="text-neutral-500">{c.entityCount ?? 0}</span>
-              </span>
+              <span>ENT <span className="text-neutral-500">{c.entityCount ?? 0}</span></span>
               <span className="text-[#ffffff10]">·</span>
-              <span>
-                DOC <span className="text-neutral-500">{c.documentCount ?? 0}</span>
-              </span>
+              <span>DOC <span className="text-neutral-500">{c.documentCount ?? 0}</span></span>
               <span className="text-[#ffffff10]">·</span>
-              <span>
-                TL <span className="text-neutral-500">{c.timelineCount ?? 0}</span>
-              </span>
-              <span className="text-[#ffffff10]">·</span>
-              <span>
-                LNK <span className="text-neutral-500">{c.relationshipCount ?? 0}</span>
-              </span>
+              <span>LNK <span className="text-neutral-500">{c.relationshipCount ?? 0}</span></span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-neutral-700 group-hover:text-red-500 transition-colors" />
           </div>
         </div>
       </Link>
 
-      {/* Delete overlay — sits outside Link to avoid navigation */}
       <div
-        className="absolute bottom-2 right-2 z-10"
+        className="absolute bottom-1.5 right-7 z-10"
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
       >
         {confirmDelete ? (
           <div className="flex items-center gap-1 border border-red-800/50 bg-[#0d0000]/90 px-1.5 py-1">
             <span className="font-mono text-[8px] text-red-400 uppercase tracking-wider">DELETE?</span>
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 py-0.5 hover:bg-red-500/20 transition-colors"
-            >
+            <button onClick={handleDelete} disabled={isDeleting} className="font-mono text-[8px] text-red-400 hover:text-red-300 uppercase px-1 py-0.5 hover:bg-red-500/20 transition-colors">
               {isDeleting ? "…" : "YES"}
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
-              className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase px-1 py-0.5"
-            >
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }} className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase px-1 py-0.5">
               NO
             </button>
           </div>
@@ -465,6 +455,11 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
       </div>
     </div>
   );
+}
+
+function cleanDescriptionPreview(desc: string | null | undefined): string {
+  if (!desc) return "";
+  return desc.replace(/\[ATLAS-SEED:[^\]]+\]/, "").replace(/\[ATLAS-DIAG:[^\]]+\]/, "").trim().slice(0, 120);
 }
 
 function CreateCaseDialog() {

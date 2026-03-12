@@ -139,6 +139,40 @@ const MEDIA_SOURCE_BLOCKLIST = new Set([
   "Dow Jones", "Hearst",
 ]);
 
+// Sports / entertainment noise that should not surface in investigative cases
+const SPORTS_ENTERTAINMENT_BLOCKLIST = new Set([
+  // Sports leagues / governing bodies
+  "NFL", "NBA", "MLB", "NHL", "FIFA", "UEFA", "MLS", "PGA", "UFC",
+  "ESPN", "Fox Sports", "NBC Sports", "CBS Sports", "TNT Sports",
+  // Generic sports noise
+  "Super Bowl", "World Series", "NBA Finals", "Stanley Cup", "Champions League",
+  "Playoffs", "Draft", "Trade Deadline", "Free Agency", "Hall of Fame",
+  // Entertainment industry
+  "Grammy", "Oscar", "Emmy", "Tony", "Box Office", "Billboard",
+  "Hollywood", "Variety", "TMZ", "People Magazine", "Entertainment Weekly",
+]);
+
+// Terms that indicate the text is about sports/entertainment rather than investigation
+const SPORTS_CONTEXT_PATTERN = /\b(quarterback|touchdown|home run|three-pointer|field goal|penalty kick|slam dunk|grand slam|hat trick|free throw|overtime|halftime|roster|draft pick|season record|championship ring|playoff run|trade deadline|salary cap|front office|head coach|general manager as sports|batting average|earned run|yards per game)\b/i;
+
+// Terms that indicate strong investigative relevance — boost entities found near these
+const INVESTIGATIVE_CONTEXT_PATTERN = /\b(contract|procurement|corruption|fraud|bribery|kickback|embezzlement|investigation|audit|misconduct|indictment|plea|conviction|settlement|fine|penalty|lobbying|donation|campaign finance|oversight|accountability|subpoena|whistleblower|grant|appropriation|budget|housing|shelter|homeless|development|rezoning|permit|violation|lawsuit|regulatory|compliance|conflict of interest|no.bid|sole.source|shell company|offshore|wire transfer|money laundering)\b/i;
+
+// Returns true if the entity's context is predominantly sports/entertainment noise
+function isSportsEntertainmentContext(context: string): boolean {
+  const sportsMatches = (context.match(SPORTS_CONTEXT_PATTERN) || []).length;
+  const investigativeMatches = (context.match(INVESTIGATIVE_CONTEXT_PATTERN) || []).length;
+  return sportsMatches > 0 && investigativeMatches === 0;
+}
+
+// Boost factor for entities found near strong investigative terms
+function getInvestigativeBoost(context: string): number {
+  const matches = (context.match(INVESTIGATIVE_CONTEXT_PATTERN) || []).length;
+  if (matches >= 3) return 0.10;
+  if (matches >= 1) return 0.05;
+  return 0;
+}
+
 function isValidName(name: string): boolean {
   if (!name || name.length < 3 || name.length > 80) return false;
   const words = name.trim().split(/\s+/);
@@ -148,6 +182,8 @@ function isValidName(name: string): boolean {
   if (!/[a-zA-Z]/.test(name)) return false;
   // Block media aggregator false positives
   if (MEDIA_SOURCE_BLOCKLIST.has(name)) return false;
+  // Block sports/entertainment noise
+  if (SPORTS_ENTERTAINMENT_BLOCKLIST.has(name)) return false;
   return true;
 }
 
@@ -216,10 +252,20 @@ export function extractEntities(text: string): ExtractedMention[] {
     if (seen.has(name.toLowerCase())) return;
     seen.add(name.toLowerCase());
     const ctx = getContext(text, name, matchIndex);
+
+    // Apply investigative boost: entities near strong investigative signals get higher confidence
+    const boost = getInvestigativeBoost(ctx);
+    let adjustedConf = Math.min(0.99, confidence + boost);
+
+    // Penalize entities found in sports/entertainment-heavy context with no investigative signal
+    if (isSportsEntertainmentContext(ctx)) {
+      adjustedConf = adjustedConf * 0.55; // heavy penalty — sink them below promotion thresholds
+    }
+
     mentions.push({
       entityName: name,
       entityType,
-      confidence,
+      confidence: adjustedConf,
       context: ctx,
       startPos: matchIndex ?? text.indexOf(name),
       endPos: (matchIndex ?? text.indexOf(name)) + name.length,

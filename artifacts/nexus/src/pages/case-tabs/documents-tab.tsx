@@ -169,27 +169,22 @@ function DocumentRow({
       <div
         onClick={onSelect}
         className={cn(
-          "flex items-center gap-3 flex-1 min-w-0 px-3 py-3 cursor-pointer",
+          "flex items-center gap-2.5 flex-1 min-w-0 px-3 py-1.5 cursor-pointer",
           isSelected ? "hover:bg-[#dc26260a]" : "hover:bg-[#ffffff04]"
         )}
       >
         <div
           className={cn(
-            "w-8 h-8 flex-shrink-0 border flex items-center justify-center",
+            "w-5 h-5 flex-shrink-0 border flex items-center justify-center",
             isSelected
               ? isWeb ? "bg-cyan-500/10 border-cyan-500/30" : "bg-red-500/10 border-red-500/30"
               : "bg-[#000] border-[#ffffff0d]"
           )}
         >
           {isWeb ? (
-            <Globe className={cn("w-3.5 h-3.5", isSelected ? "text-cyan-500" : "text-neutral-700")} />
+            <Globe className={cn("w-2.5 h-2.5", isSelected ? "text-cyan-500" : "text-neutral-700")} />
           ) : (
-            <span
-              className={cn(
-                "text-[7px] font-mono",
-                isSelected ? "text-red-400" : "text-neutral-700"
-              )}
-            >
+            <span className={cn("text-[6px] font-mono", isSelected ? "text-red-400" : "text-neutral-700")}>
               DOC
             </span>
           )}
@@ -198,20 +193,20 @@ function DocumentRow({
         <div className="flex-1 min-w-0">
           <div
             className={cn(
-              "text-sm font-semibold uppercase truncate transition-colors leading-tight",
-              isSelected ? "text-white" : "text-neutral-300"
+              "text-xs font-semibold uppercase truncate transition-colors leading-tight",
+              isSelected ? "text-white" : "text-neutral-400"
             )}
             title={doc.title}
           >
             {doc.title}
           </div>
-          <div className="flex items-center gap-2 text-[9px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
-            <span className="truncate max-w-[140px]">
-              {(doc as ExtendedDoc).sourceDomain || doc.source || "UNKNOWN SOURCE"}
+          <div className="flex items-center gap-2 text-[8px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
+            <span className="truncate max-w-[120px]">
+              {(doc as ExtendedDoc).sourceDomain || doc.source || "UNKNOWN"}
             </span>
             <span className="text-[#ffffff10]">·</span>
             <span className="flex-shrink-0 tabular-nums" title={`Ingested: ${formatDate(doc.uploadedAt)}`}>
-              {formatDate(doc.uploadedAt)}
+              {formatDate(doc.uploadedAt).split(",")[0]}
             </span>
           </div>
         </div>
@@ -225,23 +220,23 @@ function DocumentRow({
           onClick={() => analyzeMutation.mutate({ id: doc.id })}
           disabled={analyzeMutation.isPending}
           className={cn(
-            "flex items-center gap-1 px-2 py-1.5 border font-mono text-[9px] uppercase tracking-widest transition-colors",
+            "flex items-center gap-1 px-1.5 py-1 border font-mono text-[8px] uppercase tracking-widest transition-colors",
             analyzeMutation.isPending
               ? "border-neutral-800 text-neutral-700 cursor-not-allowed"
               : "border-cyan-500/30 text-cyan-600 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/60"
           )}
           title="Run entity extraction"
         >
-          <Cpu className="w-3 h-3" />
+          <Cpu className="w-2.5 h-2.5" />
           {analyzeMutation.isPending ? "…" : "ANALYZE"}
         </button>
 
         <button
           onClick={onView}
-          className="flex items-center gap-1 px-2 py-1.5 border border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
+          className="flex items-center gap-1 px-1.5 py-1 border border-neutral-800 text-neutral-600 hover:border-neutral-600 hover:text-white font-mono text-[8px] uppercase tracking-widest transition-colors"
           title="View document"
         >
-          <Eye className="w-3 h-3" />
+          <Eye className="w-2.5 h-2.5" />
           VIEW
         </button>
 

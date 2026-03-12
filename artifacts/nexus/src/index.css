@@ -141,10 +141,13 @@
     @apply bg-[#111820] border border-[#ffffff0d];
   }
   .nexus-header-strip {
-    @apply bg-[#ffffff05] border-b border-[#ffffff0d] px-3 py-2 flex items-center justify-between;
+    @apply bg-[#ffffff05] border-b border-[#ffffff0d] px-3 py-1.5 flex items-center justify-between;
   }
   .nexus-label {
-    @apply uppercase tracking-widest text-[10px] font-mono text-neutral-500;
+    @apply uppercase tracking-widest text-[9px] font-mono text-neutral-500;
+  }
+  .nexus-row {
+    @apply flex items-center border-b border-[#ffffff06] px-3 py-1 font-mono text-[10px] transition-colors;
   }
   .nexus-glow-focus:focus-within {
     box-shadow: 0 0 0 1px #dc262620;
