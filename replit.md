@@ -44,8 +44,12 @@ The project is structured as a pnpm monorepo using Node.js 24 and TypeScript 5.9
     *   `POST /web-search` for querying and `POST /web-ingest` for fetching and storing web content.
     *   Automatically runs entity analysis on ingested web articles.
     *   Document Vault distinguishes web sources with specific icons and a specialized article viewer (`previewType: "web-article"`).
-    *   Web search results are scored for relevance based on keywords, article content, and domain types.
-    *   Enhanced article body extraction using multiple CSS selectors and a paragraph aggregation fallback.
+    *   Web search results are scored for relevance based on keywords, article content, domain types, location-awareness (LA-specific boosts), and junk-title detection.
+    *   **Critical fix (Pass 12):** Google News RSS items carry the real article URL in `<source url="...">` attribute. Parser now uses this instead of the Google News redirect token, making ~7/8 docs extractable per seed run.
+    *   **JSON-LD extraction (Pass 12):** `extractArticleText()` now runs JSON-LD structured-data extraction as Pass 0, before CSS selectors. Recovers full `articleBody` from major news sites even when JS-rendered (LA Times, CBS News, NBC, AP, ProPublica, etc.).
+    *   **Seed diagnostics (Pass 12):** `runSeedPipeline()` tracks per-doc extraction quality (ok/partial/failed/wrapper). Embeds machine-readable `[ATLAS-SEED:searched=N|total=N|ingested=N|ok=N|partial=N|failed=N|wrapper=N|detected=N|promoted=N|fallback=0/1]` block in case description. Human-readable summary explains what succeeded and failed.
+    *   **SeedDiagnosticsCard (Pass 12):** Overview panel parses and displays the seed report as a 6-stat grid card for auto-seeded cases. `cleanDescription()` strips the raw `[ATLAS-SEED:...]` block from human-readable displays.
+    *   T1 auto-approve: confidence ≥ 0.82, 2+ docs. T2 fallback: confidence ≥ 0.70, prefers ok-doc hits and org/agency/facility types, cap 3.
 
 4.  **Entity Intelligence Layer:**
     *   **Auto-Dossier:** EntityIntelPanel displays comprehensive entity intelligence including mentions, documents, first/last seen dates, source documents, confirmed connections, and co-mentioned entities with scoring.

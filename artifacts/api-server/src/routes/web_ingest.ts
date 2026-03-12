@@ -98,6 +98,19 @@ const QUALITY_DOMAINS = [
   "inspector general", "audit", ".gov", ".ca.gov",
 ];
 
+// Junk title patterns that indicate low-value results
+const JUNK_TITLE_PATTERNS = [
+  /^top \d+/i, /^best \d+/i, /^\d+ best/i, /^\d+ things/i,
+  /^how to /i, /^what is /i, /^things to do/i, /^guide to/i,
+  /^everything you need/i, /^here's what/i, /^what you need/i,
+  /review:/i, /^watch:/i, /^photos:/i, /^video:/i,
+  /^opinion:/i, /^letter:/i, /^column:/i,
+];
+
+// Location terms to detect geographic target context
+const LA_TERMS = ["los angeles", " la ", "l.a.", "hollywood", "la county", "la city",
+  "laist", "lacda", "hacla", "lacity", "lacounty", "lausd", "ladwp", "lapd", "lawa"];
+
 function scoreResult(result: WebSearchResult, query: string): number {
   let score = 0;
   const titleLower = result.title.toLowerCase();
@@ -105,10 +118,15 @@ function scoreResult(result: WebSearchResult, query: string): number {
   const domainLower = result.sourceDomain.toLowerCase();
   const queryLower = query.toLowerCase();
 
-  // Exact query phrase in title → big boost
+  // ── Junk title detection ────────────────────────────────────────────────────
+  for (const pat of JUNK_TITLE_PATTERNS) {
+    if (pat.test(result.title)) { score -= 3; break; }
+  }
+
+  // ── Exact query phrase in title → big boost ─────────────────────────────────
   if (titleLower.includes(queryLower)) score += 8;
 
-  // Query words in title
+  // ── Query words in title / snippet ──────────────────────────────────────────
   const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 3);
   const titleMatches = queryWords.filter((w) => titleLower.includes(w)).length;
   score += titleMatches * 2.5;
@@ -118,21 +136,36 @@ function scoreResult(result: WebSearchResult, query: string): number {
   // All query words appear in title → strong signal
   if (queryWords.length >= 2 && titleMatches === queryWords.length) score += 4;
 
-  // Investigative keywords in title or snippet
+  // ── Location-aware boost ────────────────────────────────────────────────────
+  const queryIsLA = LA_TERMS.some((t) => queryLower.includes(t));
+  if (queryIsLA) {
+    // Boost articles that mention the location
+    const articleMentionsLA = LA_TERMS.some((t) => titleLower.includes(t) || snippetLower.includes(t));
+    if (articleMentionsLA) score += 2;
+    // Boost quality LA-specific domains
+    const laLocalDomains = ["laist.com", "kpcc.org", "kcrw.com", "la.gov", "lacounty.gov",
+      "lacity.org", "lacda.org", "hacla.org", "laist", "latimes.com", "dailynews.com",
+      "kcal", "knbc.com", "nbclosangeles.com", "abc7.com"];
+    for (const d of laLocalDomains) {
+      if (domainLower.includes(d)) { score += 3; break; }
+    }
+  }
+
+  // ── Investigative keywords ───────────────────────────────────────────────────
   for (const kw of INVESTIGATIVE_KEYWORDS) {
     if (titleLower.includes(kw)) score += 1.5;
     else if (snippetLower.includes(kw)) score += 0.5;
   }
 
-  // PDF sources often have primary documents
+  // ── PDF sources often have primary documents ─────────────────────────────────
   if (result.contentType === "pdf") score += 2;
 
-  // Quality domain boost
+  // ── Quality domain boost ─────────────────────────────────────────────────────
   for (const good of QUALITY_DOMAINS) {
     if (domainLower.includes(good)) { score += 3; break; }
   }
 
-  // Penalise lifestyle/entertainment domains and keywords
+  // ── Penalise lifestyle/entertainment domains and keywords ─────────────────────
   for (const bad of LIFESTYLE_DOMAINS) {
     if (domainLower.includes(bad) || titleLower.includes(bad)) {
       score -= 10;
@@ -140,11 +173,11 @@ function scoreResult(result: WebSearchResult, query: string): number {
     }
   }
 
-  // Prefer longer, more substantive snippets
+  // ── Snippet length quality signals ───────────────────────────────────────────
   if (result.snippet.length > 200) score += 1;
   else if (result.snippet.length > 100) score += 0.4;
 
-  // Penalize very short snippets (likely wrappers / paywalled)
+  // Very short snippets → likely paywalled / wrapper
   if (result.snippet.length < 50) score -= 2;
 
   return score;
@@ -161,19 +194,28 @@ function parseRssItems(xml: string, query = ""): WebSearchResult[] {
     const dashIdx = title.lastIndexOf(" - ");
     if (dashIdx > 10) title = title.substring(0, dashIdx);
 
-    const url = extractTag(item, "link") || extractTag(item, "guid");
+    const rawLink = extractTag(item, "link") || extractTag(item, "guid");
     const pubDate = extractTag(item, "pubDate");
     const rawDesc = extractTag(item, "description");
     const snippet = stripHtml(decodeEntities(rawDesc)).slice(0, 280);
 
+    // Google News RSS embeds the real article URL in <source url="..."> attribute.
+    // Prefer this over the google.com/rss/articles/... redirect token which
+    // cannot be followed server-side.
     const srcMatch = item.match(/<source\s+url="([^"]+)"[^>]*>([^<]*)<\/source>/);
+    const realSourceUrl = srcMatch ? decodeEntities(srcMatch[1].trim()) : null;
     const sourceDomain = srcMatch
       ? srcMatch[2].trim()
-      : url
-        ? tryHostname(url)
+      : rawLink
+        ? tryHostname(rawLink)
         : "unknown";
 
-    const contentType: "web-article" | "pdf" = url.toLowerCase().includes(".pdf")
+    // Use the real article URL when available; fall back to the RSS link
+    const url = (realSourceUrl && !realSourceUrl.includes("news.google.com"))
+      ? realSourceUrl
+      : rawLink;
+
+    const contentType: "web-article" | "pdf" = (url || "").toLowerCase().includes(".pdf")
       ? "pdf"
       : "web-article";
 
@@ -315,11 +357,46 @@ export interface ExtractionResult {
   paragraphCount: number;
   charCount: number;
   selectorUsed: string;
-  strategy: "selector" | "paragraph-agg" | "body-text" | "fallback";
+  strategy: "json-ld" | "selector" | "paragraph-agg" | "body-text" | "fallback";
 }
 
 export function extractArticleText(html: string, fallback: string): ExtractionResult {
   try {
+    let text = "";
+    let selectorUsed = "none";
+    let strategy: ExtractionResult["strategy"] = "fallback";
+
+    // ── Pass 0: JSON-LD structured data ─────────────────────────────────────
+    // Most modern news sites (LA Times, CBS News, NBC, AP, etc.) embed their
+    // full article body in application/ld+json for SEO. This works even when
+    // the page is JS-rendered and the CSS selectors find nothing.
+    const jsonLdRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let jMatch: RegExpExecArray | null;
+    while ((jMatch = jsonLdRegex.exec(html)) !== null) {
+      try {
+        const rawJson = jMatch[1].trim();
+        const data = JSON.parse(rawJson);
+        const items: unknown[] = Array.isArray(data) ? data : [data];
+        for (const item of items) {
+          if (typeof item !== "object" || !item) continue;
+          const obj = item as Record<string, unknown>;
+          // Look for articleBody first, then description as fallback
+          const body = (obj.articleBody ?? obj["article:body"] ?? "") as string;
+          const desc = (obj.description ?? "") as string;
+          const candidate = body.length > desc.length ? body : desc;
+          if (candidate.length > text.length && candidate.length > 300) {
+            text = candidate;
+            selectorUsed = "json-ld";
+            strategy = "selector";
+          }
+        }
+        if (text.length >= 2000) break; // Great extraction, stop early
+      } catch {
+        // Invalid JSON block — skip
+      }
+    }
+
+    // ── Parse HTML for CSS-based passes ──────────────────────────────────────
     const root = parseHtml(html);
 
     // Strip non-content elements first
@@ -327,44 +404,42 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
       try { root.querySelectorAll(sel).forEach((el) => el.remove()); } catch { /* bad selector ok */ }
     }
 
-    let text = "";
-    let selectorUsed = "none";
-    let strategy: ExtractionResult["strategy"] = "fallback";
-
-    // Pass 1: Try article body selectors in priority order
-    for (const { sel, label } of ARTICLE_SELECTORS) {
-      try {
-        const el = root.querySelector(sel);
-        if (el) {
-          // Extract paragraph blocks from this container
-          const paras = el.querySelectorAll("p");
-          let candidate = "";
-          if (paras.length >= 2) {
-            const paraTexts = paras
-              .map((p) => p.text.replace(/\s+/g, " ").trim())
-              .filter((t) => t.length > 50);
-            candidate = paraTexts.join("\n\n");
+    // ── Pass 1: Try article body selectors in priority order ─────────────────
+    if (text.length < 1000) {
+      for (const { sel, label } of ARTICLE_SELECTORS) {
+        try {
+          const el = root.querySelector(sel);
+          if (el) {
+            // Extract paragraph blocks from this container first
+            const paras = el.querySelectorAll("p");
+            let candidate = "";
+            if (paras.length >= 2) {
+              const paraTexts = paras
+                .map((p) => p.text.replace(/\s+/g, " ").trim())
+                .filter((t) => t.length > 50);
+              candidate = paraTexts.join("\n\n");
+            }
+            // Fall back to raw element text if paragraph extraction insufficient
+            if (candidate.length < 300) {
+              candidate = el.text.replace(/\s+/g, " ").trim();
+            }
+            if (candidate.length > text.length && candidate.length > 250) {
+              text = candidate;
+              selectorUsed = label;
+              strategy = "selector";
+              if (text.length > 3000) break; // Good enough
+            }
           }
-          // Fall back to raw element text if paragraph extraction insufficient
-          if (candidate.length < 300) {
-            candidate = el.text.replace(/\s+/g, " ").trim();
-          }
-          if (candidate.length > text.length && candidate.length > 250) {
-            text = candidate;
-            selectorUsed = label;
-            strategy = "selector";
-            if (text.length > 2000) break; // Good enough
-          }
-        }
-      } catch { /* bad selector ok */ }
+        } catch { /* bad selector ok */ }
+      }
     }
 
-    // Pass 2: Global paragraph aggregation if no selector worked well
-    if (text.length < 400) {
+    // ── Pass 2: Global paragraph aggregation ─────────────────────────────────
+    if (text.length < 500) {
       const paragraphs = root.querySelectorAll("p");
       const paraTexts = paragraphs
         .map((p) => p.text.replace(/\s+/g, " ").trim())
-        .filter((t) => t.length > 60);
+        .filter((t) => t.length > 60 && !BOILERPLATE_PHRASES.some((b) => t.toLowerCase().includes(b)));
       if (paraTexts.length >= 2) {
         const aggregated = paraTexts.join("\n\n");
         if (aggregated.length > text.length) {
@@ -375,7 +450,7 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
       }
     }
 
-    // Pass 3: Body text as last resort (noisy but better than nothing)
+    // ── Pass 3: Body text last resort ────────────────────────────────────────
     if (text.length < 200) {
       const bodyEl = root.querySelector("body");
       const bodyText = bodyEl ? bodyEl.text : root.text;
@@ -384,14 +459,16 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
       strategy = "body-text";
     }
 
-    const truncated = text.slice(0, 18000);
+    const truncated = text.slice(0, 20000);
     const paragraphCount = countRealParagraphs(truncated);
 
-    // Determine extraction status
+    // ── Determine extraction quality ──────────────────────────────────────────
     let status: ExtractionResult["status"];
-    if (truncated.length >= 800 && paragraphCount >= 3 && !isBoilerplateHeavy(truncated)) {
+    const boilerplateHeavy = isBoilerplateHeavy(truncated);
+
+    if (truncated.length >= 600 && paragraphCount >= 2 && !boilerplateHeavy) {
       status = "ok";
-    } else if (truncated.length >= 200 && !isBoilerplateHeavy(truncated)) {
+    } else if (truncated.length >= 150 && !boilerplateHeavy) {
       status = "partial";
     } else {
       status = "failed";
@@ -518,13 +595,26 @@ function isWrapperOrJunk(html: string, finalUrl: string, extractedText: string):
 
 // ── Entity junk suppression blocklist ────────────────────────────────────────
 
-// Values that should NEVER become entity names (injected by wrapper pages)
+// Values that should NEVER become entity names (injected by wrapper pages or site boilerplate)
 export const WRAPPER_ENTITY_BLOCKLIST = new Set([
+  // Google / search wrappers
   "Google News", "Google LLC", "Google", "Google Search", "News Google",
+  // JS / auth walls
   "JavaScript", "Sign In", "Log In", "Subscribe", "Continue", "Accept",
   "Enable JavaScript", "Cookie", "Cookies", "Privacy Policy",
   "Terms of Service", "More", "Share", "Close", "Skip",
   "Loading", "Please Wait", "Redirect", "Follow",
+  // Generic UI labels
+  "Open Original", "Published", "Updated", "Related", "Read More",
+  "Newsletter", "Email", "Print", "Download", "Comments",
+  // Publication training/sidebar content (ProPublica, newsrooms)
+  "Investigative Editor Training Program", "ProPublica Investigative Editor Training Program",
+  "Investigative Reporting Workshop", "Training Program", "Fellowship Program",
+  "Journalism Fellowship", "Investigative Fellowship",
+  // Generic newsroom boilerplate
+  "Associated Press", "AP Stylebook", "Reuters Institute", "Nieman Foundation",
+  // Generic location labels (too vague to be useful as entities)
+  "United States", "US", "USA", "America", "North America",
 ]);
 
 // ── formatDoc helper ──────────────────────────────────────────────────────────
@@ -798,8 +888,13 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   const toIngest = qualifiedResults.slice(0, 8);
 
   const ingestedDocIds: number[] = [];
+  const okDocIds = new Set<number>();
 
   let validDocsIngested = 0;
+  let okDocs = 0;
+  let partialDocs = 0;
+  let failedDocs = 0;
+  let wrapperDocs = 0;
 
   for (const result of toIngest) {
     try {
@@ -862,6 +957,12 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         { caseId, documentId: doc.id }
       );
 
+      // ── Track per-doc extraction stats ──────────────────────────────────
+      if (docExtractionStatus === "ok") okDocs++;
+      else if (docExtractionStatus === "partial") partialDocs++;
+      else if (docExtractionStatus === "wrapper") wrapperDocs++;
+      else failedDocs++;
+
       // Skip entity extraction for wrapper/failed content
       const canAnalyze = docExtractionStatus === "ok" || docExtractionStatus === "partial";
       if (!canAnalyze) {
@@ -874,6 +975,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       }
 
       validDocsIngested++;
+      if (docExtractionStatus === "ok") okDocIds.add(doc.id);
       const textForAnalysis = cleanRawText(rawText);
       const entities = extractEntities(textForAnalysis);
 
@@ -979,16 +1081,25 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // Tier 2 fallback: if zero entities approved, promote top safest single-doc detections
+  // Tier 2 fallback: if zero entities approved, promote the safest single-doc candidates
   if (approvedEntityIds.size === 0 && validDocsIngested > 0) {
-    // Sort by confidence descending, filter to reasonably confident, non-blocklisted
+    // Preferred entity types for safe seed promotion (stable, non-person types first)
+    const PREFERRED_TYPES = ["organization", "government_agency", "facility", "program", "location"];
+
     const candidates = Array.from(entityMap.entries())
-      .filter(([, e]) => e.maxConfidence >= 0.74 && !WRAPPER_ENTITY_BLOCKLIST.has(e.displayName))
-      .sort((a, b) => b[1].maxConfidence - a[1].maxConfidence);
+      .filter(([, e]) => e.maxConfidence >= 0.70 && !WRAPPER_ENTITY_BLOCKLIST.has(e.displayName))
+      .map(([key, entry]) => {
+        // Compute a priority score: prefer okDoc hits, preferred types, higher confidence
+        const hasOkDoc = Array.from(entry.docIds).some((id) => okDocIds.has(id));
+        const typeBonus = PREFERRED_TYPES.includes(entry.type) ? 1.5 : 0;
+        const okBonus = hasOkDoc ? 2 : 0;
+        return { key, entry, priority: entry.maxConfidence + typeBonus + okBonus };
+      })
+      .sort((a, b) => b.priority - a.priority);
 
     let fallbackCount = 0;
-    for (const [key, entry] of candidates) {
-      if (fallbackCount >= 5) break;
+    for (const { key, entry } of candidates) {
+      if (fallbackCount >= 3) break; // Cap at 3 — just enough for a starter graph
       await approveEntity(key, entry, "T2-FALLBACK");
       fallbackCount++;
     }
@@ -996,7 +1107,13 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     if (fallbackCount > 0) {
       await logEvent(
         "seed_fallback_triggered",
-        `Seed fallback: promoted ${fallbackCount} entity candidate${fallbackCount !== 1 ? "s" : ""} — no high-confidence multi-doc entities found`,
+        `Seed fallback: promoted ${fallbackCount} entity candidate${fallbackCount !== 1 ? "s" : ""} — no high-confidence multi-doc entities qualified`,
+        { caseId }
+      );
+    } else if (allMentions.length > 0) {
+      await logEvent(
+        "seed_no_promotion",
+        `No seed entities promoted — ${allMentions.length} signals detected but none passed confidence/blocklist checks`,
         { caseId }
       );
     }
@@ -1053,35 +1170,61 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // ── Case summary ──────────────────────────────────────────────────────────
+  // ── Case summary with machine-readable seed diagnostics ──────────────────
 
   const docsIngested = ingestedDocIds.length;
-  const failedDocs = docsIngested - validDocsIngested;
+  const searchResultsConsidered = toIngest.length;
+  const searchResultsTotal = uniqueResults.length;
   const entitiesApproved = approvedEntityIds.size;
   const totalDetected = allMentions.length;
+  const isFallback = entitiesApproved > 0 && approvedEntityIds.size > 0 &&
+    Array.from(approvedEntityIds.keys()).every((k) => {
+      const entry = entityMap.get(k);
+      return entry && entry.docIds.size < 2;
+    });
 
-  const entityTypeBreakdown = Array.from(approvedEntityIds.keys())
-    .map((k) => entityMap.get(k)?.type)
-    .filter(Boolean);
-  const typeCounts: Record<string, number> = {};
-  for (const t of entityTypeBreakdown) {
-    if (t) typeCounts[t] = (typeCounts[t] || 0) + 1;
+  // Build human-readable description
+  const sourceWord = (n: number) => `${n} source${n !== 1 ? "s" : ""}`;
+  const entityWord = (n: number) => `${n} entity${n !== 1 ? " signals" : " signal"}`;
+
+  let statusLine: string;
+  if (entitiesApproved > 0) {
+    const promotionNote = isFallback ? " via seed fallback" : "";
+    statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, successfully extracted ${sourceWord(validDocsIngested)} with usable article text, detected ${entityWord(totalDetected)}, and auto-promoted ${entitiesApproved} seed ${entitiesApproved !== 1 ? "entities" : "entity"}${promotionNote} to the case graph.`;
+  } else if (totalDetected > 0) {
+    statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, extracted ${sourceWord(validDocsIngested)} with usable text, and detected ${entityWord(totalDetected)} — none passed confidence and quality checks for auto-promotion. Review pending detections to manually approve entities.`;
+  } else if (validDocsIngested > 0) {
+    statusLine = `ATLAS found ${searchResultsTotal} results and ingested ${sourceWord(docsIngested)}, but no entity signals were extracted from ${sourceWord(validDocsIngested)} with usable text. Try re-analyzing individual documents or adding sources manually.`;
+  } else {
+    statusLine = `ATLAS found ${searchResultsTotal} results but all ${docsIngested} ingested sources were blocked, paywalled, or JS-rendered. No usable article text was recovered. Add sources manually via Web Ingest.`;
   }
-  const typeDesc = Object.entries(typeCounts)
-    .map(([t, n]) => `${n} ${t.replace(/_/g, " ")}${n !== 1 ? "s" : ""}`)
-    .join(", ");
 
-  const failedNote = failedDocs > 0
-    ? ` (${failedDocs} wrapper/redirect page${failedDocs !== 1 ? "s" : ""} skipped)`
-    : "";
+  // Encode machine-readable diagnostics block (parsed by the Overview panel)
+  const seedTag = [
+    `searched=${searchResultsConsidered}`,
+    `total=${searchResultsTotal}`,
+    `ingested=${docsIngested}`,
+    `ok=${okDocs}`,
+    `partial=${partialDocs}`,
+    `failed=${failedDocs}`,
+    `wrapper=${wrapperDocs}`,
+    `detected=${totalDetected}`,
+    `promoted=${entitiesApproved}`,
+    `fallback=${isFallback ? 1 : 0}`,
+  ].join("|");
 
-  const summary =
-    `Initial investigation seeded from target "${target}". ATLAS ingested ${validDocsIngested} extractable source${validDocsIngested !== 1 ? "s" : ""}${failedNote} and detected ${totalDetected} entity signal${totalDetected !== 1 ? "s" : ""}, with ${entitiesApproved} auto-approved for the case graph${typeDesc ? ` (${typeDesc})` : ""}.`;
+  const description = `${statusLine}\n\n[ATLAS-SEED:${seedTag}]`;
 
   await db
     .update(casesTable)
-    .set({ description: summary, updatedAt: new Date() })
+    .set({ description, updatedAt: new Date() })
     .where(eq(casesTable.id, caseId));
+
+  await logEvent(
+    "seed_complete",
+    `Seed pipeline complete — ${searchResultsTotal} results → ${docsIngested} ingested → ${validDocsIngested} usable → ${totalDetected} detected → ${entitiesApproved} promoted`,
+    { caseId }
+  );
 }
 
 export default router;

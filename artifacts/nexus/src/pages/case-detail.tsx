@@ -699,6 +699,113 @@ function CaseDetailInner({
   );
 }
 
+// ─── Seed Diagnostics ────────────────────────────────────────────────────────
+
+interface SeedDiag {
+  searched: number;
+  total: number;
+  ingested: number;
+  ok: number;
+  partial: number;
+  failed: number;
+  wrapper: number;
+  detected: number;
+  promoted: number;
+  fallback: boolean;
+}
+
+function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
+  if (!desc) return null;
+  const m = desc.match(/\[ATLAS-SEED:([^\]]+)\]/);
+  if (!m) return null;
+  const parts = Object.fromEntries(m[1].split("|").map((p) => p.split("=")));
+  const n = (k: string) => parseInt(parts[k] ?? "0", 10) || 0;
+  return {
+    searched: n("searched"),
+    total: n("total"),
+    ingested: n("ingested"),
+    ok: n("ok"),
+    partial: n("partial"),
+    failed: n("failed"),
+    wrapper: n("wrapper"),
+    detected: n("detected"),
+    promoted: n("promoted"),
+    fallback: parts["fallback"] === "1",
+  };
+}
+
+function cleanDescription(desc: string | null | undefined): string {
+  if (!desc) return "";
+  return desc.replace(/\[ATLAS-SEED:[^\]]+\]/, "").trim();
+}
+
+function SeedDiagnosticsCard({ diag }: { diag: SeedDiag }) {
+  const usable = diag.ok + diag.partial;
+  const blocked = diag.failed + diag.wrapper;
+
+  let promotionNote: React.ReactNode = null;
+  if (diag.promoted === 0 && diag.detected > 0) {
+    promotionNote = (
+      <div className="mt-2 px-2 py-1.5 bg-[#1a0e00] border border-[#ff6b0020] text-[9px] font-mono text-amber-500 uppercase tracking-wide leading-relaxed">
+        No entities auto-promoted — {diag.detected} signal{diag.detected !== 1 ? "s" : ""} detected but none passed confidence/blocklist checks. Review pending detections.
+      </div>
+    );
+  } else if (diag.promoted === 0 && diag.detected === 0 && usable === 0) {
+    promotionNote = (
+      <div className="mt-2 px-2 py-1.5 bg-[#0a0a0a] border border-[#ffffff0a] text-[9px] font-mono text-neutral-600 uppercase tracking-wide leading-relaxed">
+        All sources were blocked, paywalled, or JS-rendered. Add sources manually via Web Ingest.
+      </div>
+    );
+  } else if (diag.fallback && diag.promoted > 0) {
+    promotionNote = (
+      <div className="mt-2 px-2 py-1.5 bg-[#001a0a] border border-[#00ff6620] text-[9px] font-mono text-green-500/70 uppercase tracking-wide leading-relaxed">
+        Seed fallback active — {diag.promoted} entity{diag.promoted !== 1 ? "s" : ""} promoted at lower confidence threshold. Review and validate.
+      </div>
+    );
+  }
+
+  return (
+    <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
+      <div className="nexus-header-strip flex items-center gap-2">
+        <span className="nexus-label">SEED INTELLIGENCE REPORT</span>
+        <span className="font-mono text-[9px] text-neutral-600 ml-auto">AUTO-SEEDED</span>
+      </div>
+      <div className="p-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-[#0a0e14] border border-[#ffffff08] p-2">
+          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Results Found</div>
+          <div className="font-mono text-lg font-bold text-white tabular-nums">{diag.total}</div>
+        </div>
+        <div className="bg-[#0a0e14] border border-[#ffffff08] p-2">
+          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Ingested</div>
+          <div className="font-mono text-lg font-bold text-blue-400 tabular-nums">{diag.ingested}</div>
+        </div>
+        <div className={cn("bg-[#0a0e14] border p-2", usable > 0 ? "border-[#00ff6620]" : "border-[#ffffff08]")}>
+          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Usable</div>
+          <div className={cn("font-mono text-lg font-bold tabular-nums", usable > 0 ? "text-green-400" : "text-neutral-600")}>{usable}</div>
+          {diag.ok > 0 && diag.partial > 0 && (
+            <div className="font-mono text-[8px] text-neutral-600">{diag.ok} full · {diag.partial} partial</div>
+          )}
+        </div>
+        <div className={cn("bg-[#0a0e14] border p-2", blocked > 0 ? "border-[#ff000015]" : "border-[#ffffff08]")}>
+          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Blocked</div>
+          <div className={cn("font-mono text-lg font-bold tabular-nums", blocked > 0 ? "text-red-500" : "text-neutral-600")}>{blocked}</div>
+          {diag.wrapper > 0 && <div className="font-mono text-[8px] text-neutral-600">{diag.wrapper} wrapper · {diag.failed} failed</div>}
+        </div>
+        <div className={cn("bg-[#0a0e14] border p-2", diag.detected > 0 ? "border-[#ffffff10]" : "border-[#ffffff08]")}>
+          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Detected</div>
+          <div className={cn("font-mono text-lg font-bold tabular-nums", diag.detected > 0 ? "text-amber-400" : "text-neutral-600")}>{diag.detected}</div>
+        </div>
+        <div className={cn("bg-[#0a0e14] border p-2", diag.promoted > 0 ? "border-[#00ff6630]" : "border-[#ffffff08]")}>
+          <div className="font-mono text-[8px] text-neutral-600 uppercase mb-1">Promoted</div>
+          <div className={cn("font-mono text-lg font-bold tabular-nums", diag.promoted > 0 ? "text-green-300" : "text-neutral-600")}>{diag.promoted}</div>
+          {diag.fallback && diag.promoted > 0 && <div className="font-mono text-[8px] text-amber-600">FALLBACK</div>}
+        </div>
+      </div>
+      {promotionNote && <div className="px-3 pb-3">{promotionNote}</div>}
+    </div>
+  );
+}
+
 // ─── Overview Panel ──────────────────────────────────────────────────────────
 
 function OverviewPanel({
@@ -718,8 +825,25 @@ function OverviewPanel({
   financialSignals: any[];
   onViewDocument?: (doc: Document) => void;
 }) {
+  const seedDiag = parseSeedDiag(caseData.description);
+  const descText = cleanDescription(caseData.description);
+  const isAutoSeeded = caseData.tags?.includes("auto-seeded");
+
   return (
     <div className="p-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
+      {/* ── Seed Diagnostics Card — shown for auto-seeded cases ── */}
+      {isAutoSeeded && seedDiag && <SeedDiagnosticsCard diag={seedDiag} />}
+
+      {/* ── Case brief — only for non-seeded or seeded with clean text ── */}
+      {descText && (
+        <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
+          <div className="nexus-header-strip">
+            <span className="nexus-label">CASE BRIEF</span>
+          </div>
+          <div className="p-3 text-sm text-neutral-400 leading-relaxed">{descText}</div>
+        </div>
+      )}
+
       <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
           <span className="nexus-label">ENTITY LIST ({entities.length})</span>
@@ -1012,13 +1136,13 @@ function DefaultInspector({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        {caseData.description && (
+        {caseData.description && cleanDescription(caseData.description) && (
           <div className="space-y-1.5">
             <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
               BRIEF
             </div>
             <p className="text-sm text-neutral-300 leading-relaxed">
-              {caseData.description}
+              {cleanDescription(caseData.description)}
             </p>
           </div>
         )}

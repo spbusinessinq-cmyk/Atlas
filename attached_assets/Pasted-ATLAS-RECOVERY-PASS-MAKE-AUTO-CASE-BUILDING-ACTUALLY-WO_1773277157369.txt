@@ -1,0 +1,302 @@
+ATLAS RECOVERY PASS — MAKE AUTO CASE BUILDING ACTUALLY WORK
+
+System:
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+IMPORTANT:
+This is a recovery / stabilization pass.
+Do NOT redesign the platform.
+Do NOT add cosmetic-only features.
+Do NOT spend effort on polish until the automatic case-building pipeline is actually working.
+
+PRIMARY GOAL
+
+Make ATLAS reliably perform this full flow:
+
+TYPE TARGET
+→ CREATE CASE
+→ SEARCH WEB
+→ INGEST REAL SOURCES
+→ EXTRACT REAL ARTICLE TEXT
+→ EXTRACT ENTITIES
+→ AUTO-PROMOTE SAFE SEED ENTITIES
+→ POPULATE ENTITY REGISTRY
+→ POPULATE GRAPH
+→ SHOW A NON-EMPTY CASE
+
+ATLAS is not considered fixed unless a seeded case can actually populate usable entities and graph nodes automatically from at least some valid sources.
+
+========================================================
+1. STOP TREATING BROKEN EXTRACTION AS SUCCESS
+========================================================
+
+Right now many web docs still end up as:
+- failed
+- partial
+- snippet-only
+- empty
+- wrapper-adjacent
+and seeded cases remain dead.
+
+Fix this at the pipeline level.
+
+Requirements:
+
+1. A seeded case must track:
+- total search results considered
+- valid extractable sources
+- failed / blocked sources
+- successfully analyzed docs
+- entities extracted
+- entities auto-promoted
+
+2. If a source is failed/partial/blocked:
+- do NOT count it like a successful analysis source
+- do NOT let it silently pass through the pipeline
+
+3. The seeded case summary must reflect reality:
+Example:
+"ATLAS found 12 search results, ingested 6 sources, successfully extracted 2 usable article bodies, detected 5 entities, auto-promoted 2 seed entities."
+
+Do not say “ingested 6 sources and detected 6 signals” if those sources were mostly unusable.
+
+========================================================
+2. MAKE ARTICLE EXTRACTION WORK ON REAL SOURCES
+========================================================
+
+This is the core blocker.
+
+ATLAS must fetch and recover actual article body text from at least some real source pages.
+
+Focus on robust extraction for sources like:
+- Los Angeles Times
+- CBS News
+- NBC Los Angeles
+- Screen Daily
+- Business Wire
+- AP / Reuters style pages if present
+- common news article templates
+
+Requirements:
+
+1. Improve source fetching and extraction so that ATLAS gets real body paragraphs when possible.
+2. Prefer:
+- article body selectors
+- content containers
+- paragraph blocks
+- readable long-form text
+3. Strip:
+- nav
+- footer
+- cookie walls
+- subscription prompts
+- related links
+- newsletter blocks
+- metadata-only text
+4. Add a stronger “usable text” threshold:
+A doc should count as usable only if there is enough true article text, not just title + teaser.
+
+========================================================
+3. DO NOT LET FAILED DOCS POISON THE CASE
+========================================================
+
+If extraction fails, partial docs should not dominate the seeded case.
+
+Requirements:
+
+1. Failed docs must not create junk entities.
+2. Partial docs should only contribute to entity extraction if they contain meaningful body text.
+3. Wrapper names / metadata junk / site labels must never become entities.
+4. Block values like:
+- Google News
+- Subscribe
+- Sign In
+- Javascript
+- Cookie
+- Newsletter
+- Open Original
+- Published
+- Los Angeles Times (when it’s just a source label and not content)
+and similar UI / wrapper artifacts.
+
+========================================================
+4. AUTO-PROMOTE A MINIMUM SAFE SEED SET
+========================================================
+
+This is the missing piece making the system feel dead.
+
+When a case has some usable article text but no entities auto-approved under the strict rule, ATLAS must still try to create a minimal starter graph.
+
+Add a seed-promotion fallback.
+
+Requirements:
+
+1. Keep the strict rule first.
+2. If strict auto-approval yields 0 entities but valid docs exist:
+- choose the safest 1–3 candidate entities
+- only promote if they pass blocklist / confidence / sanity checks
+- prefer repeated candidates across docs
+- prefer likely organizations, agencies, facilities, programs
+- avoid obvious junk
+
+3. The goal is not full automation perfection.
+The goal is: a seeded case should not feel visually dead when good source material exists.
+
+========================================================
+5. GRAPH MUST POPULATE WHEN SAFE ENTITIES EXIST
+========================================================
+
+If ATLAS has:
+- approved entities
+or
+- fallback-promoted seed entities
+
+then it must automatically:
+- create graph nodes
+- create suggested edges if co-mentioned
+- populate entity registry
+- show visible case activity
+
+A seeded case should not stay blank once safe entities exist.
+
+========================================================
+6. STRONGER SEARCH QUALITY
+========================================================
+
+Search still needs to stop pulling junk.
+
+Improve ranking and filtering for seeded search results.
+
+Boost:
+- exact title/entity match
+- target phrase match
+- location relevance
+- investigative / funding / contract / audit / corruption terms
+- local reporting if target is local
+
+Demote:
+- lifestyle content
+- generic listicles
+- weakly related entertainment
+- unrelated geography
+- broad generic funding stories
+- duplicate syndication
+- low-value press noise unless directly relevant
+
+For a target like:
+"Los Angeles studio funding"
+
+ATLAS should prefer:
+- LA studio policy
+- film funding
+- tax credits
+- subsidies
+- grants
+- studio financing
+- city/county/state funding reporting
+
+========================================================
+7. SEEDED CASE MUST EXPLAIN ITSELF CLEARLY
+========================================================
+
+The user should immediately understand what happened.
+
+Inside the case overview, show something like:
+
+SEARCH RESULTS: 12
+USABLE SOURCES: 3
+FAILED SOURCES: 3
+ENTITIES DETECTED: 7
+AUTO-PROMOTED: 2
+
+If zero entities were promoted:
+say exactly why.
+
+Example:
+"No seed entities were promoted because no candidates passed confidence and quality checks. Review the strongest pending detections."
+
+========================================================
+8. DOCUMENT INSPECTOR MUST TELL THE TRUTH
+========================================================
+
+Right now the UI is better, but still not solving the real problem.
+
+Improve the inspector so it clearly shows:
+
+- BODY STATUS: SUCCESS / PARTIAL / FAILED / BLOCKED
+- extracted text length
+- whether analysis actually ran
+- whether the doc contributed to case seeding
+- whether the doc was ignored for graph-building
+
+If the doc was partial and excluded from seeding:
+say so directly.
+
+========================================================
+9. CASE-LEVEL SEED DIAGNOSTICS
+========================================================
+
+Add a compact seed diagnostics panel inside seeded cases.
+
+This should show:
+- how many results were searched
+- how many docs were ingested
+- how many docs were usable
+- how many docs failed
+- how many detections found
+- how many were promoted
+- why the graph is empty if empty
+
+This is more important than more styling.
+
+========================================================
+10. DO NOT REGRESS DELETE / CONTROL FEATURES
+========================================================
+
+Keep working:
+- document delete
+- entity delete
+- case delete
+- graph drag
+- graph fit/reset
+- hide suggested
+- no blue focus boxes
+
+Do not break these.
+
+========================================================
+11. FINAL ACCEPTANCE TEST
+========================================================
+
+ATLAS is only considered fixed if this works:
+
+Test with one or more targets like:
+- Los Angeles studio funding
+- Highland Gardens Hotel Los Angeles
+- LA homeless hotel contracts
+
+Expected outcome:
+1. case is created
+2. search runs
+3. multiple sources are ingested
+4. at least some real usable body text is recovered
+5. some entities are detected from actual content
+6. at least 1–3 safe seed entities are auto-promoted when valid
+7. entity registry is populated
+8. graph is no longer dead/blank
+9. case overview clearly explains what succeeded and failed
+
+========================================================
+12. FINAL SUMMARY
+========================================================
+
+Report:
+1. what was blocking true auto-case population
+2. how real article extraction was improved
+3. how failed docs are excluded from poisoning the pipeline
+4. how fallback seed promotion now works
+5. how graph seeding now works
+6. how search quality was improved
+7. how seeded case diagnostics are shown
+8. files changed
