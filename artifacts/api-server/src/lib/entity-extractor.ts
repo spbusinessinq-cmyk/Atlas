@@ -2,6 +2,32 @@ import nlp from "compromise";
 import fs from "fs";
 import path from "path";
 
+export type EntityRole =
+  | "PERSON"
+  | "ORGANIZATION"
+  | "GOVERNMENT_AGENCY"
+  | "COURT_JUDGE"
+  | "COMMITTEE"
+  | "ATTORNEY_COUNSEL"
+  | "PROGRAM"
+  | "FACILITY"
+  | "DOCUMENT_FILING"
+  | "VICTIM_WITNESS"
+  | "DEFENDANT"
+  | "OFFICIAL"
+  | "UNKNOWN";
+
+export type TopicRelevance = "HIGH" | "MEDIUM" | "LOW" | "OFF_TOPIC";
+export type DocumentZone = "title" | "lead" | "body" | "tail";
+export type AdmissionRejectReason =
+  | "BLOCKLIST"
+  | "COMMON_FIRST_NAME"
+  | "TITLE_FRAGMENT"
+  | "BOILERPLATE_CONTEXT"
+  | "TOPIC_MISMATCH"
+  | "LOW_CONFIDENCE"
+  | "SHORT_FRAGMENT";
+
 export interface ExtractedMention {
   entityName: string;
   entityType: string;
@@ -9,6 +35,12 @@ export interface ExtractedMention {
   context: string;
   startPos: number;
   endPos: number;
+  role: EntityRole;
+  roleConfidence: number;
+  topicRelevance: TopicRelevance;
+  zone: DocumentZone;
+  admitted: boolean;
+  rejectReason?: AdmissionRejectReason;
 }
 
 // ── Investigative entity classification ───────────────────────────────────────
@@ -156,6 +188,81 @@ const SPORTS_ENTERTAINMENT_BLOCKLIST = new Set([
   "Hollywood Reporter", "Variety", "TMZ", "People Magazine", "Entertainment Weekly",
 ]);
 
+// ── Role classification patterns ─────────────────────────────────────────────
+
+const ROLE_PATTERNS: { pattern: RegExp; role: EntityRole; confidence: number }[] = [
+  { pattern: /\b(federal\s+)?judge\b|\bchief\s+judge\b|\bmagistrate\b|\bjustice\b(?!\s+department)/i, role: "COURT_JUDGE", confidence: 0.88 },
+  { pattern: /\b(oversight|senate|house|joint|select|standing)?\s*committee\b|\bsubcommittee\b|\btask\s+force\b|\bcommission\b/i, role: "COMMITTEE", confidence: 0.87 },
+  { pattern: /\bDOJ\b|\bFBI\b|\bDHS\b|\bHUD\b|\bHHS\b|\bCDC\b|\bFDA\b|\bSEC\b|\bIRS\b|\bNSA\b|\bCIA\b|\bATF\b|\bDEA\b|\bEPA\b|\bHAP\b|\bHACLA\b|\bLACDA\b/i, role: "GOVERNMENT_AGENCY", confidence: 0.93 },
+  { pattern: /\b(?:department\s+of|office\s+of|bureau\s+of|inspector\s+general|housing\s+authority|redevelopment\s+agency)\b/i, role: "GOVERNMENT_AGENCY", confidence: 0.86 },
+  { pattern: /\b(?:attorney|counsel|lawyer|public\s+defender|prosecutor|district\s+attorney|U\.S\.\s+attorney|solicitor)\b/i, role: "ATTORNEY_COUNSEL", confidence: 0.87 },
+  { pattern: /\b(?:grant\s+program|housing\s+program|pilot\s+program|voucher\s+program|initiative|assistance\s+program|rapid\s+rehousing|shelter\s+program)\b/i, role: "PROGRAM", confidence: 0.82 },
+  { pattern: /\b(?:shelter|facility|building|campus|clinic|hospital|detention\s+center|housing\s+unit|motel|hotel\s+voucher)\b/i, role: "FACILITY", confidence: 0.80 },
+  { pattern: /\b(?:filing|indictment|complaint|affidavit|subpoena|warrant|exhibit|report|audit\s+report|grand\s+jury)\b/i, role: "DOCUMENT_FILING", confidence: 0.83 },
+  { pattern: /\b(?:victim|witness|survivor|plaintiff|complainant|accuser|relator)\b/i, role: "VICTIM_WITNESS", confidence: 0.82 },
+  { pattern: /\b(?:defendant|suspect|accused|charged|indicted|convicted)\b/i, role: "DEFENDANT", confidence: 0.82 },
+  { pattern: /\b(?:secretary|minister|commissioner|administrator|mayor|governor|senator|representative|superintendent|director\s+of)\b/i, role: "OFFICIAL", confidence: 0.76 },
+];
+
+function classifyEntityRole(name: string, context: string, entityType: string): { role: EntityRole; roleConfidence: number } {
+  if (entityType === "government_agency") return { role: "GOVERNMENT_AGENCY", roleConfidence: 0.90 };
+
+  const ctxL = context.toLowerCase();
+  for (const { pattern, role, confidence } of ROLE_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(ctxL)) return { role, roleConfidence: confidence };
+  }
+
+  if (entityType === "person") return { role: "PERSON", roleConfidence: 0.60 };
+  if (entityType === "organization") return { role: "ORGANIZATION", roleConfidence: 0.65 };
+  if (entityType === "location") return { role: "FACILITY", roleConfidence: 0.50 };
+  return { role: "UNKNOWN", roleConfidence: 0.30 };
+}
+
+// ── Document Zone Extraction ───────────────────────────────────────────────────
+
+interface DocZones {
+  titleEnd: number;
+  leadEnd: number;
+  bodyEnd: number;
+}
+
+function extractDocumentZones(text: string): DocZones {
+  const lines = text.split("\n");
+  let offset = 0;
+  let paraCount = 0;
+  let titleEnd = -1;
+  let leadEnd = -1;
+  for (const line of lines) {
+    if (line.trim().length > 40) {
+      paraCount++;
+      if (paraCount === 1 && titleEnd === -1) titleEnd = offset + line.length;
+      if (paraCount === 3) leadEnd = offset + line.length;
+    }
+    offset += line.length + 1;
+  }
+  if (titleEnd === -1) titleEnd = Math.min(200, text.length);
+  if (leadEnd === -1) leadEnd = Math.min(Math.floor(text.length * 0.35), text.length);
+  const bodyEnd = Math.floor(text.length * 0.80);
+  return { titleEnd, leadEnd, bodyEnd };
+}
+
+function getZoneForPosition(pos: number, zones: DocZones): DocumentZone {
+  if (pos <= zones.titleEnd) return "title";
+  if (pos <= zones.leadEnd) return "lead";
+  if (pos <= zones.bodyEnd) return "body";
+  return "tail";
+}
+
+function getZoneConfidenceMultiplier(zone: DocumentZone): number {
+  switch (zone) {
+    case "title": return 1.30;
+    case "lead":  return 1.15;
+    case "body":  return 1.00;
+    case "tail":  return 0.65;
+  }
+}
+
 // Common first names — single-occurrence person with only one of these is rejected
 const COMMON_FIRST_NAMES = new Set([
   "james", "john", "robert", "michael", "william", "david", "richard", "joseph",
@@ -222,6 +329,142 @@ export function classifySeedIntent(target: string): SeedIntent {
     return "policy_government";
 
   return "general";
+}
+
+// ── Topic Relevance Scoring ────────────────────────────────────────────────────
+
+/**
+ * Compute case-topic relevance for an entity mention.
+ * Returns HIGH / MEDIUM / LOW / OFF_TOPIC based on context + seed intent.
+ */
+export function computeTopicRelevance(
+  name: string,
+  context: string,
+  queryTerms: string[],
+  seedIntent: SeedIntent
+): TopicRelevance {
+  const combined = `${name} ${context}`.toLowerCase();
+  const queryTermsL = queryTerms.map((t) => t.toLowerCase());
+  const queryHits = queryTermsL.filter((t) => t.length > 2 && combined.includes(t)).length;
+  const queryRatio = queryTerms.length > 0 ? queryHits / queryTerms.length : 0;
+
+  const isSportsCtx  = /\b(quarterback|touchdown|roster|playoff|salary.cap|draft.pick|game.score|nfl|nba|mlb|nhl|batting|rushing|scoring|standings|bracket)\b/i.test(combined);
+  const isEntCtx     = /\b(box.office|opening.weekend|celebrity.gossip|red.carpet|oscar|grammy|emmy|episode.recap|streaming.show|dating|romance|breakup)\b/i.test(combined);
+  const isInvCtx     = /\b(contract|fraud|corruption|bribery|kickback|embezzl|indictment|subpoena|audit|investigation|probe|misconduct|grant|fund|budget|procurement|appropriation|settlement|lawsuit)\b/i.test(combined);
+
+  if (seedIntent === "housing_homelessness") {
+    const onTopic = /\b(shelter|homeless|housing|unhoused|affordable|voucher|wrap.around|social.services|supportive|navigation.center|motel|encampment|program|department|county|city|fund|contract|grant)\b/i.test(combined);
+    if ((isSportsCtx || isEntCtx) && !onTopic) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.5) return "HIGH";
+    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
+    if (isInvCtx) return "MEDIUM";
+    return "LOW";
+  }
+  if (seedIntent === "crime_corruption") {
+    const onTopic = /\b(fraud|corrupt|bribery|kickback|embezzl|money.laundering|indictment|misconduct|probe|audit|investigation|DOJ|FBI|attorney|charges|plea|conviction)\b/i.test(combined);
+    if (isSportsCtx && !onTopic) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.5) return "HIGH";
+    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
+    return "LOW";
+  }
+  if (seedIntent === "legal_lawsuit") {
+    const onTopic = /\b(lawsuit|court|filing|attorney|plaintiff|defendant|judge|jury|settlement|verdict|charges|complaint|appeal|indictment)\b/i.test(combined);
+    if (isSportsCtx && !onTopic) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.5) return "HIGH";
+    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
+    return "LOW";
+  }
+  if (seedIntent === "education_university") {
+    const onTopic = /\b(university|college|campus|student|tuition|faculty|professor|academic|research|program|grant|enrollment|administration|trustee|regent)\b/i.test(combined);
+    if (isSportsCtx && !/\b(university|college)\b/i.test(combined)) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.5) return "HIGH";
+    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
+    return "LOW";
+  }
+  if (seedIntent === "finance_funding") {
+    const onTopic = /\b(fund|grant|budget|contract|appropriation|spend|award|procurement|subsidy|incentive|investment|finance|allocation|grantee|awardee)\b/i.test(combined);
+    if (isSportsCtx && !onTopic) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.5) return "HIGH";
+    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
+    return "LOW";
+  }
+  if (seedIntent === "entertainment_film") {
+    const isGossip = /\b(celebrity|gossip|dating|breakup|romance|dress|fashion|red.carpet|paparazzi)\b/i.test(combined);
+    const onTopic  = /\b(tax.credit|film.incentive|studio|production|fund|subsidy|deal|contract|grant|budget|commission|incentive.program)\b/i.test(combined);
+    if (isGossip) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.4) return "HIGH";
+    if (onTopic || queryRatio >= 0.25) return "MEDIUM";
+    return "LOW";
+  }
+  if (seedIntent === "policy_government") {
+    const onTopic = /\b(policy|legislation|bill|government|agency|department|program|contract|fund|oversight|accountability|ordinance|regulation|authority)\b/i.test(combined);
+    if (isSportsCtx && !onTopic) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.5) return "HIGH";
+    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
+    return "LOW";
+  }
+  // General
+  if (isSportsCtx && queryRatio < 0.2) return "OFF_TOPIC";
+  if (isEntCtx && queryRatio < 0.2) return "OFF_TOPIC";
+  if (queryRatio >= 0.6) return "HIGH";
+  if (queryRatio >= 0.3 || isInvCtx) return "MEDIUM";
+  return "LOW";
+}
+
+// ── Entity Admission Firewall ──────────────────────────────────────────────────
+
+/**
+ * Final admission gate — a mention must pass ALL rules to enter triage.
+ * Returns { admit: true } or { admit: false, rejectReason }.
+ */
+export function shouldAdmitMention(
+  mention: ExtractedMention,
+  seedIntent: SeedIntent,
+  queryTerms: string[]
+): { admit: boolean; rejectReason?: AdmissionRejectReason } {
+  const { entityName, entityType, confidence, topicRelevance, role, context, zone } = mention;
+  const nameL = entityName.toLowerCase().trim();
+  const words  = nameL.split(/\s+/);
+
+  // SHORT_FRAGMENT
+  if (entityName.trim().length < 3) return { admit: false, rejectReason: "SHORT_FRAGMENT" };
+
+  // BLOCKLIST
+  if (MEDIA_SOURCE_BLOCKLIST.has(entityName) || SKIP_NAMES.has(entityName))
+    return { admit: false, rejectReason: "BLOCKLIST" };
+
+  // COMMON_FIRST_NAME — single first name person with no title/role context
+  if (entityType === "person" && words.length === 1 && COMMON_FIRST_NAMES.has(nameL)) {
+    // Only reject if role context doesn't elevate it
+    if (role === "UNKNOWN" || role === "PERSON")
+      return { admit: false, rejectReason: "COMMON_FIRST_NAME" };
+  }
+
+  // TITLE_FRAGMENT
+  if (TITLE_FRAGMENT_PATTERNS.some((rx) => rx.test(entityName)))
+    return { admit: false, rejectReason: "TITLE_FRAGMENT" };
+
+  // BOILERPLATE_CONTEXT — tail zone with very short context = junk
+  if (zone === "tail" && context.trim().length < 40 && confidence < 0.60)
+    return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
+
+  // TOPIC_MISMATCH — OFF_TOPIC entities are never admitted
+  if (topicRelevance === "OFF_TOPIC")
+    return { admit: false, rejectReason: "TOPIC_MISMATCH" };
+
+  // LOW_CONFIDENCE
+  if (confidence < 0.42)
+    return { admit: false, rejectReason: "LOW_CONFIDENCE" };
+
+  // LOW topic relevance + UNKNOWN role + below threshold → suppress
+  if (topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.62)
+    return { admit: false, rejectReason: "LOW_CONFIDENCE" };
+
+  // Tail-only + LOW relevance + no role-bearing = suppressed
+  if (zone === "tail" && topicRelevance === "LOW" && role === "UNKNOWN")
+    return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
+
+  return { admit: true };
 }
 
 // ── Body Text Cleaning ─────────────────────────────────────────────────────────
@@ -453,11 +696,16 @@ function getContext(text: string, name: string, idx?: number): string {
 }
 
 // Run NER on text using compromise.js + rule-based augmentation
-export function extractEntities(text: string): ExtractedMention[] {
+export function extractEntities(
+  text: string,
+  queryTerms: string[] = [],
+  seedIntent: SeedIntent = "general"
+): ExtractedMention[] {
   if (!text || text.trim().length < 10) return [];
 
   const mentions: ExtractedMention[] = [];
   const seen = new Set<string>();
+  const zones = extractDocumentZones(text);
 
   function addMention(
     entityName: string,
@@ -469,19 +717,36 @@ export function extractEntities(text: string): ExtractedMention[] {
     if (!isValidName(name, entityType)) return;
     if (seen.has(name.toLowerCase())) return;
     seen.add(name.toLowerCase());
+    const pos = matchIndex ?? text.indexOf(name);
     const ctx = getContext(text, name, matchIndex);
 
+    const zone = getZoneForPosition(pos, zones);
+    const zoneMultiplier = getZoneConfidenceMultiplier(zone);
     const { boost, penaltyFactor } = scoreContextWindow(ctx);
-    let adjustedConf = Math.min(0.99, (confidence + boost) * penaltyFactor);
+    const adjustedConf = Math.min(0.99, (confidence + boost) * penaltyFactor * zoneMultiplier);
 
-    mentions.push({
+    const { role, roleConfidence } = classifyEntityRole(name, ctx, entityType);
+    const topicRelevance = computeTopicRelevance(name, ctx, queryTerms, seedIntent);
+
+    const mention: ExtractedMention = {
       entityName: name,
       entityType,
       confidence: adjustedConf,
       context: ctx,
-      startPos: matchIndex ?? text.indexOf(name),
-      endPos: (matchIndex ?? text.indexOf(name)) + name.length,
-    });
+      startPos: pos,
+      endPos: pos + name.length,
+      role,
+      roleConfidence,
+      topicRelevance,
+      zone,
+      admitted: false,
+    };
+
+    const admissionResult = shouldAdmitMention(mention, seedIntent, queryTerms);
+    mention.admitted = admissionResult.admit;
+    if (!admissionResult.admit) mention.rejectReason = admissionResult.rejectReason;
+
+    mentions.push(mention);
   }
 
   // ── Pass 1: compromise NLP ──

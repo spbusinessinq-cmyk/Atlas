@@ -251,12 +251,36 @@ router.post("/cases/:caseId/mentions/bulk-reject", async (req, res) => {
   );
 
   let toReject: number[] = [];
+  let toHold: number[] = [];
+
   if (type === "low-confidence") {
     toReject = pending.filter(m => (m.confidence ?? 1) < 0.60).map(m => m.id);
   } else if (type === "single-word-person") {
     toReject = pending.filter(m => m.entityType === "person" && !m.entityName.includes(" ")).map(m => m.id);
   } else if (type === "all-pending") {
     toReject = pending.map(m => m.id);
+  } else if (type === "off-topic") {
+    // Reject mentions where admission context encodes t=OFF_TOPIC
+    toReject = pending.filter(m => {
+      const ctx = m.context ?? "";
+      return /\[A:r=[^|]+\|t=OFF_TOPIC/.test(ctx);
+    }).map(m => m.id);
+  } else if (type === "junk") {
+    // Reject mentions flagged as BLOCKLIST or BOILERPLATE in admission context
+    toReject = pending.filter(m => {
+      const ctx = m.context ?? "";
+      return /BLOCKLIST|BOILERPLATE/i.test(ctx) ||
+        // Also catch known junk entity patterns: all-caps 2-3 char tokens, pure numbers, URLs
+        /^[A-Z]{1,3}$/.test(m.entityName.trim()) ||
+        /^\d+$/.test(m.entityName.trim()) ||
+        /https?:\/\//.test(m.entityName);
+    }).map(m => m.id);
+  } else if (type === "low-role") {
+    // Set to "held" (not rejected) — unknown role, needs analyst review
+    toHold = pending.filter(m => {
+      const ctx = m.context ?? "";
+      return /\[A:r=UNKNOWN/.test(ctx);
+    }).map(m => m.id);
   }
 
   if (toReject.length > 0) {
@@ -264,14 +288,57 @@ router.post("/cases/:caseId/mentions/bulk-reject", async (req, res) => {
       .set({ status: "rejected" })
       .where(inArray(entityMentionsTable.id, toReject));
   }
+  if (toHold.length > 0) {
+    await db.update(entityMentionsTable)
+      .set({ status: "held" })
+      .where(inArray(entityMentionsTable.id, toHold));
+  }
 
+  const total = toReject.length + toHold.length;
   await logEvent(
     "pending_mentions_cleared",
-    `Bulk rejected ${toReject.length} pending mentions (filter: ${type}) in case ${caseId}`,
+    `Bulk action (${type}): rejected ${toReject.length}, held ${toHold.length} pending mentions in case ${caseId}`,
     { caseId }
   );
 
-  res.json({ rejected: toReject.length });
+  res.json({ rejected: toReject.length, held: toHold.length, total });
+});
+
+// ── Bulk-approve role-bearing high-confidence pending mentions ─────────────
+router.post("/cases/:caseId/mentions/bulk-approve", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  const { type } = req.body as { type: string };
+
+  const pending = await db.select().from(entityMentionsTable).where(
+    and(eq(entityMentionsTable.caseId, caseId), eq(entityMentionsTable.status, "pending"))
+  );
+
+  let toApprove: number[] = [];
+
+  if (type === "role-bearing") {
+    // Promote mentions that have a real role (not UNKNOWN) and confidence ≥ 0.72
+    toApprove = pending.filter(m => {
+      const ctx = m.context ?? "";
+      const roleMatch = ctx.match(/\[A:r=([^|]+)\|/);
+      const role = roleMatch ? roleMatch[1] : "UNKNOWN";
+      const conf = m.confidence ?? 0;
+      return role !== "UNKNOWN" && conf >= 0.72;
+    }).map(m => m.id);
+  }
+
+  if (toApprove.length > 0) {
+    await db.update(entityMentionsTable)
+      .set({ status: "approved" })
+      .where(inArray(entityMentionsTable.id, toApprove));
+  }
+
+  await logEvent(
+    "pending_mentions_promoted",
+    `Bulk promoted ${toApprove.length} role-bearing mentions (type: ${type}) in case ${caseId}`,
+    { caseId }
+  );
+
+  res.json({ approved: toApprove.length });
 });
 
 function formatCase(

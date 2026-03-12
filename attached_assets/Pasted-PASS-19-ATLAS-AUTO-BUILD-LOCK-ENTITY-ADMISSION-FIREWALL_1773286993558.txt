@@ -1,0 +1,317 @@
+PASS 19 — ATLAS AUTO-BUILD LOCK / ENTITY ADMISSION FIREWALL
+
+Objective:
+Finish the intelligence hardening so ATLAS can automatically build a CLEAN starter case after seeding. This pass is about entity admission control, role-aware extraction, topic locking, and trustworthy auto-promotion.
+
+NON-NEGOTIABLE OUTCOME:
+When I seed a case like:
+- “Jeffery Epstein investigation”
+- “California shelter funding for homeless”
+- “Hollywood funding for movies”
+ATLAS should:
+1. ingest relevant sources,
+2. suppress junk entities before they hit triage,
+3. auto-promote only role-bearing, case-relevant entities,
+4. generate a clean starter graph,
+5. produce a case brief I can trust.
+
+IMPORTANT:
+This pass is NOT a UI redesign pass.
+Minor UI additions are allowed only if they support intelligence clarity.
+The main goal is to make auto-building actually usable.
+
+==================================================
+PART 1 — ENTITY ADMISSION FIREWALL
+==================================================
+
+Problem:
+Too many junk entities are making it into the pending triage rail.
+
+Implement:
+1. Add a strict entity admission stage before mention insertion.
+2. A mention must pass ALL of these to enter triage:
+   - cleaned entity name length >= 3
+   - not in hard blocklist
+   - not single common first name unless surname/title context exists
+   - not possessive fragment
+   - not generic title fragment
+   - not pure publication/UI/share/nav text
+   - not obviously sports-only/entertainment-only noise when case intent mismatches
+3. Add reject reasons:
+   - BLOCKLIST
+   - COMMON_FIRST_NAME
+   - TITLE_FRAGMENT
+   - BOILERPLATE_CONTEXT
+   - TOPIC_MISMATCH
+   - LOW_CONFIDENCE
+   - SHORT_FRAGMENT
+4. Store these reject reasons in logs/diag counts even if not inserted.
+
+Goal:
+The right-side pending rail should shrink dramatically and become more trustworthy.
+
+==================================================
+PART 2 — ROLE-AWARE ENTITY EXTRACTION
+==================================================
+
+Problem:
+ATLAS knows names, but not whether they matter.
+
+Implement:
+1. Add role classification per entity mention:
+   - PERSON
+   - ORGANIZATION
+   - GOVERNMENT_AGENCY
+   - COURT / JUDGE
+   - COMMITTEE
+   - ATTORNEY / COUNSEL
+   - PROGRAM
+   - FACILITY
+   - DOCUMENT / FILING
+   - VICTIM / WITNESS / DEFENDANT / OFFICIAL (when inferable)
+2. Determine role from surrounding context keywords:
+   Examples:
+   - “judge”, “court”, “federal judge” => COURT/JUDGE
+   - “committee”, “oversight committee”, “senate committee” => COMMITTEE
+   - “DOJ”, “Justice Department”, “FBI” => GOVERNMENT_AGENCY
+   - “attorney”, “counsel”, “lawyer” => ATTORNEY
+   - “program”, “initiative”, “grant program” => PROGRAM
+3. Add role confidence separate from entity confidence.
+4. Auto-promotion should strongly prefer entities with meaningful roles.
+
+Goal:
+Entities entering the graph should be meaningful actors, not random names.
+
+==================================================
+PART 3 — CASE-TOPIC ENTITY FILTER
+==================================================
+
+Problem:
+Even relevant docs can contain irrelevant people/names.
+
+Implement:
+1. Add seed-specific case-topic filtering:
+   For each entity mention, compute case-topic relevance using:
+   - seed target tokens
+   - doc title
+   - doc top paragraphs
+   - surrounding context
+2. Build a case-topic relevance score:
+   - HIGH
+   - MEDIUM
+   - LOW
+   - OFF_TOPIC
+3. If OFF_TOPIC:
+   - do not insert mention into triage
+4. If LOW:
+   - keep only if confidence and role are both strong
+5. For “Epstein investigation”:
+   prioritize names near:
+   - Epstein
+   - DOJ / FBI
+   - documents / files / release
+   - grand jury / court / judge
+   - Maxwell / victims / attorneys / committees
+   penalize unrelated local crime names or random quoted names.
+
+Goal:
+A case should only accumulate entities that plausibly belong to that investigation.
+
+==================================================
+PART 4 — DOCUMENT SEGMENT WEIGHTING
+==================================================
+
+Problem:
+The extractor still over-trusts garbage from lower-value parts of article text.
+
+Implement:
+1. Split article into weighted zones:
+   - title
+   - subtitle/dek
+   - lead paragraphs
+   - body
+   - footer/appendix-like tail
+2. Entity mentions from:
+   - title = strongest
+   - subtitle = very strong
+   - first 2–3 paragraphs = strong
+   - later body = normal
+   - footer tail = penalized
+3. Financial/timeline signals should also use this weighted confidence.
+4. If a doc is partial, only trust title + lead paragraphs heavily.
+
+Goal:
+ATLAS should stop promoting names only found in junk tails.
+
+==================================================
+PART 5 — AUTO-PROMOTION 2.0
+==================================================
+
+Problem:
+Promotion still admits too much weak material.
+
+Implement:
+1. New promotion rules:
+   T1_CONFIRMED:
+   - 2+ docs
+   - supported by PRIORITY_A/B docs
+   - role-bearing
+   - case-topic HIGH/MEDIUM
+   - confidence >= strong threshold
+
+   T1_STRONG:
+   - title/lead hit
+   - role-bearing
+   - doc quality high
+   - case-topic HIGH
+   - confidence >= threshold
+
+   HOLD:
+   - anything questionable remains held, not promoted
+2. Add negative rules:
+   never auto-promote if:
+   - single common name
+   - extracted only from partial tail boilerplate
+   - only LOW signal docs
+   - topic relevance LOW/OFF_TOPIC
+   - reject reason exists
+3. Add auto-build starter cap:
+   - max 6–8 promoted entities initially
+4. Add “starter graph eligibility” flag to approved entities.
+
+Goal:
+A seeded case should open with a small, believable graph.
+
+==================================================
+PART 6 — GRAPH STARTER DISCIPLINE
+==================================================
+
+Problem:
+Even when entities are better, edges can still spaghetti.
+
+Implement:
+1. Build starter graph only from starter-eligible promoted entities.
+2. Create edge only when:
+   - entities co-occur in same PRIORITY_A/B doc
+   - and at least one of:
+     - title/lead co-occurrence
+     - repeated across 2+ docs
+     - role-compatible relationship
+3. Edge labels:
+   - CO-MENTION
+   - TITLE CO-MENTION
+   - REPEATED ASSOCIATION
+4. Default visible graph:
+   - strongest edges only
+   - no weak spaghetti by default
+5. Keep weak suggestions hidden behind review toggle.
+
+==================================================
+PART 7 — CASE BRIEF GENERATOR 2.0
+==================================================
+
+Problem:
+The brief is still descriptive, not investigative enough.
+
+Implement:
+1. Rewrite brief generation to output:
+   - WHAT THIS CASE APPEARS TO BE ABOUT
+   - PRIMARY ACTORS
+   - PRIMARY INSTITUTIONS
+   - PRIMARY DOCUMENT / FINANCIAL / TIMELINE SIGNALS
+   - LIKELY INVESTIGATION ANGLE
+2. If quality is weak:
+   - explicitly say:
+     “Auto-build completed, but entity confidence remains weak. Manual narrowing recommended.”
+3. If quality is strong:
+   - explicitly say:
+     “ATLAS assembled a viable starter investigation graph from high-confidence aligned sources.”
+
+==================================================
+PART 8 — TRIAGE QUALITY CONTROLS
+==================================================
+
+Implement new bulk tools:
+1. REJECT OFF-TOPIC MENTIONS
+2. REJECT BLOCKLIST/JUNK MENTIONS
+3. HOLD ALL LOW-ROLE MENTIONS
+4. PROMOTE ONLY ROLE-BEARING HIGH-CONFIDENCE MENTIONS
+
+Also show triage summary counts:
+- candidate
+- held
+- suppressed
+- off-topic
+- junk-blocked
+
+==================================================
+PART 9 — INTELLIGENCE CLARITY UI
+==================================================
+
+Small UI-only improvements for intelligence, not redesign:
+1. In pending triage cards show:
+   - role badge
+   - topic relevance badge
+   - reject/hold reason if applicable
+2. In document inspector show:
+   - lead-zone trust
+   - body-zone trust
+   - entity admission summary:
+     inserted / held / blocked
+3. In overview show:
+   - promoted
+   - held
+   - suppressed
+   - off-topic rejected
+4. In case health show:
+   - AUTO-BUILD QUALITY:
+     STRONG / MODERATE / WEAK / FAILED
+
+==================================================
+PART 10 — AUTOMATIC BUILD ACCEPTANCE TEST
+==================================================
+
+After implementation, test these exact seeds:
+
+1. “Jeffery Epstein investigation”
+Expected:
+- docs about DOJ, court filings, released files, committees, witnesses, associated institutions
+- no random local crime names
+- triage should not be full of junk persons
+- starter graph should be small and believable
+
+2. “California shelter funding for homeless”
+Expected:
+- agencies, counties, programs, departments, grants, budget signals
+- minimal celebrity/sports noise
+
+3. “Hollywood funding for movies”
+Expected:
+- tax credits, subsidies, grants, studios, state funding actors
+- not gossip personalities unless directly tied to financing story
+
+4. “Ohio State University”
+Expected:
+- if non-athletics seed, suppress sports roster/game content heavily
+- prioritize administration, governance, policy, funding, investigations, leadership
+
+==================================================
+FINAL REQUIRED OUTPUT
+==================================================
+
+When done, provide:
+1. Files changed
+2. New entity admission rules
+3. New role classification rules
+4. New promotion rules
+5. Before vs after behavior summary
+6. Results of all 4 seed tests
+7. Clear statement:
+   - Is ATLAS now automatically building usable starter cases?
+   - If not, what exact gap remains?
+
+IMPORTANT:
+Implement the full pass end-to-end.
+Do not stop at partial edits.
+Do not just tweak visuals.
+The goal is to make ATLAS auto-build trustworthy.

@@ -767,6 +767,9 @@ interface SeedDiag {
   priorityA: number;
   priorityB: number;
   detected: number;
+  admitted: number;
+  rejectedFw: number;
+  rejectReasons: Record<string, number>;
   promoted: number;
   promotedConfirmed: number;
   promotedStrong: number;
@@ -775,6 +778,7 @@ interface SeedDiag {
   seedIntent: string;
   fallback: boolean;
   buildStatus: string;
+  autoBuildQuality: "STRONG" | "MODERATE" | "WEAK" | "FAILED" | null;
   trustRating: string;
   nextQueries: string[];
 }
@@ -803,6 +807,13 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
   const n = (k: string) => parseInt(kv[k] ?? "0", 10) || 0;
   const dec = (v?: string) => { try { return v ? decodeURIComponent(v) : ""; } catch { return v ?? ""; } };
   const nextQueriesRaw = dec(kv.next_queries);
+  const rejectReasonsRaw = dec(kv.reject_reasons) || "";
+  const rejectReasons: Record<string, number> = {};
+  rejectReasonsRaw.split(",").filter(Boolean).forEach(pair => {
+    const idx = pair.lastIndexOf(":");
+    if (idx > 0) rejectReasons[pair.slice(0, idx)] = parseInt(pair.slice(idx + 1), 10) || 0;
+  });
+  const abq = kv["auto_build_quality"];
   return {
     searched: n("searched"),
     total: n("total"),
@@ -815,6 +826,9 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     priorityA: n("priority_a"),
     priorityB: n("priority_b"),
     detected: n("detected"),
+    admitted: n("admitted"),
+    rejectedFw: n("rejected_fw"),
+    rejectReasons,
     promoted: n("promoted"),
     promotedConfirmed: n("promoted_confirmed"),
     promotedStrong: n("promoted_strong"),
@@ -823,6 +837,7 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     seedIntent: kv["seed_intent"] || "general",
     fallback: kv["fallback"] === "1",
     buildStatus: kv["build_status"] || "unknown",
+    autoBuildQuality: (abq === "STRONG" || abq === "MODERATE" || abq === "WEAK" || abq === "FAILED") ? abq : null,
     trustRating: dec(kv["trust"]) || "UNKNOWN",
     nextQueries: nextQueriesRaw ? nextQueriesRaw.split("||").filter(Boolean) : [],
   };
@@ -951,6 +966,24 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
           {diag.suppressedNoise > 0 && (
             <span className="font-mono text-[9px] text-neutral-600 uppercase">{diag.suppressedNoise} SUPPRESSED</span>
           )}
+        </div>
+      )}
+
+      {/* ── Admission firewall row ── */}
+      {(diag.admitted > 0 || diag.rejectedFw > 0) && (
+        <div className="border-t border-[#ffffff06] px-3 py-2 flex items-center gap-4 flex-wrap">
+          <span className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest">ADMISSION FW:</span>
+          {diag.admitted > 0 && (
+            <span className="font-mono text-[9px] text-green-500/80 uppercase">{diag.admitted} ADMITTED</span>
+          )}
+          {diag.rejectedFw > 0 && (
+            <span className="font-mono text-[9px] text-red-500/70 uppercase">{diag.rejectedFw} BLOCKED</span>
+          )}
+          {Object.entries(diag.rejectReasons).filter(([, v]) => v > 0).slice(0, 4).map(([reason, count]) => (
+            <span key={reason} className="font-mono text-[8px] text-neutral-700 uppercase">
+              {count}× {reason.replace(/_/g, "-")}
+            </span>
+          ))}
         </div>
       )}
 
@@ -1639,6 +1672,21 @@ function DefaultInspector({
                     }
                     return null;
                   })()}
+                  {(() => {
+                    const sd = parseSeedDiag(caseData.description);
+                    const abq = sd?.autoBuildQuality;
+                    if (!abq) return null;
+                    const abqColor =
+                      abq === "STRONG" ? "text-green-400 border-green-900/40" :
+                      abq === "MODERATE" ? "text-cyan-500 border-cyan-900/40" :
+                      abq === "WEAK" ? "text-amber-600 border-amber-900/40" :
+                      "text-red-700 border-red-900/40";
+                    return (
+                      <span className={`text-[8px] font-mono border px-1 uppercase ${abqColor}`}>
+                        {abq}
+                      </span>
+                    );
+                  })()}
                   <span className={`${localTrustColor} text-[8px] font-bold`}>{localTrustRating}</span>
                 </div>
               </div>
@@ -1654,16 +1702,63 @@ function DefaultInspector({
           );
         })()}
 
-        {caseData.description && cleanDescription(caseData.description) && (
-          <div className="space-y-1">
-            <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-              BRIEF
+        {caseData.description && cleanDescription(caseData.description) && (() => {
+          const raw = cleanDescription(caseData.description);
+          // Parse structured Brief 2.0 sections
+          const SECTIONS_RE = /\b(WHAT|PRIMARY ACTORS|PRIMARY INSTITUTIONS|DOCUMENT SIGNALS|LIKELY ANGLE):/g;
+          const parts: Array<{ label: string; text: string }> = [];
+          let match: RegExpExecArray | null;
+          const positions: Array<{ label: string; start: number; end: number }> = [];
+          while ((match = SECTIONS_RE.exec(raw)) !== null) {
+            positions.push({ label: match[1], start: match.index, end: match.index + match[0].length });
+          }
+          if (positions.length >= 2) {
+            for (let i = 0; i < positions.length; i++) {
+              const { label, end } = positions[i];
+              const nextStart = i + 1 < positions.length ? positions[i + 1].start : raw.length;
+              const text = raw.slice(end, nextStart).trim().replace(/\.$/, "");
+              parts.push({ label, text });
+            }
+            // Split trailing quality note from last section
+            if (parts.length > 0) {
+              const lastPart = parts[parts.length - 1];
+              const splitIdx = lastPart.text.indexOf(". ");
+              if (splitIdx > 0) {
+                const note = lastPart.text.slice(splitIdx + 2).trim();
+                parts[parts.length - 1] = { ...lastPart, text: lastPart.text.slice(0, splitIdx) };
+                if (note) parts.push({ label: "NOTE", text: note });
+              }
+            }
+            return (
+              <div className="space-y-1">
+                <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff06] pb-1">CASE BRIEF</div>
+                <div className="space-y-0.5">
+                  {parts.map(({ label, text }) => (
+                    <div key={label} className="flex gap-1.5">
+                      <span className={cn(
+                        "font-mono text-[8px] uppercase tracking-wider flex-shrink-0 mt-0.5",
+                        label === "WHAT" ? "text-neutral-600" :
+                        label === "PRIMARY ACTORS" ? "text-cyan-600" :
+                        label === "PRIMARY INSTITUTIONS" ? "text-violet-600" :
+                        label === "DOCUMENT SIGNALS" ? "text-blue-600" :
+                        label === "LIKELY ANGLE" ? "text-amber-600" :
+                        "text-neutral-700"
+                      )}>{label}:</span>
+                      <span className="font-mono text-[9px] text-neutral-400 leading-relaxed">{text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          // Fallback: plain text
+          return (
+            <div className="space-y-1">
+              <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">BRIEF</div>
+              <p className="text-xs text-neutral-400 leading-relaxed">{raw}</p>
             </div>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              {cleanDescription(caseData.description)}
-            </p>
-          </div>
-        )}
+          );
+        })()}
 
         {caseData.tags && caseData.tags.filter((t) => t !== "auto-seeded").length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -1707,6 +1802,51 @@ function DefaultInspector({
           {ctrlMsg && (
             <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1">{ctrlMsg}</div>
           )}
+          {pendingMentions > 0 && (
+            <>
+              <div className="font-mono text-[8px] text-neutral-800 uppercase tracking-widest pt-0.5">TRIAGE ACTIONS</div>
+              <button
+                disabled={ctrlWorking}
+                onClick={() => bulkReject("off-topic")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">✕</span> REJECT OFF-TOPIC MENTIONS
+              </button>
+              <button
+                disabled={ctrlWorking}
+                onClick={() => bulkReject("junk")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">✕</span> REJECT JUNK / BOILERPLATE
+              </button>
+              <button
+                disabled={ctrlWorking}
+                onClick={() => bulkReject("low-role")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-500 hover:border-amber-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">◌</span> HOLD LOW-ROLE (UNKNOWN)
+              </button>
+              <button
+                disabled={ctrlWorking}
+                onClick={async () => {
+                  setCtrlWorking(true); setCtrlMsg(null);
+                  try {
+                    const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ type: "role-bearing" })
+                    });
+                    const d = await r.json();
+                    setCtrlMsg(`Promoted ${d.approved ?? "?"} role-bearing mention(s).`);
+                    await invalidate();
+                  } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+                }}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-green-400 hover:border-green-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">▲</span> PROMOTE ROLE-BEARING HIGH-CONF
+              </button>
+            </>
+          )}
+          <div className="font-mono text-[8px] text-neutral-800 uppercase tracking-widest pt-0.5">QUALITY CONTROLS</div>
           <button
             disabled={ctrlWorking}
             onClick={() => bulkReject("low-confidence")}

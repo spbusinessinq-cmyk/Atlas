@@ -11,7 +11,20 @@ import { eq } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import { parse as parseHtml } from "node-html-parser";
-import { extractEntities, computeDocRelevanceScore, normalizeEntityName, resolveToCanonical, classifySeedIntent, cleanBodyText, type SeedIntent } from "../lib/entity-extractor";
+import {
+  extractEntities,
+  computeDocRelevanceScore,
+  normalizeEntityName,
+  resolveToCanonical,
+  classifySeedIntent,
+  cleanBodyText,
+  shouldAdmitMention,
+  type SeedIntent,
+  type EntityRole,
+  type TopicRelevance,
+  type DocumentZone,
+  type AdmissionRejectReason,
+} from "../lib/entity-extractor";
 import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
@@ -785,7 +798,9 @@ router.post("/web-ingest", async (req, res) => {
 
     for (const m of entities) {
       if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
+      if (!m.admitted) continue; // Admission firewall
       try {
+        const encodedCtx = `[A:r=${m.role}|t=${m.topicRelevance}|z=${m.zone}] ${m.context}`;
         await db.insert(entityMentionsTable).values({
           documentId: doc.id,
           caseId: doc.caseId,
@@ -793,7 +808,7 @@ router.post("/web-ingest", async (req, res) => {
           entityType: m.entityType,
           confidence: m.confidence,
           status: "pending",
-          context: m.context,
+          context: encodedCtx,
           startPos: m.startPos,
           endPos: m.endPos,
         });
@@ -963,6 +978,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   let noiseSkipped = 0;
   let priorityADocs = 0;
   let priorityBDocs = 0;
+  let pipelineRejectedTotal = 0;
+  const pipelineRejectReasons: Record<string, number> = {};
+  const docPriorities = new Map<number, string>(); // docId → priority
   const promotedEntityNames: string[] = []; // canonical names approved into the graph
 
   for (const result of toIngest) {
@@ -1064,6 +1082,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       );
       if (relevance.priority === "PRIORITY_A") priorityADocs++;
       else if (relevance.priority === "PRIORITY_B") priorityBDocs++;
+      docPriorities.set(doc.id, relevance.priority);
 
       // Log topic alignment advisory for mismatched docs
       if (relevance.topicAlignment === "mismatched" && relevance.mismatchReason) {
@@ -1093,12 +1112,22 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         continue;
       }
 
-      const entities = extractEntities(textForAnalysis);
+      const entities = extractEntities(textForAnalysis, queryTerms, seedIntent);
 
       let entityCountForDoc = 0;
+      let rejectedByFirewall = 0;
+      const rejectReasonCounts: Record<string, number> = {};
+
       for (const m of entities) {
         if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
+        if (!m.admitted) {
+          rejectedByFirewall++;
+          const rr = m.rejectReason ?? "UNKNOWN";
+          rejectReasonCounts[rr] = (rejectReasonCounts[rr] ?? 0) + 1;
+          continue;
+        }
         try {
+          const encodedCtx = `[A:r=${m.role}|t=${m.topicRelevance}|z=${m.zone}] ${m.context}`;
           await db.insert(entityMentionsTable).values({
             documentId: doc.id,
             caseId,
@@ -1106,7 +1135,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
             entityType: m.entityType,
             confidence: m.confidence,
             status: "pending",
-            context: m.context,
+            context: encodedCtx,
             startPos: m.startPos,
             endPos: m.endPos,
           });
@@ -1116,10 +1145,16 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         }
       }
 
-      // ── Patch rawText to add entity count, analysis_ran, relevance score, and alignment ──
+      // Accumulate pipeline-level rejection counts
+      pipelineRejectedTotal += rejectedByFirewall;
+      for (const [r, n] of Object.entries(rejectReasonCounts)) {
+        pipelineRejectReasons[r] = (pipelineRejectReasons[r] ?? 0) + n;
+      }
+
+      // ── Patch rawText to add entity count, analysis_ran, relevance score, alignment, rejected ──
       const updatedRawText = rawText.replace(
         /(\[ATLAS-DIAG:[^\]]+)\]/,
-        (_, inner) => `${inner}|entities=${entityCountForDoc}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}]`
+        (_, inner) => `${inner}|entities=${entityCountForDoc}|rejected=${rejectedByFirewall}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}]`
       );
       if (updatedRawText !== rawText) {
         await db.update(documentsTable)
@@ -1144,6 +1179,18 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     .from(documentsTable).where(eq(documentsTable.caseId, caseId));
   const docTitleMap = new Map(ingestedDocs.map(d => [d.id, (d.title || "").toLowerCase()]));
 
+  // ── Parse role/topic from encoded context prefix ────────────────────────
+  function parseMentionMeta(ctx: string | null): { role: EntityRole | null; topic: TopicRelevance | null; zone: DocumentZone | null } {
+    if (!ctx) return { role: null, topic: null, zone: null };
+    const m = ctx.match(/^\[A:r=([^|]+)\|t=([^|]+)\|z=([^\]]+)\]/);
+    if (!m) return { role: null, topic: null, zone: null };
+    return {
+      role: m[1] as EntityRole,
+      topic: m[2] as TopicRelevance,
+      zone: m[3] as DocumentZone,
+    };
+  }
+
   // Group by normalized entity name for dedup/merge
   interface EntryData {
     displayName: string;
@@ -1151,25 +1198,40 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     docIds: Set<number>;
     maxConfidence: number;
     mentionIds: number[];
-    titleHits: number;      // how many doc titles contain this entity name
-    moneyCtxHits: number;   // mentions near financial terms
-    agencyBonus: boolean;   // is a government/agency type
+    titleHits: number;
+    moneyCtxHits: number;
+    agencyBonus: boolean;
+    bestRole: EntityRole | null;
+    bestTopic: TopicRelevance | null;
+    hasLeadHit: boolean;       // appears in title/lead zone
+    qualityDocHit: boolean;    // appears in a PRIORITY_A or PRIORITY_B doc
+    tailOnlyCount: number;     // mentions only from tail zone
+    topicHighCount: number;
+    topicMediumCount: number;
   }
   const entityMap = new Map<string, EntryData>();
 
   const MONEY_CONTEXT_RE = /\b(funding|grant|budget|contract|appropriation|allocation|spending|award|procurement|invoice|settlement|payment|payout)\b/i;
   const TARGET_WORDS = new Set(target.toLowerCase().split(/\s+/).filter(w => w.length > 3));
 
+  // Role priority order — higher index = more investigatively meaningful
+  const ROLE_WEIGHT: Record<string, number> = {
+    GOVERNMENT_AGENCY: 10, COMMITTEE: 9, COURT_JUDGE: 9, ATTORNEY_COUNSEL: 8,
+    OFFICIAL: 7, DEFENDANT: 7, VICTIM_WITNESS: 6, DOCUMENT_FILING: 6,
+    PROGRAM: 5, FACILITY: 5, ORGANIZATION: 4, PERSON: 3, UNKNOWN: 0,
+  };
+  const TOPIC_WEIGHT: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1, OFF_TOPIC: -1 };
+
   for (const m of allMentions) {
-    // Normalize key for grouping — resolve canonical to merge variants
     const normKey = normalizeEntityName(m.entityName);
-    // Try to resolve to an existing canonical key
     const existingKeys = Array.from(entityMap.keys());
     const canonicalKey = existingKeys.find(k => {
       const shorter = normKey.length < k.length ? normKey : k;
-      const longer = normKey.length >= k.length ? normKey : k;
+      const longer  = normKey.length >= k.length ? normKey : k;
       return shorter.length >= 4 && longer.includes(shorter);
     }) ?? normKey;
+
+    const meta = parseMentionMeta(m.context ?? null);
 
     if (!entityMap.has(canonicalKey)) {
       entityMap.set(canonicalKey, {
@@ -1181,39 +1243,94 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         titleHits: 0,
         moneyCtxHits: 0,
         agencyBonus: m.entityType === "government_agency",
+        bestRole: meta.role,
+        bestTopic: meta.topic,
+        hasLeadHit: meta.zone === "title" || meta.zone === "lead",
+        qualityDocHit: false,
+        tailOnlyCount: 0,
+        topicHighCount: 0,
+        topicMediumCount: 0,
       });
     }
     const entry = entityMap.get(canonicalKey)!;
     if (m.documentId) {
       entry.docIds.add(m.documentId);
-      // Title hit — entity appears in doc title
       const docTitle = docTitleMap.get(m.documentId) || "";
       if (docTitle.includes(normalizeEntityName(m.entityName))) entry.titleHits++;
+      // Track if this mention came from a quality doc
+      const docPri = docPriorities.get(m.documentId);
+      if (docPri === "PRIORITY_A" || docPri === "PRIORITY_B") entry.qualityDocHit = true;
     }
     if (m.context && MONEY_CONTEXT_RE.test(m.context)) entry.moneyCtxHits++;
     if (m.entityType === "government_agency") entry.agencyBonus = true;
     entry.maxConfidence = Math.max(entry.maxConfidence, m.confidence ?? 0);
     entry.mentionIds.push(m.id);
-    // Prefer longer/more descriptive display names
     if (m.entityName.length > entry.displayName.length) entry.displayName = m.entityName;
+
+    // Update role — keep highest-weight role seen
+    if (meta.role && (ROLE_WEIGHT[meta.role] ?? 0) > (ROLE_WEIGHT[entry.bestRole ?? "UNKNOWN"] ?? 0)) {
+      entry.bestRole = meta.role;
+    }
+    // Update topic — keep best topic seen
+    if (meta.topic && (TOPIC_WEIGHT[meta.topic] ?? 0) > (TOPIC_WEIGHT[entry.bestTopic ?? "LOW"] ?? 0)) {
+      entry.bestTopic = meta.topic;
+    }
+    if (meta.zone === "title" || meta.zone === "lead") entry.hasLeadHit = true;
+    if (meta.zone === "tail") entry.tailOnlyCount++;
+    if (meta.topic === "HIGH") entry.topicHighCount++;
+    else if (meta.topic === "MEDIUM") entry.topicMediumCount++;
   }
 
-  // Compute trust score for each entity
+  // Compute trust score for each entity — role + topicRelevance + quality signals
   function computeTrustScore(entry: EntryData): number {
     let trust = entry.maxConfidence;
     if (entry.docIds.size >= 3) trust += 0.12;
     else if (entry.docIds.size >= 2) trust += 0.07;
     if (entry.titleHits >= 2) trust += 0.10;
     else if (entry.titleHits >= 1) trust += 0.05;
+    if (entry.hasLeadHit) trust += 0.06;
     if (entry.moneyCtxHits >= 1) trust += 0.06;
     if (entry.agencyBonus) trust += 0.05;
+    if (entry.qualityDocHit) trust += 0.04;
+    if (entry.topicHighCount >= 2) trust += 0.08;
+    else if (entry.topicHighCount >= 1) trust += 0.04;
+    if (entry.topicMediumCount >= 2) trust += 0.04;
+
+    // Role-bearing bonus
+    const roleW = ROLE_WEIGHT[entry.bestRole ?? "UNKNOWN"] ?? 0;
+    if (roleW >= 9) trust += 0.10;       // court/committee/agency
+    else if (roleW >= 7) trust += 0.07;  // official/defendant/attorney
+    else if (roleW >= 5) trust += 0.04;  // program/facility/org
+    else if (roleW === 0) trust -= 0.10; // UNKNOWN role penalty
+
+    // Topic penalty
+    if (entry.bestTopic === "LOW") trust -= 0.08;
+    if (entry.bestTopic === "OFF_TOPIC") trust -= 0.25;
+
     // Penalize: single-word person with no title hit
     const isPersonSingleWord = entry.type === "person" && !entry.displayName.includes(" ");
-    if (isPersonSingleWord) trust -= 0.30;
+    if (isPersonSingleWord && entry.titleHits === 0) trust -= 0.30;
+
     // Penalize: entity name is a subset of the query target (too generic)
     const normDisplay = normalizeEntityName(entry.displayName);
     if (TARGET_WORDS.has(normDisplay)) trust -= 0.20;
+
+    // Penalize tail-only mentions
+    const totalMentions = entry.mentionIds.length;
+    if (totalMentions > 0 && entry.tailOnlyCount === totalMentions) trust -= 0.15;
+
     return Math.min(0.99, trust);
+  }
+
+  // Check if entity is "role-bearing" (meaningful role vs generic UNKNOWN)
+  function isRoleBearing(entry: EntryData): boolean {
+    const roleW = ROLE_WEIGHT[entry.bestRole ?? "UNKNOWN"] ?? 0;
+    return roleW >= 3; // at least PERSON-level role
+  }
+
+  // Check if entity has any meaningful topic signal
+  function hasGoodTopic(entry: EntryData): boolean {
+    return entry.bestTopic === "HIGH" || entry.bestTopic === "MEDIUM";
   }
 
   // ── Trust tier tracking ─────────────────────────────────────────────────
@@ -1227,8 +1344,8 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     try {
       if (WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName)) return;
 
-      // Cap starter graph at 12 entities
-      if (approvedEntityIds.size >= 12) return;
+      // Cap starter graph at 8 entities
+      if (approvedEntityIds.size >= 8) return;
 
       // Check for canonical resolution against already-promoted names
       const canonicalMatch = resolveToCanonical(entry.displayName, promotedEntityNames);
@@ -1268,40 +1385,76 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // T1_CONFIRMED: multi-doc + high trust (graph-quality anchor entities)
+  // T1_CONFIRMED: 2+ docs + quality doc + role-bearing + HIGH/MEDIUM topic + trust ≥ 0.82
   for (const [key, entry] of entityMap) {
     const trust = computeTrustScore(entry);
-    if (trust >= 0.82 && entry.docIds.size >= 2) {
+    const roleBearing = isRoleBearing(entry);
+    const goodTopic = hasGoodTopic(entry);
+    if (trust >= 0.82 && entry.docIds.size >= 2 && roleBearing && goodTopic) {
       await approveEntity(key, entry, "T1_CONFIRMED");
     }
   }
 
-  // T1b_STRONG: single-doc but very strong signals (title hit + money context + agency type)
+  // T1b_STRONG: lead/title hit + role-bearing + HIGH topic + quality doc + trust ≥ 0.78
   if (approvedEntityIds.size < 3) {
     for (const [key, entry] of entityMap) {
       if (approvedEntityIds.has(key)) continue;
       const trust = computeTrustScore(entry);
-      const strongSingleDoc = entry.titleHits >= 1 && (entry.moneyCtxHits >= 1 || entry.agencyBonus);
-      if (trust >= 0.78 && strongSingleDoc) {
+      const roleBearing = isRoleBearing(entry);
+      const hasHighTopic = entry.bestTopic === "HIGH";
+      const strongSignals = (entry.hasLeadHit || entry.titleHits >= 1) &&
+        (entry.moneyCtxHits >= 1 || entry.agencyBonus || entry.qualityDocHit);
+      if (trust >= 0.78 && strongSignals && roleBearing && hasHighTopic) {
         await approveEntity(key, entry, "T1b_STRONG");
       }
     }
   }
 
-  // T2_CANDIDATE: single good doc, moderate trust — insert as pending (analyst review)
+  // T1b_STRONG relaxed: allow MEDIUM topic if other signals are very strong
+  if (approvedEntityIds.size < 2) {
+    for (const [key, entry] of entityMap) {
+      if (approvedEntityIds.has(key)) continue;
+      const trust = computeTrustScore(entry);
+      const roleBearing = isRoleBearing(entry);
+      const goodTopic = hasGoodTopic(entry);
+      const strongSignals = (entry.hasLeadHit || entry.titleHits >= 1) &&
+        (entry.moneyCtxHits >= 1 || entry.agencyBonus || entry.qualityDocHit);
+      if (trust >= 0.80 && strongSignals && roleBearing && goodTopic) {
+        await approveEntity(key, entry, "T1b_STRONG");
+      }
+    }
+  }
+
+  // T2_CANDIDATE: moderate trust + role-bearing + at least LOW topic → stays pending for analyst review
   for (const [key, entry] of entityMap) {
     if (approvedEntityIds.has(key)) continue;
     const trust = computeTrustScore(entry);
-    if (trust >= 0.65 && !WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName)) {
+    const roleBearing = isRoleBearing(entry);
+    const topicOk = entry.bestTopic !== "OFF_TOPIC";
+
+    // HOLD: low trust, OFF_TOPIC, unknown role, tail-only, or blocklisted → suppress
+    const shouldSuppress =
+      WRAPPER_ENTITY_BLOCKLIST.has(entry.displayName) ||
+      !topicOk ||
+      (!roleBearing && trust < 0.70) ||
+      (entry.tailOnlyCount === entry.mentionIds.length && trust < 0.72);
+
+    if (shouldSuppress) {
+      suppressedNoise++;
+      for (const mentionId of entry.mentionIds) {
+        await db.update(entityMentionsTable)
+          .set({ status: "rejected" })
+          .where(eq(entityMentionsTable.id, mentionId));
+      }
+    } else if (trust >= 0.60 && roleBearing) {
       heldCandidates++;
-      // Mentions already inserted as pending — no entity record created, stays in review queue
       await logEvent(
         "entity_candidate_held",
-        `[T2_CANDIDATE] Entity held for review: ${entry.displayName} [${entry.type}] — trust ${(trust * 100).toFixed(0)}%, ${entry.docIds.size} doc(s)`,
+        `[T2_CANDIDATE] Entity held for review: ${entry.displayName} [${entry.type}] role=${entry.bestRole} topic=${entry.bestTopic} — trust ${(trust * 100).toFixed(0)}%, ${entry.docIds.size} doc(s)`,
         { caseId }
       );
-    } else if (trust < 0.65) {
-      // HOLD: very low trust or blocked — suppress entirely
+    } else {
+      // Below threshold for candidate — suppress
       suppressedNoise++;
       for (const mentionId of entry.mentionIds) {
         await db.update(entityMentionsTable)
@@ -1311,12 +1464,18 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // T2_CANDIDATE fallback: if zero entities auto-approved, promote the top 3 candidates
+  // Fallback: if zero entities auto-approved, promote top quality candidates
   if (approvedEntityIds.size === 0 && validDocsIngested > 0) {
     const PREFERRED_TYPES = ["organization", "government_agency", "facility", "program", "location"];
 
     const fallbackCandidates = Array.from(entityMap.entries())
-      .filter(([, e]) => computeTrustScore(e) >= 0.60 && !WRAPPER_ENTITY_BLOCKLIST.has(e.displayName))
+      .filter(([, e]) => {
+        const trust = computeTrustScore(e);
+        return trust >= 0.55
+          && !WRAPPER_ENTITY_BLOCKLIST.has(e.displayName)
+          && e.bestTopic !== "OFF_TOPIC"
+          && isRoleBearing(e);
+      })
       .map(([key, entry]) => {
         const hasOkDoc = Array.from(entry.docIds).some((id) => okDocIds.has(id));
         const typeBonus = PREFERRED_TYPES.includes(entry.type) ? 1.5 : 0;
@@ -1327,7 +1486,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
 
     let fallbackCount = 0;
     for (const { key, entry } of fallbackCandidates) {
-      if (fallbackCount >= 3) break;
+      if (fallbackCount >= 4) break;
       await approveEntity(key, entry, "T2_CANDIDATE");
       fallbackCount++;
     }
@@ -1347,52 +1506,81 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // ── Graph seeding: CO-MENTION edges ──────────────────────────────────────
+  // ── Graph seeding: quality-filtered edges ────────────────────────────────
 
   if (approvedEntityIds.size >= 2) {
-    // Build doc → approved entities map
-    const docEntityKeys = new Map<number, string[]>();
+    // Only create edges between entities from PRIORITY_A or PRIORITY_B docs
+    const qualityDocEntityKeys = new Map<number, string[]>();
+    const pairDocCount = new Map<string, number>();   // how many docs each pair co-occurs in
+    const pairHasTitle = new Map<string, boolean>();  // co-occurs in title/lead of any doc
+
     for (const [key, entry] of entityMap) {
       if (!approvedEntityIds.has(key)) continue;
       for (const docId of entry.docIds) {
-        if (!docEntityKeys.has(docId)) docEntityKeys.set(docId, []);
-        docEntityKeys.get(docId)!.push(key);
+        const docPri = docPriorities.get(docId);
+        if (docPri !== "PRIORITY_A" && docPri !== "PRIORITY_B") continue;
+        if (!qualityDocEntityKeys.has(docId)) qualityDocEntityKeys.set(docId, []);
+        qualityDocEntityKeys.get(docId)!.push(key);
+      }
+    }
+
+    // Count co-occurrence frequency per pair
+    for (const [, keys] of qualityDocEntityKeys.entries()) {
+      for (let i = 0; i < keys.length; i++) {
+        for (let j = i + 1; j < keys.length; j++) {
+          const pairKey = [keys[i], keys[j]].sort().join("|||");
+          pairDocCount.set(pairKey, (pairDocCount.get(pairKey) ?? 0) + 1);
+          // Check if both entities appear in lead zone for this doc
+          const eA = entityMap.get(keys[i]);
+          const eB = entityMap.get(keys[j]);
+          if ((eA?.hasLeadHit || eA?.titleHits) && (eB?.hasLeadHit || eB?.titleHits)) {
+            pairHasTitle.set(pairKey, true);
+          }
+        }
       }
     }
 
     const createdPairs = new Set<string>();
-    for (const keys of docEntityKeys.values()) {
-      for (let i = 0; i < keys.length; i++) {
-        for (let j = i + 1; j < keys.length; j++) {
-          const a = keys[i];
-          const b = keys[j];
-          const pairKey = [a, b].sort().join("|||");
-          if (createdPairs.has(pairKey)) continue;
-          createdPairs.add(pairKey);
+    for (const [pairKey, docCount] of pairDocCount.entries()) {
+      if (createdPairs.has(pairKey)) continue;
+      createdPairs.add(pairKey);
 
-          const entityAId = approvedEntityIds.get(a);
-          const entityBId = approvedEntityIds.get(b);
-          if (!entityAId || !entityBId) continue;
+      const [a, b] = pairKey.split("|||");
+      const entityAId = approvedEntityIds.get(a);
+      const entityBId = approvedEntityIds.get(b);
+      if (!entityAId || !entityBId) continue;
 
-          try {
-            await db.insert(relationshipsTable).values({
-              entityAId,
-              entityBId,
-              relationshipType: "co_mention",
-              caseId,
-              confidence: 0.7,
-            });
-          } catch {
-            // Skip duplicates
-          }
-        }
+      // Determine edge type and confidence
+      let relType: string;
+      let edgeConf: number;
+      if (pairHasTitle.get(pairKey)) {
+        relType = "title_co_mention";
+        edgeConf = 0.88;
+      } else if (docCount >= 2) {
+        relType = "repeated_association";
+        edgeConf = 0.82;
+      } else {
+        relType = "co_mention";
+        edgeConf = 0.70;
+      }
+
+      try {
+        await db.insert(relationshipsTable).values({
+          entityAId,
+          entityBId,
+          relationshipType: relType,
+          caseId,
+          confidence: edgeConf,
+        });
+      } catch {
+        // Skip duplicates
       }
     }
 
     if (createdPairs.size > 0) {
       await logEvent(
         "graph_updated",
-        `Graph seeded with ${createdPairs.size} CO-MENTION edge${createdPairs.size !== 1 ? "s" : ""} between ${approvedEntityIds.size} auto-approved entities`,
+        `Graph seeded with ${createdPairs.size} edge${createdPairs.size !== 1 ? "s" : ""} (quality-filtered) between ${approvedEntityIds.size} auto-approved entities`,
         { caseId }
       );
     }
@@ -1415,16 +1603,20 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   const usableDocCount = okDocs + partialDocs;
   let buildStatus: string;
   let trustRating: string;
-  if (entitiesApproved >= 3 && priorityADocs >= 2 && usableDocCount >= 3) {
-    buildStatus = "summarized"; trustRating = "STRONG BUILD";
+  let autoBuildQuality: "STRONG" | "MODERATE" | "WEAK" | "FAILED";
+
+  if (promotedConfirmedCount >= 2 && priorityADocs >= 2 && usableDocCount >= 3) {
+    buildStatus = "summarized"; trustRating = "STRONG BUILD"; autoBuildQuality = "STRONG";
+  } else if (entitiesApproved >= 2 && usableDocCount >= 2 && (priorityADocs + priorityBDocs) >= 1) {
+    buildStatus = "graphed"; trustRating = "STRONG BUILD"; autoBuildQuality = "STRONG";
   } else if (entitiesApproved >= 1 && usableDocCount >= 2) {
-    buildStatus = "graphed"; trustRating = "MODERATE BUILD";
+    buildStatus = "graphed"; trustRating = "MODERATE BUILD"; autoBuildQuality = "MODERATE";
   } else if (totalDetected > 0 && usableDocCount >= 1) {
-    buildStatus = "analyzed"; trustRating = "DEGRADED BUILD";
+    buildStatus = "analyzed"; trustRating = "DEGRADED BUILD"; autoBuildQuality = "WEAK";
   } else if (usableDocCount > 0) {
-    buildStatus = "ingested"; trustRating = "LOW CONFIDENCE";
+    buildStatus = "ingested"; trustRating = "LOW CONFIDENCE"; autoBuildQuality = "WEAK";
   } else {
-    buildStatus = "failed"; trustRating = "EMPTY CASE";
+    buildStatus = "failed"; trustRating = "EMPTY CASE"; autoBuildQuality = "FAILED";
   }
 
   // ── Generate NEXT QUERIES based on promoted entities + seed intent ─────────
@@ -1445,24 +1637,67 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     ? nextQueryBase.flatMap(name => suffixes.map(s => `${name} ${s}`)).slice(0, 6)
     : suffixes.map(s => `${target} ${s}`).slice(0, 6);
 
-  // Build human-readable description
-  const sourceWord = (n: number) => `${n} source${n !== 1 ? "s" : ""}`;
-  const entityWord = (n: number) => `${n} entity${n !== 1 ? " signals" : " signal"}`;
+  // ── Case Brief Generator 2.0 — structured investigative summary ───────────
+  const admittedTotal = totalDetected; // mentions that passed admission firewall
+  const rejectedTotal = pipelineRejectedTotal;
 
-  let statusLine: string;
-  if (entitiesApproved > 0) {
-    const promotionNote = isFallback ? " via seed fallback" : "";
-    const confirmedNote = promotedConfirmedCount > 0 ? ` (${promotedConfirmedCount} confirmed, ${promotedStrongCount} strong)` : "";
-    statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, extracted ${sourceWord(validDocsIngested)} with usable text, detected ${entityWord(totalDetected)}, and auto-promoted ${entitiesApproved} seed ${entitiesApproved !== 1 ? "entities" : "entity"}${confirmedNote}${promotionNote} to the case graph.`;
-    if (noiseSkipped > 0) statusLine += ` ${noiseSkipped} low-relevance document${noiseSkipped !== 1 ? "s" : ""} suppressed from entity extraction.`;
-    if (heldCandidates > 0) statusLine += ` ${heldCandidates} candidate${heldCandidates !== 1 ? "s" : ""} held for analyst review.`;
+  // Collect promoted entity details for brief
+  const promotedEntries = Array.from(entityMap.entries())
+    .filter(([k]) => approvedEntityIds.has(k))
+    .map(([, e]) => e);
+  const primaryActors = promotedEntries
+    .filter(e => e.type === "person" || e.bestRole === "OFFICIAL" || e.bestRole === "DEFENDANT")
+    .map(e => e.displayName).slice(0, 4);
+  const primaryInstitutions = promotedEntries
+    .filter(e => e.type === "organization" || e.type === "government_agency" ||
+      e.bestRole === "GOVERNMENT_AGENCY" || e.bestRole === "COMMITTEE" ||
+      e.bestRole === "PROGRAM" || e.bestRole === "FACILITY")
+    .map(e => e.displayName).slice(0, 4);
+
+  const intentAngle: Record<SeedIntent, string> = {
+    housing_homelessness: "Possible mismanagement, fraud, or accountability gaps in homelessness/shelter funding programs",
+    crime_corruption:     "Potential corruption, fraud, bribery, or official misconduct",
+    legal_lawsuit:        "Active or pending legal proceedings, settlements, or judicial actions",
+    education_university: "Governance, funding, or accountability issues in academic institutions",
+    finance_funding:      "Irregular or questionable financial flows, contracts, or grant awards",
+    entertainment_film:   "Film financing structures, tax credit claims, or studio funding deals",
+    policy_government:    "Policy implementation gaps, program accountability, or government oversight failures",
+    sports:               "Contractual, financial, or investigative matters related to sports",
+    general:              "Multi-domain investigative signals — manual review recommended to narrow scope",
+  };
+
+  const sourceWord = (n: number) => `${n} source${n !== 1 ? "s" : ""}`;
+
+  let briefText: string;
+  if (entitiesApproved >= 2 && autoBuildQuality !== "FAILED") {
+    const actorLine = primaryActors.length > 0
+      ? `PRIMARY ACTORS: ${primaryActors.join(", ")}.`
+      : "";
+    const instLine = primaryInstitutions.length > 0
+      ? `PRIMARY INSTITUTIONS: ${primaryInstitutions.join(", ")}.`
+      : "";
+    const signalLine = priorityADocs > 0
+      ? `DOCUMENT SIGNALS: ${priorityADocs} high-priority and ${priorityBDocs} supporting sources identified.`
+      : `DOCUMENT SIGNALS: ${priorityBDocs} supporting sources identified.`;
+    const angleLine = `LIKELY ANGLE: ${intentAngle[seedIntent]}`;
+    const qualityNote = autoBuildQuality === "STRONG"
+      ? "ATLAS assembled a viable starter investigation graph from high-confidence aligned sources."
+      : "Auto-build completed. Manual review of held candidates recommended to strengthen the graph.";
+    briefText = [
+      `WHAT: Seed investigation into "${target}" [${seedIntent.replace(/_/g, " ").toUpperCase()}].`,
+      actorLine, instLine, signalLine, angleLine, qualityNote,
+    ].filter(Boolean).join(" ");
   } else if (totalDetected > 0) {
-    statusLine = `ATLAS found ${searchResultsTotal} results, ingested ${sourceWord(docsIngested)}, extracted ${sourceWord(validDocsIngested)} with usable text, and detected ${entityWord(totalDetected)} — none passed quality checks for auto-promotion. Review pending detections to manually approve entities.`;
-  } else if (validDocsIngested > 0) {
-    statusLine = `ATLAS found ${searchResultsTotal} results and ingested ${sourceWord(docsIngested)}, but no entity signals were extracted from ${sourceWord(validDocsIngested)} with usable text. Try re-analyzing individual documents or adding sources manually.`;
+    briefText = `Auto-build completed, but entity confidence remains weak. Manual narrowing recommended. ${totalDetected} entity signals detected from ${sourceWord(usableDocCount)} usable sources — none met auto-promotion thresholds. Use the triage queue to manually approve candidates.`;
+  } else if (usableDocCount > 0) {
+    briefText = `ATLAS ingested ${sourceWord(usableDocCount)} sources but extracted no entity signals. Documents may be paywalled or content-light. Add sources manually via Web Ingest.`;
   } else {
-    statusLine = `BUILD DEGRADED — ATLAS found ${searchResultsTotal} results but all ${docsIngested} ingested sources were blocked, paywalled, or JS-rendered. No usable article text was recovered. Add sources manually via Web Ingest.`;
+    briefText = `BUILD FAILED — ATLAS found ${searchResultsTotal} results but all ${docsIngested} ingested sources were blocked or JS-rendered. No usable article text was recovered. Add sources manually via Web Ingest.`;
   }
+
+  // Encode rejection reasons for the ATLAS-SEED block
+  const rejectReasonStr = Object.entries(pipelineRejectReasons)
+    .map(([r, n]) => `${r}:${n}`).join(",");
 
   // Encode machine-readable diagnostics block (parsed by the Overview panel)
   const seedTag = [
@@ -1477,6 +1712,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     `priority_a=${priorityADocs}`,
     `priority_b=${priorityBDocs}`,
     `detected=${totalDetected}`,
+    `admitted=${admittedTotal}`,
+    `rejected_fw=${rejectedTotal}`,
+    `reject_reasons=${encodeURIComponent(rejectReasonStr)}`,
     `promoted=${entitiesApproved}`,
     `promoted_confirmed=${promotedConfirmedCount}`,
     `promoted_strong=${promotedStrongCount}`,
@@ -1485,11 +1723,12 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     `seed_intent=${seedIntent}`,
     `fallback=${isFallback ? 1 : 0}`,
     `build_status=${buildStatus}`,
+    `auto_build_quality=${autoBuildQuality}`,
     `trust=${encodeURIComponent(trustRating)}`,
     `next_queries=${encodeURIComponent(nextQueryLines.join("||"))}`,
   ].join("|");
 
-  const description = `${statusLine}\n\n[ATLAS-SEED:${seedTag}]`;
+  const description = `${briefText}\n\n[ATLAS-SEED:${seedTag}]`;
 
   await db
     .update(casesTable)
