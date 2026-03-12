@@ -1,7 +1,7 @@
 import React from "react";
 import { useListDocuments } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Search, FileText, Globe, ArrowRight } from "lucide-react";
+import { Search, FileText, Globe, ArrowRight, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -15,9 +15,11 @@ type ExtendedDoc = {
 };
 
 export default function DocumentLibrary() {
-  const { data: documents, isLoading } = useListDocuments();
+  const { data: documents, isLoading, refetch } = useListDocuments();
   const [search, setSearch] = React.useState("");
   const [, navigate] = useLocation();
+  const [confirmId, setConfirmId] = React.useState<number | null>(null);
+  const [deleting, setDeleting] = React.useState<number | null>(null);
 
   const filtered =
     (documents as ExtendedDoc[] | undefined)?.filter((d) =>
@@ -28,6 +30,17 @@ export default function DocumentLibrary() {
     if (doc.caseId) {
       sessionStorage.setItem("atlas_pending_doc", String(doc.id));
       navigate(`/cases/${doc.caseId}`);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    setDeleting(id);
+    try {
+      await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      setConfirmId(null);
+      refetch();
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -67,7 +80,7 @@ export default function DocumentLibrary() {
           <div className="w-44 hidden md:block">SOURCE</div>
           <div className="w-28 hidden sm:block text-right pr-4">CASE</div>
           <div className="w-28 text-right">INGEST DATE</div>
-          <div className="w-8" />
+          <div className="w-20 text-right">ACTION</div>
         </div>
 
         <div className="divide-y divide-[#ffffff04]">
@@ -90,7 +103,7 @@ export default function DocumentLibrary() {
           ) : (
             filtered.map((doc) => {
               const isWeb = doc.ingestMethod === "web";
-              const isClickable = !!doc.caseId;
+              const isClickable = !!doc.caseId && confirmId !== doc.id;
               return (
                 <div
                   key={doc.id}
@@ -99,9 +112,9 @@ export default function DocumentLibrary() {
                     "flex px-4 py-2.5 items-center transition-all group",
                     isClickable
                       ? "cursor-pointer hover:bg-[#ffffff05] hover:border-l-2 hover:border-l-red-600"
-                      : "cursor-default opacity-60"
+                      : "cursor-default"
                   )}
-                  title={isClickable ? "Click to open document viewer" : "Unlinked document"}
+                  title={isClickable ? "Click to open document viewer" : undefined}
                 >
                   <div className="w-8 flex items-center flex-shrink-0">
                     <div
@@ -133,9 +146,36 @@ export default function DocumentLibrary() {
                   <div className="w-28 font-mono text-[9px] text-neutral-600 text-right">
                     {formatDate(doc.uploadedAt).split(",")[0]}
                   </div>
-                  <div className="w-8 flex justify-end">
-                    {isClickable && (
-                      <ArrowRight className="w-3 h-3 text-neutral-800 group-hover:text-neutral-400 transition-colors" />
+                  <div className="w-20 flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {confirmId === doc.id ? (
+                      <>
+                        <button
+                          onClick={() => handleDelete(doc.id)}
+                          disabled={deleting === doc.id}
+                          className="font-mono text-[8px] text-red-500 border border-red-500/40 px-1.5 py-0.5 hover:bg-red-500/10 transition-colors uppercase disabled:opacity-50"
+                        >
+                          {deleting === doc.id ? "..." : "CONFIRM"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmId(null)}
+                          className="font-mono text-[8px] text-neutral-600 border border-[#ffffff0d] px-1.5 py-0.5 hover:bg-[#ffffff05] transition-colors uppercase"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setConfirmId(doc.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-neutral-700 hover:text-red-500 p-1"
+                          title="Delete document"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                        {doc.caseId && (
+                          <ArrowRight className="w-3 h-3 text-neutral-800 group-hover:text-neutral-400 transition-colors" />
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

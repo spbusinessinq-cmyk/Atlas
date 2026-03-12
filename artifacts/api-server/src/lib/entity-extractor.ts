@@ -302,3 +302,171 @@ function getContext(text: string, name: string, idx?: number): string {
   const end = Math.min(text.length, pos + name.length + 90);
   return text.slice(start, end).replace(/\s+/g, " ").trim();
 }
+
+// ── Timeline Event Extraction ─────────────────────────────────────────────────
+
+export interface ExtractedTimelineEvent {
+  eventDate: string;
+  eventType: string;
+  summary: string;
+}
+
+const EVENT_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
+  { regex: /\b(?:launched?|opening|opened|created|founded|established|started|began|initiated)\b/i, type: "PROGRAM_LAUNCH" },
+  { regex: /\b(?:contract\s+(?:awarded?|signed?|approved?|won)|awarded?\s+(?:a\s+)?contract)\b/i, type: "CONTRACT_AWARDED" },
+  { regex: /\b(?:fund(?:ing|ed)\s+(?:approved?|granted?|allocated?|received?)|approved?\s+(?:funding|budget))\b/i, type: "FUNDING_APPROVED" },
+  { regex: /\b(?:investigat(?:ed?|ing|ion)|probe(?:d|s)?|investigat(?:ing|ion)\s+(?:started?|opened?|launched?))\b/i, type: "INVESTIGATION_STARTED" },
+  { regex: /\b(?:audit(?:ed?|ing|s)?|auditor(?:s)?|audit\s+(?:found?|showed?|revealed?))\b/i, type: "AUDIT" },
+  { regex: /\b(?:lawsuit|litigation|sued?|complaint\s+filed?|legal\s+action|court\s+(?:ruling|order|decision))\b/i, type: "LEGAL_ACTION" },
+  { regex: /\b(?:expand(?:ed?|ing|s)|expansion|program\s+expan(?:d|sion))\b/i, type: "PROGRAM_EXPANSION" },
+  { regex: /\b(?:purchased?|acqui(?:red?|sition)|bought|property\s+(?:deal|sale|transaction))\b/i, type: "PROPERTY_ACQUISITION" },
+  { regex: /\b(?:polic(?:y|ies)\s+(?:change|changed?|updated?|new|reform)|reform(?:ed?|s)?)\b/i, type: "POLICY_CHANGE" },
+];
+
+const DATE_PATTERNS = [
+  // Full dates: March 11, 2021 / March 11 / 11 March 2021
+  /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?/gi,
+  // Month abbrevs: Jan 5, 2022
+  /\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,?\s+\d{4})?/gi,
+  // In YEAR: "In 2022" / "by 2023" / "since 2019"
+  /\b(?:in|by|since|after|before|during|throughout|from|as\s+of)\s+(?:20|19)\d{2}\b/gi,
+  // Standalone year: "2021" or "(2021)"
+  /\b(?:20|19)\d{2}\b/g,
+];
+
+function extractDateFromSentence(sentence: string): string | null {
+  for (const pat of DATE_PATTERNS) {
+    pat.lastIndex = 0;
+    const m = pat.exec(sentence);
+    if (m) {
+      const raw = m[0].trim();
+      // Normalize to a sortable string; prefer year-only as fallback
+      try {
+        const d = new Date(raw.replace(/^(?:in|by|since|after|before|during|from|as of)\s+/i, ""));
+        if (!isNaN(d.getTime())) return d.toISOString();
+      } catch { /* continue */ }
+      // If it's just a year, synthesize Jan 1
+      const yearMatch = /\b((?:20|19)\d{2})\b/.exec(raw);
+      if (yearMatch) return `${yearMatch[1]}-01-01T00:00:00.000Z`;
+      return null;
+    }
+  }
+  return null;
+}
+
+function classifyEventType(sentence: string): string {
+  for (const { regex, type } of EVENT_TYPE_PATTERNS) {
+    if (regex.test(sentence)) return type;
+  }
+  return "EVENT";
+}
+
+export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
+  if (!text || text.trim().length < 20) return [];
+
+  const events: ExtractedTimelineEvent[] = [];
+  const seen = new Set<string>();
+
+  // Split into sentences
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 20);
+
+  for (const sentence of sentences) {
+    const dateStr = extractDateFromSentence(sentence);
+    if (!dateStr) continue;
+
+    const eventType = classifyEventType(sentence);
+
+    // Create a clean summary (truncate long sentences)
+    const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 200);
+    const key = `${dateStr.slice(0, 10)}-${summary.slice(0, 60)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    events.push({ eventDate: dateStr, eventType, summary });
+    if (events.length >= 15) break; // Cap per document
+  }
+
+  return events;
+}
+
+// ── Financial Signal Extraction ───────────────────────────────────────────────
+
+export interface ExtractedFinancialSignal {
+  amountRaw: string;
+  normalizedAmount: number | null;
+  currency: string;
+  signalType: string;
+  eventSummary: string;
+  entityName: string | null;
+}
+
+const MONEY_PATTERN = /(?:(?:US\$|£|€|\$)\s*[\d,]+(?:\.\d+)?\s*(?:million|billion|trillion|thousand|M|B|K|mn|bn)?|[\d,]+(?:\.\d+)?\s*(?:million|billion|trillion|M|B|bn|mn)\s*(?:US\s*)?(?:dollar|pound|euro)?s?)/gi;
+
+const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
+  { regex: /\b(?:contract(?:ed?|s)?|contracted?)\b/i, type: "CONTRACT" },
+  { regex: /\b(?:grant(?:ed?|s)?|grants?)\b/i, type: "GRANT" },
+  { regex: /\b(?:fund(?:ed?|ing|s)?|funded)\b/i, type: "FUNDING" },
+  { regex: /\b(?:appropriat(?:ed?|ion|ions)?)\b/i, type: "APPROPRIATION" },
+  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?)\b/i, type: "PAYMENT" },
+  { regex: /\b(?:award(?:ed?|s)?|rewarded?)\b/i, type: "AWARD" },
+  { regex: /\b(?:receiv(?:ed?|ing|s)?|received)\b/i, type: "PAYMENT" },
+];
+
+function normalizeAmount(raw: string): { amount: number | null; currency: string } {
+  let currency = "USD";
+  if (raw.includes("£")) currency = "GBP";
+  if (raw.includes("€")) currency = "EUR";
+
+  const cleaned = raw.replace(/[£€$,\s]/gi, "").toLowerCase();
+  const numStr = cleaned.replace(/(?:million|billion|trillion|thousand|m|b|k|mn|bn|dollar|pound|euros?)/gi, "").trim();
+  const base = parseFloat(numStr);
+  if (isNaN(base)) return { amount: null, currency };
+
+  let multiplier = 1;
+  if (/billion|bn/i.test(raw)) multiplier = 1_000_000_000;
+  else if (/million|mn|m\b/i.test(raw)) multiplier = 1_000_000;
+  else if (/thousand|k\b/i.test(raw)) multiplier = 1_000;
+
+  return { amount: Math.round(base * multiplier * 100) / 100, currency };
+}
+
+function getSignalType(context: string): string {
+  for (const { regex, type } of SIGNAL_TYPE_PATTERNS) {
+    if (regex.test(context)) return type;
+  }
+  return "FUNDING";
+}
+
+export function extractFinancialSignals(text: string): ExtractedFinancialSignal[] {
+  if (!text || text.trim().length < 20) return [];
+
+  const signals: ExtractedFinancialSignal[] = [];
+  const seen = new Set<string>();
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 10);
+
+  for (const sentence of sentences) {
+    MONEY_PATTERN.lastIndex = 0;
+    let match;
+    while ((match = MONEY_PATTERN.exec(sentence)) !== null) {
+      const amountRaw = match[0].trim();
+      if (seen.has(amountRaw)) continue;
+      seen.add(amountRaw);
+
+      const { amount, currency } = normalizeAmount(amountRaw);
+      if (amount !== null && amount < 1000) continue; // Skip trivial amounts
+
+      const signalType = getSignalType(sentence);
+      const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 200);
+
+      // Try to find a nearby proper noun (entity name)
+      let entityName: string | null = null;
+      const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence.slice(0, match.index + amountRaw.length));
+      if (properNounMatch) entityName = properNounMatch[1];
+
+      signals.push({ amountRaw, normalizedAmount: amount, currency, signalType, eventSummary: summary, entityName });
+      if (signals.length >= 20) return signals;
+    }
+  }
+
+  return signals;
+}

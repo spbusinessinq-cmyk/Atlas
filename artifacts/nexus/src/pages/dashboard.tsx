@@ -90,6 +90,9 @@ function SeedLauncher() {
             <label className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest block">
               Investigation Target
             </label>
+            <p className="font-mono text-[8px] text-neutral-700 uppercase tracking-wide">
+              ATLAS auto-generates 5 search queries, ingests web sources, extracts entities &amp; financial signals, and builds your case graph automatically.
+            </p>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-600" />
               <input

@@ -9,3 +9,4 @@ export * from "./money_flows";
 export * from "./entity_mentions";
 export * from "./relationship_evidence";
 export * from "./system_log";
+export * from "./financial_signals";

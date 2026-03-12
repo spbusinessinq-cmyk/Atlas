@@ -10,6 +10,7 @@ import {
   relationshipsTable,
   moneyFlowsTable,
   entityMentionsTable,
+  financialSignalsTable,
 } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -53,7 +54,7 @@ router.get("/cases/:id/summary", async (req, res) => {
   const rows = await db.select().from(casesTable).where(eq(casesTable.id, id));
   if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-  const [entities, documents, timeline, events, notes, allRelationships, moneyFlows, pendingMentionsRows] =
+  const [entities, documents, timeline, events, notes, allRelationships, moneyFlows, pendingMentionsRows, financialSignals] =
     await Promise.all([
       db.select().from(entitiesTable).where(eq(entitiesTable.caseId, id)),
       db.select().from(documentsTable).where(eq(documentsTable.caseId, id)),
@@ -65,6 +66,7 @@ router.get("/cases/:id/summary", async (req, res) => {
       db.select().from(entityMentionsTable).where(
         and(eq(entityMentionsTable.caseId, id), eq(entityMentionsTable.status, "pending"))
       ),
+      db.select().from(financialSignalsTable).where(eq(financialSignalsTable.caseId, id)),
     ]);
 
   const entityIds = entities.map((e) => e.id);
@@ -83,6 +85,7 @@ router.get("/cases/:id/summary", async (req, res) => {
     notes: notes.map(formatNote),
     relationships: relationships.map((r) => formatRelationship(r, entityMap)),
     moneyFlows: moneyFlows.map((m) => formatMoneyFlow(m, entityMap)),
+    financialSignals: financialSignals.map(formatFinancialSignal),
     pendingMentions: pendingMentionsRows.length,
   });
 });
@@ -245,6 +248,23 @@ function formatMoneyFlow(
     confidenceLevel: m.confidenceLevel,
     caseId: m.caseId,
     createdAt: m.createdAt.toISOString(),
+  };
+}
+
+function formatFinancialSignal(s: typeof financialSignalsTable.$inferSelect) {
+  return {
+    id: s.id,
+    amountRaw: s.amountRaw,
+    normalizedAmount: s.normalizedAmount,
+    currency: s.currency || "USD",
+    signalType: s.signalType,
+    eventSummary: s.eventSummary,
+    entityName: s.entityName,
+    entityId: s.entityId,
+    documentId: s.documentId,
+    documentTitle: s.documentTitle,
+    caseId: s.caseId,
+    createdAt: s.createdAt.toISOString(),
   };
 }
 

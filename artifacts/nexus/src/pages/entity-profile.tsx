@@ -101,6 +101,7 @@ export default function EntityProfile() {
   const lastSeen = ((profile as any)?.lastSeen as string | null) ?? null;
   const linkedDocuments: any[] = (profile as any)?.linkedDocuments || [];
   const coMentioned: { name: string; count: number; score: string }[] = (profile as any)?.coMentioned || [];
+  const financialSignals: any[] = (profile as any)?.financialSignals || [];
 
   const expansionSuggestions = useMemo(
     () => entity ? generateExpansionSuggestions(entity.name, entity.type) : [],
@@ -570,6 +571,40 @@ export default function EntityProfile() {
               )}
             </div>
           </div>
+
+          {/* Financial Signals */}
+          {financialSignals.length > 0 && (
+            <div className="nexus-panel rounded-none">
+              <div className="nexus-header-strip">
+                <span className="nexus-label">FINANCIAL SIGNALS ({financialSignals.length})</span>
+                <span className="font-mono text-[8px] text-green-500 uppercase">AUTO-DETECTED</span>
+              </div>
+              <div className="p-0">
+                {financialSignals.map((sig: any) => (
+                  <div key={sig.id} className="px-3 py-2.5 border-b border-[#ffffff04] space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[8px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] text-neutral-500">
+                        {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
+                      </span>
+                      {sig.amountRaw && (
+                        <span className="text-sm font-bold text-green-400 font-mono ml-auto">
+                          {sig.currency || "USD"}&nbsp;{sig.amountRaw}
+                        </span>
+                      )}
+                    </div>
+                    {sig.eventSummary && (
+                      <p className="text-[10px] text-neutral-500 leading-relaxed">{sig.eventSummary}</p>
+                    )}
+                    {sig.documentTitle && (
+                      <div className="font-mono text-[8px] text-neutral-700 uppercase">
+                        SRC: {sig.documentTitle}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Expansion Suggestions */}
           {entity.caseId && (

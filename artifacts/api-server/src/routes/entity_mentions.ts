@@ -4,9 +4,11 @@ import {
   entityMentionsTable,
   entitiesTable,
   documentsTable,
+  timelineEntriesTable,
+  financialSignalsTable,
 } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
-import { extractTextFromFile, extractEntities } from "../lib/entity-extractor";
+import { extractTextFromFile, extractEntities, extractTimelineEvents, extractFinancialSignals } from "../lib/entity-extractor";
 import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
@@ -74,15 +76,67 @@ router.post("/documents/:id/analyze", async (req, res) => {
     inserted.push(rows[0]);
   }
 
+  // ── Timeline event extraction ───────────────────────────────────────────────
+  const timelineEvents = extractTimelineEvents(text);
+  let timelineInserted = 0;
+  for (const ev of timelineEvents) {
+    try {
+      await db.insert(timelineEntriesTable).values({
+        title: ev.eventType.replace(/_/g, " ") + ": " + ev.summary.slice(0, 80),
+        description: ev.summary,
+        eventDate: ev.eventDate,
+        linkedDocumentId: docId,
+        caseId: doc.caseId,
+      });
+      timelineInserted++;
+    } catch { /* skip duplicates */ }
+  }
+  if (timelineInserted > 0) {
+    await logEvent(
+      "timeline_event_detected",
+      `${timelineInserted} timeline event${timelineInserted !== 1 ? "s" : ""} extracted from "${doc.title || `DOC-${docId}`}"`,
+      { caseId: doc.caseId, documentId: docId }
+    );
+  }
+
+  // ── Financial signal extraction ──────────────────────────────────────────────
+  const financialSignals = extractFinancialSignals(text);
+  let signalInserted = 0;
+  for (const sig of financialSignals) {
+    try {
+      await db.insert(financialSignalsTable).values({
+        amountRaw: sig.amountRaw,
+        normalizedAmount: sig.normalizedAmount ?? undefined,
+        currency: sig.currency,
+        signalType: sig.signalType,
+        eventSummary: sig.eventSummary,
+        entityName: sig.entityName,
+        documentId: docId,
+        documentTitle: doc.title,
+        caseId: doc.caseId,
+      });
+      signalInserted++;
+    } catch { /* skip duplicates */ }
+  }
+  if (signalInserted > 0) {
+    await logEvent(
+      "financial_signal_detected",
+      `${signalInserted} financial signal${signalInserted !== 1 ? "s" : ""} extracted from "${doc.title || `DOC-${docId}`}"`,
+      { caseId: doc.caseId, documentId: docId }
+    );
+  }
+
   await logEvent(
     "analysis_completed",
-    `Analysis completed on "${doc.title || `DOC-${docId}`}": ${inserted.length} entity detection${inserted.length !== 1 ? "s" : ""} found`,
+    `Analysis completed on "${doc.title || `DOC-${docId}`}": ${inserted.length} entity detections, ${timelineInserted} timeline events, ${signalInserted} financial signals`,
     { caseId: doc.caseId, documentId: docId }
   );
 
   res.json({
     documentId: docId,
     mentionsCreated: inserted.length,
+    timelineEventsCreated: timelineInserted,
+    financialSignalsCreated: signalInserted,
     mentions: inserted.map(formatMention),
     textLength: text.length,
     extractionMethod,

@@ -1,6 +1,6 @@
 import React from "react";
 import { useListEntities } from "@workspace/api-client-react";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDate } from "@/lib/utils";
 
@@ -15,13 +15,26 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function EntityList() {
-  const { data: entities, isLoading } = useListEntities();
+  const { data: entities, isLoading, refetch } = useListEntities();
   const [search, setSearch] = React.useState("");
+  const [confirmId, setConfirmId] = React.useState<number | null>(null);
+  const [deleting, setDeleting] = React.useState<number | null>(null);
 
   const filtered =
     entities?.filter((e) =>
       e.name.toLowerCase().includes(search.toLowerCase())
     ) || [];
+
+  async function handleDelete(id: number) {
+    setDeleting(id);
+    try {
+      await fetch(`/api/entities/${id}`, { method: "DELETE" });
+      setConfirmId(null);
+      refetch();
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-3">
@@ -58,7 +71,7 @@ export default function EntityList() {
           <div className="flex-1">NAME</div>
           <div className="w-28 hidden sm:block">CASE</div>
           <div className="w-28 hidden md:block">REGISTERED</div>
-          <div className="w-16 text-right">→</div>
+          <div className="w-20 text-right">ACTION</div>
         </div>
 
         <div className="divide-y divide-[#ffffff04]">
@@ -79,33 +92,62 @@ export default function EntityList() {
             </div>
           ) : (
             filtered.map((entity) => (
-              <Link key={entity.id} href={`/entities/${entity.id}`}>
-                <div className="flex px-4 py-2.5 items-center hover:bg-[#ffffff03] cursor-pointer transition-colors group">
-                  <div className="w-32">
-                    <span
-                      className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border bg-black ${
-                        TYPE_COLORS[entity.type] || TYPE_COLORS.other
-                      }`}
-                    >
-                      {entity.type.replace(/_/g, " ")}
-                    </span>
-                  </div>
-                  <div className="flex-1 font-medium text-sm text-white group-hover:text-red-400 transition-colors uppercase truncate">
+              <div key={entity.id} className="flex px-4 py-2.5 items-center hover:bg-[#ffffff03] transition-colors group">
+                <div className="w-32 flex-shrink-0">
+                  <span
+                    className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border bg-black ${
+                      TYPE_COLORS[entity.type] || TYPE_COLORS.other
+                    }`}
+                  >
+                    {entity.type.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <Link href={`/entities/${entity.id}`} className="flex-1 min-w-0">
+                  <div className="font-medium text-sm text-white group-hover:text-red-400 transition-colors uppercase truncate">
                     {entity.name}
                   </div>
-                  <div className="w-28 hidden sm:block font-mono text-[9px] text-neutral-600">
-                    {entity.caseId
-                      ? `CASE-${entity.caseId.toString().padStart(4, "0")}`
-                      : "UNLINKED"}
-                  </div>
-                  <div className="w-28 hidden md:block font-mono text-[9px] text-neutral-600">
-                    {formatDate(entity.createdAt).split(",")[0]}
-                  </div>
-                  <div className="w-16 text-right text-neutral-700 group-hover:text-red-500 font-mono text-[9px] uppercase">
-                    ACCESS
-                  </div>
+                </Link>
+                <div className="w-28 hidden sm:block font-mono text-[9px] text-neutral-600">
+                  {entity.caseId
+                    ? `CASE-${entity.caseId.toString().padStart(4, "0")}`
+                    : "UNLINKED"}
                 </div>
-              </Link>
+                <div className="w-28 hidden md:block font-mono text-[9px] text-neutral-600">
+                  {formatDate(entity.createdAt).split(",")[0]}
+                </div>
+                <div className="w-20 flex items-center justify-end gap-1.5">
+                  {confirmId === entity.id ? (
+                    <>
+                      <button
+                        onClick={() => handleDelete(entity.id)}
+                        disabled={deleting === entity.id}
+                        className="font-mono text-[8px] text-red-500 border border-red-500/40 px-1.5 py-0.5 hover:bg-red-500/10 transition-colors uppercase disabled:opacity-50"
+                      >
+                        {deleting === entity.id ? "..." : "CONFIRM"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmId(null)}
+                        className="font-mono text-[8px] text-neutral-600 border border-[#ffffff0d] px-1.5 py-0.5 hover:bg-[#ffffff05] transition-colors uppercase"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.preventDefault(); setConfirmId(entity.id); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-neutral-700 hover:text-red-500 p-1"
+                      title="Delete entity"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                  {confirmId !== entity.id && (
+                    <Link href={`/entities/${entity.id}`}>
+                      <span className="font-mono text-[9px] text-neutral-700 group-hover:text-red-500 uppercase">ACCESS</span>
+                    </Link>
+                  )}
+                </div>
+              </div>
             ))
           )}
         </div>

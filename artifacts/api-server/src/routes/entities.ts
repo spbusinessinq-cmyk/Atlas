@@ -6,6 +6,7 @@ import {
   documentsTable,
   timelineEntriesTable,
   entityMentionsTable,
+  financialSignalsTable,
 } from "@workspace/db/schema";
 import { eq, or, and, inArray, ilike } from "drizzle-orm";
 import { logEvent } from "../lib/log-event";
@@ -61,13 +62,18 @@ router.get("/entities/:id", async (req, res) => {
     ? and(ilike(entityMentionsTable.entityName, entity.name), eq(entityMentionsTable.caseId, entity.caseId))
     : ilike(entityMentionsTable.entityName, entity.name);
 
-  const [mentions, relationships, timelineAppearances] = await Promise.all([
+  const sigFilter = entity.caseId
+    ? and(ilike(financialSignalsTable.entityName, entity.name), eq(financialSignalsTable.caseId, entity.caseId))
+    : ilike(financialSignalsTable.entityName, entity.name);
+
+  const [mentions, relationships, timelineAppearances, financialSignals] = await Promise.all([
     db.select().from(entityMentionsTable).where(mentionFilter),
     db
       .select()
       .from(relationshipsTable)
       .where(or(eq(relationshipsTable.entityAId, id), eq(relationshipsTable.entityBId, id))),
     db.select().from(timelineEntriesTable).where(eq(timelineEntriesTable.linkedEntityId, id)),
+    db.select().from(financialSignalsTable).where(sigFilter as any),
   ]);
 
   const mentionDocIds = [...new Set(mentions.map((m) => m.documentId))];
@@ -143,6 +149,19 @@ router.get("/entities/:id", async (req, res) => {
 
   res.json({
     entity: formatEntity(entity),
+    financialSignals: financialSignals.map((s) => ({
+      id: s.id,
+      amountRaw: s.amountRaw,
+      normalizedAmount: s.normalizedAmount,
+      currency: s.currency || "USD",
+      signalType: s.signalType,
+      eventSummary: s.eventSummary,
+      entityName: s.entityName,
+      documentId: s.documentId,
+      documentTitle: s.documentTitle,
+      caseId: s.caseId,
+      createdAt: s.createdAt.toISOString(),
+    })),
     mentions: mentions.map((m) => ({
       id: m.id,
       documentId: m.documentId,

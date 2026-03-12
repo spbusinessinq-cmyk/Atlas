@@ -148,8 +148,9 @@ export default function CaseDetail() {
     notes,
     relationships,
     moneyFlows,
+    financialSignals,
     pendingMentions,
-  } = summary;
+  } = summary as typeof summary & { financialSignals?: any[] };
 
   const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
   const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
@@ -171,6 +172,7 @@ export default function CaseDetail() {
       notes={notes}
       relationships={relationships}
       moneyFlows={moneyFlows}
+      financialSignals={financialSignals ?? []}
       pendingMentions={pendingMentions as number}
       approvedMentions={approvedMentions}
       activeSection={activeSection}
@@ -246,6 +248,7 @@ function CaseDetailInner({
   notes,
   relationships,
   moneyFlows,
+  financialSignals,
   pendingMentions,
   approvedMentions,
   activeSection,
@@ -278,6 +281,7 @@ function CaseDetailInner({
   notes: Note[];
   relationships: Relationship[];
   moneyFlows: MoneyFlow[];
+  financialSignals: any[];
   pendingMentions: number;
   approvedMentions: { id: number; documentId: number; entityName: string; entityType: string; confidence: number; status: string }[];
   activeSection: SectionId;
@@ -592,6 +596,7 @@ function CaseDetailInner({
               documents={documents}
               timeline={timeline}
               moneyFlows={moneyFlows}
+              financialSignals={financialSignals}
               onViewDocument={(doc) => {
                 onSectionChange("documents");
                 onViewDoc(doc);
@@ -637,7 +642,7 @@ function CaseDetailInner({
           )}
 
           {activeSection === "flows" && (
-            <FlowTracePanel moneyFlows={moneyFlows} />
+            <FlowTracePanel moneyFlows={moneyFlows} financialSignals={financialSignals} />
           )}
 
           {activeSection === "notes" && (
@@ -702,6 +707,7 @@ function OverviewPanel({
   documents,
   timeline,
   moneyFlows,
+  financialSignals,
   onViewDocument,
 }: {
   caseData: { title: string; description?: string | null; tags?: string[] | null };
@@ -709,6 +715,7 @@ function OverviewPanel({
   documents: Document[];
   timeline: TimelineEntry[];
   moneyFlows: MoneyFlow[];
+  financialSignals: any[];
   onViewDocument?: (doc: Document) => void;
 }) {
   return (
@@ -802,27 +809,31 @@ function OverviewPanel({
         </div>
       </div>
 
-      {moneyFlows.length > 0 && (
-        <div className="nexus-panel rounded-none lg:col-span-2">
+      {financialSignals.length > 0 && (
+        <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
           <div className="nexus-header-strip">
-            <span className="nexus-label">FLOW TRACE ({moneyFlows.length})</span>
+            <span className="nexus-label">FINANCIAL SIGNALS ({financialSignals.length})</span>
           </div>
           <div className="p-0">
-            {moneyFlows.slice(0, 5).map((mf) => (
+            {financialSignals.slice(0, 6).map((sig: any) => (
               <div
-                key={mf.id}
+                key={sig.id}
                 className="px-3 py-2 border-b border-[#ffffff04] flex items-center gap-3"
               >
-                <span className="text-sm font-semibold text-cyan-400 uppercase">
-                  {mf.sourceEntityName}
+                <span className="text-[9px] font-mono text-neutral-500 uppercase bg-[#0a0e14] px-1.5 py-0.5 border border-[#ffffff08]">
+                  {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
                 </span>
-                <span className="text-[9px] font-mono text-green-500">→</span>
-                <span className="text-sm font-semibold text-cyan-400 uppercase">
-                  {mf.destinationEntityName}
+                {sig.entityName && (
+                  <span className="text-sm font-semibold text-cyan-400 uppercase truncate">
+                    {sig.entityName}
+                  </span>
+                )}
+                <span className="text-xs text-neutral-500 truncate flex-1">
+                  {sig.eventSummary?.slice(0, 80)}
                 </span>
-                {mf.amount && (
-                  <span className="text-xs font-mono text-green-400 ml-auto">
-                    {mf.currency || "USD"} {mf.amount.toLocaleString()}
+                {sig.amountRaw && (
+                  <span className="text-xs font-mono text-green-400 ml-auto flex-shrink-0">
+                    {sig.currency || "USD"} {sig.amountRaw}
                   </span>
                 )}
               </div>
@@ -836,57 +847,126 @@ function OverviewPanel({
 
 // ─── Flow Trace Panel ────────────────────────────────────────────────────────
 
-function FlowTracePanel({ moneyFlows }: { moneyFlows: MoneyFlow[] }) {
+function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlow[]; financialSignals: any[] }) {
+  const SIGNAL_COLOR: Record<string, string> = {
+    payment: "text-green-400",
+    transfer: "text-cyan-400",
+    investment: "text-blue-400",
+    loan: "text-yellow-400",
+    fine: "text-red-400",
+    bribe: "text-red-500",
+    contract: "text-purple-400",
+    grant: "text-emerald-400",
+    revenue: "text-green-500",
+    expense: "text-orange-400",
+  };
+
+  const hasData = financialSignals.length > 0 || moneyFlows.length > 0;
+
   return (
     <div className="nexus-panel rounded-none h-full flex flex-col">
-      <div className="nexus-header-strip">
+      <div className="nexus-header-strip flex items-center justify-between">
         <span className="nexus-label">FLOW TRACE</span>
+        {financialSignals.length > 0 && (
+          <span className="font-mono text-[9px] text-green-500 pr-3">
+            {financialSignals.length} AUTO-DETECTED SIGNAL{financialSignals.length !== 1 ? "S" : ""}
+          </span>
+        )}
       </div>
-      <div className="flex-1 overflow-auto p-4">
-        {moneyFlows.length === 0 ? (
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {!hasData ? (
           <div className="py-12 text-center">
             <TrendingUp className="w-6 h-6 text-neutral-800 mx-auto mb-3" />
             <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
               NO FINANCIAL FLOWS RECORDED
             </div>
+            <div className="font-mono text-[9px] text-neutral-800 uppercase mt-1">
+              ANALYZE DOCUMENTS TO AUTO-DETECT SIGNALS
+            </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            {moneyFlows.map((mf) => (
-              <div
-                key={mf.id}
-                className="p-3 border border-[#ffffff0d] bg-[#0a0e14] space-y-1.5"
-              >
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-cyan-400 uppercase">
-                    {mf.sourceEntityName}
-                  </span>
-                  <span className="text-[9px] font-mono text-green-500">→</span>
-                  <span className="text-sm font-bold text-cyan-400 uppercase">
-                    {mf.destinationEntityName}
-                  </span>
-                  {mf.amount && (
-                    <span className="ml-auto text-sm font-bold text-green-400 font-mono">
-                      {mf.currency || "USD"}&nbsp;
-                      {mf.amount.toLocaleString()}
-                    </span>
-                  )}
+          <>
+            {financialSignals.length > 0 && (
+              <div>
+                <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest mb-2">
+                  AUTO-DETECTED FINANCIAL SIGNALS
                 </div>
-                <div className="flex items-center gap-4 font-mono text-[9px] text-neutral-600">
-                  {mf.date && <span>DATE: {mf.date}</span>}
-                  {mf.confidenceLevel && (
-                    <span>
-                      CONF:{" "}
-                      <span className="text-neutral-400">{mf.confidenceLevel}</span>
-                    </span>
-                  )}
+                <div className="space-y-2">
+                  {financialSignals.map((sig: any) => (
+                    <div
+                      key={sig.id}
+                      className="p-3 border border-[#ffffff0d] bg-[#0a0e14] space-y-1.5"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] ${SIGNAL_COLOR[sig.signalType] ?? "text-neutral-400"}`}>
+                          {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
+                        </span>
+                        {sig.entityName && (
+                          <span className="text-sm font-bold text-cyan-400 uppercase">
+                            {sig.entityName}
+                          </span>
+                        )}
+                        {sig.amountRaw && (
+                          <span className="ml-auto text-sm font-bold text-green-400 font-mono">
+                            {sig.currency || "USD"}&nbsp;{sig.amountRaw}
+                          </span>
+                        )}
+                      </div>
+                      {sig.eventSummary && (
+                        <p className="text-xs text-neutral-500 leading-relaxed">{sig.eventSummary}</p>
+                      )}
+                      {sig.documentTitle && (
+                        <div className="font-mono text-[9px] text-neutral-700 uppercase">
+                          SRC: {sig.documentTitle}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                {mf.description && (
-                  <p className="text-xs text-neutral-500">{mf.description}</p>
-                )}
               </div>
-            ))}
-          </div>
+            )}
+
+            {moneyFlows.length > 0 && (
+              <div>
+                <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest mb-2">
+                  MANUAL FLOW RECORDS
+                </div>
+                <div className="space-y-2">
+                  {moneyFlows.map((mf) => (
+                    <div
+                      key={mf.id}
+                      className="p-3 border border-[#ffffff0d] bg-[#0a0e14] space-y-1.5"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-cyan-400 uppercase">
+                          {mf.sourceEntityName}
+                        </span>
+                        <span className="text-[9px] font-mono text-green-500">→</span>
+                        <span className="text-sm font-bold text-cyan-400 uppercase">
+                          {mf.destinationEntityName}
+                        </span>
+                        {mf.amount && (
+                          <span className="ml-auto text-sm font-bold text-green-400 font-mono">
+                            {mf.currency || "USD"}&nbsp;
+                            {mf.amount.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 font-mono text-[9px] text-neutral-600">
+                        {mf.date && <span>DATE: {mf.date}</span>}
+                        {mf.confidenceLevel && (
+                          <span>CONF: <span className="text-neutral-400">{mf.confidenceLevel}</span></span>
+                        )}
+                      </div>
+                      {mf.description && (
+                        <p className="text-xs text-neutral-500">{mf.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

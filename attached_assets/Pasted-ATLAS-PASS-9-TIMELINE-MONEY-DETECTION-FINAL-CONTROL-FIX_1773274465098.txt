@@ -1,0 +1,385 @@
+ATLAS PASS 9 — TIMELINE + MONEY DETECTION + FINAL CONTROL FIXES
+
+System:
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+IMPORTANT:
+This pass must preserve all existing ingest, graph, dossier, and seed-launcher functionality.
+Do NOT rewrite the architecture.
+Do NOT add mock data.
+Do NOT remove existing APIs unless necessary.
+
+This pass has TWO goals:
+
+1. Add real investigative intelligence:
+   - timeline extraction
+   - money / funding detection
+   - temporal trace
+   - flow trace
+
+2. Close remaining control / usability gaps:
+   - delete controls in the main Entity Registry
+   - delete controls in the main Document Vault
+   - fix remaining blue canvas/focus box artifacts
+   - clarify how auto-case seeding / auto-search works in the UI
+   - keep graph controls stable
+
+========================================================
+PART A — TIMELINE + MONEY SIGNAL EXTRACTION
+========================================================
+
+1. TIMELINE EVENT EXTRACTION
+
+When analyzing documents, ATLAS should detect timeline events.
+
+Scan article / PDF text for:
+- dates
+- years
+- month/day phrases
+- date ranges
+- event phrases
+
+Examples:
+- "On March 11"
+- "In 2022"
+- "Launched in 2020"
+- "Funding was approved in 2021"
+- "Contract awarded last year"
+- "After the audit"
+- "Following the lawsuit"
+
+Detected event types may include:
+- PROGRAM_LAUNCH
+- CONTRACT_AWARDED
+- FUNDING_APPROVED
+- INVESTIGATION_STARTED
+- AUDIT
+- LEGAL_ACTION
+- PROGRAM_EXPANSION
+- PROPERTY_ACQUISITION
+- POLICY_CHANGE
+
+Extract and store:
+- event_date
+- event_type
+- event_summary
+- source_document_id
+- source_document_title
+- related_entity_ids if found
+- case_id
+
+Use a new timeline_events table if needed.
+
+2. TEMPORAL TRACE POPULATION
+
+Populate the existing Temporal Trace panel.
+
+Display events in chronological order.
+
+Each entry should show:
+- date
+- event summary
+- related entity tags if available
+- source document
+- event type badge
+
+Clicking an event should open the source document or case document view.
+
+If no events exist:
+show a clean empty state:
+NO TIMELINE EVENTS DETECTED
+
+3. MONEY / FUNDING DETECTION
+
+Add financial signal extraction.
+
+Detect:
+- $5 million
+- $2.3M
+- $450,000
+- £2.5m
+- €6.2M
+- "$10 million contract"
+- "awarded $5M"
+- "funded with $20 million"
+- "received $450,000"
+
+Extract:
+- amount_raw
+- normalized_amount if feasible
+- currency
+- money_signal_type
+- event_summary
+- source_document_id
+- related entity if found
+- case_id
+
+Money signal types may include:
+- CONTRACT
+- GRANT
+- FUNDING
+- APPROPRIATION
+- PAYMENT
+- AWARD
+
+Use a new financial_signals table if needed.
+
+4. FLOW TRACE POPULATION
+
+Populate the existing Flow Trace panel.
+
+Each entry should show:
+- entity / recipient if known
+- amount
+- type
+- source document
+- date if known
+
+Example:
+LOS ANGELES HOMELESS SERVICES AUTHORITY
+$5,000,000
+CONTRACT
+Source: LAist
+
+If no signals exist:
+show clean empty state:
+NO FINANCIAL FLOWS RECORDED
+
+5. ENTITY DOSSIER EXPANSION
+
+Enhance entity dossiers with:
+
+TIMELINE APPEARANCES
+FINANCIAL SIGNALS
+
+Example:
+TIMELINE APPEARANCES
+2021 — Program launched
+2022 — Contract awarded
+2023 — Audit opened
+
+FINANCIAL SIGNALS
+$5M — Program contract
+$2.3M — State housing funding
+
+Do not fake values.
+
+========================================================
+PART B — REMAINING CONTROL / CLEANUP FIXES
+========================================================
+
+6. DELETE BUTTON — MAIN ENTITY REGISTRY
+
+A user must be able to delete entities directly from the main Entity Registry page, not only from the entity detail page.
+
+Add a visible delete action on each row in the main Entity Registry.
+
+Requirements:
+- confirmation before delete
+- entity removed from registry
+- node removed from graph
+- related suggested links removed
+- counts update immediately
+- System Log records ENTITY_DELETED
+
+7. DELETE BUTTON — MAIN DOCUMENT VAULT
+
+A user must be able to delete documents directly from the main Document Vault page, not only from case-level document views.
+
+Add a visible delete action on each row in the main Document Vault.
+
+Requirements:
+- confirmation before delete
+- document removed from vault
+- associated mentions removed if tied only to that document
+- counts update immediately
+- graph updates if necessary
+- System Log records DOCUMENT_DELETED
+
+This must work for:
+- uploaded documents
+- web-ingested documents
+
+8. WEB DOCUMENT DELETE / CONTROL CLARITY
+
+Clarify that web-ingested sources are still normal documents inside the system and can be deleted like other documents.
+
+Make sure delete works from:
+- case document vault
+- main document vault
+- document inspector if feasible
+
+9. BLUE CANVAS / FOCUS BOX FIX — FINAL PASS
+
+There are still bright blue box/focus/canvas artifacts visible in some parts of the UI.
+
+Fix ALL remaining blue boxes.
+
+Likely causes:
+- React Flow focus ring
+- canvas/container outline
+- browser default focus style
+- wrapper div border/focus state
+- debug styling
+
+Requirements:
+- no bright browser-style blue rectangles remain
+- replace with subtle ATLAS-style focus state:
+  thin cyan glow or thin muted border
+- preserve usability
+
+10. GRAPH CONTROL — KEEP STABLE
+
+Keep current graph controls working:
+- drag nodes
+- persist positions
+- fit
+- reset
+- hide suggested
+
+Do not regress these features.
+
+========================================================
+PART C — AUTO-SEED / AUTO-SEARCH CLARITY
+========================================================
+
+11. CLARIFY AUTO-SEARCH BEHAVIOR IN UI
+
+The user is confused about whether ATLAS searches on its own and how to trigger it.
+
+Make this explicit in the dashboard / seed launcher UI.
+
+The Case Seed Launcher should clearly explain:
+
+Type a target → ATLAS will:
+- create a case
+- search the web
+- ingest top sources
+- analyze them
+- seed the case
+
+Add a short helper text under the seed launcher input.
+
+Example:
+"ATLAS will automatically create a case, search public sources, ingest top results, and begin entity analysis."
+
+12. CASE OVERVIEW STATUS CLARITY
+
+Inside auto-seeded cases, explain what happened.
+
+Example case overview text should be clearer:
+- how many sources were ingested
+- how many detections found
+- how many auto-approved
+- what next step the user should take
+
+If 0 auto-approved entities:
+say so clearly:
+"0 entities were auto-approved. Review pending detections to build the graph."
+
+13. OPTIONAL — MANUAL RE-RUN OF AUTO SEARCH
+
+If lightweight and safe:
+Add a RE-RUN SEED SEARCH or REFRESH SOURCES action for auto-seeded cases.
+
+This should:
+- re-run the seeded target search
+- ingest only new deduped sources
+- not duplicate existing docs
+
+Only add this if it is low-risk.
+
+========================================================
+PART D — PALANTIR / ORION STYLE UI REFINEMENT
+========================================================
+
+14. GLASS / INTELLIGENCE PANEL POLISH
+
+Continue moving ATLAS toward a more premium intelligence look.
+
+Without changing layout architecture, improve:
+- panel depth
+- glass feel
+- blur layers
+- subtle glow
+- hover polish
+
+Use:
+- backdrop-filter blur where appropriate
+- thin cyan borders
+- soft orange warning accents
+- subtle layered panel shadows
+
+Keep:
+- near-black background
+- white text
+- cyan intelligence accents
+- red action buttons
+- orange warning states
+
+Do NOT overdo effects.
+Keep it tactical and sharp.
+
+15. TEMPORAL TRACE + FLOW TRACE VISUALS
+
+Make the new panels feel like intelligence tools.
+
+Temporal Trace:
+- vertical timeline line
+- event markers
+- compact cards
+
+Flow Trace:
+- compact financial signal cards
+- amount emphasis
+- source / entity tags
+
+========================================================
+PART E — SYSTEM LOG
+========================================================
+
+16. ADD SYSTEM LOG EVENTS
+
+Add log events for:
+- TIMELINE_EVENT_DETECTED
+- FINANCIAL_SIGNAL_DETECTED
+- DOCUMENT_DELETED
+- ENTITY_DELETED
+- CASE_RESEEDED if re-run search is added
+
+No fake logs.
+
+========================================================
+PART F — TESTING CHECKLIST
+========================================================
+
+17. VERIFY ALL OF THIS
+
+Verify:
+1. analyzing a document extracts timeline events when present
+2. monetary values are detected when present
+3. Temporal Trace populates
+4. Flow Trace populates
+5. entity dossiers show timeline appearances
+6. entity dossiers show financial signals
+7. delete works from main Entity Registry
+8. delete works from main Document Vault
+9. web-ingested docs can be deleted
+10. graph controls still work
+11. blue box artifacts are gone
+12. seed launcher clearly explains auto-search behavior
+
+========================================================
+FINAL SUMMARY
+========================================================
+
+Report:
+1. how timeline extraction works
+2. how money detection works
+3. how Temporal Trace works
+4. how Flow Trace works
+5. what delete controls were added
+6. how the remaining blue box artifacts were fixed
+7. what UI clarification was added for auto-seeding
+8. files modified
