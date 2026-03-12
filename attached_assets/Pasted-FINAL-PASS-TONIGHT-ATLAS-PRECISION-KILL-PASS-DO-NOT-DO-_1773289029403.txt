@@ -1,0 +1,429 @@
+FINAL PASS TONIGHT — ATLAS PRECISION KILL-PASS
+DO NOT DO A COSMETIC PASS. DO NOT SPREAD EFFORT. THIS PASS IS ABOUT MAKING AUTO-BUILD TRUSTWORTHY.
+
+GOAL
+ATLAS must stop building junk graphs from contaminated article text.
+Search + ingest are already “good enough.”
+The failure is ENTITY ADMISSION, AUTO-PROMOTION, and GRAPH SEED QUALITY.
+This pass must harden the system so a new investigation produces a smaller, cleaner, believable starter graph.
+
+NON-NEGOTIABLE TARGET
+For investigation / corruption / legal / government / homelessness seeds:
+- ATLAS should prefer fewer, cleaner promoted entities over more noisy ones.
+- If confidence is weak, HOLD entities instead of promoting them.
+- The system must stop promoting merged-line garbage, sidebar bleed, footer bleed, related-story bleed, and stitched names.
+- If the build is weak after starter ingest, ATLAS must expand search depth automatically instead of pretending the case is good.
+
+==================================================
+PASS NAME
+PASS 20 — PRECISION KILL-PASS
+==================================================
+
+FILES TO TOUCH
+- artifacts/api-server/src/lib/entity-extractor.ts
+- artifacts/api-server/src/routes/web_ingest.ts
+- artifacts/api-server/src/routes/cases.ts
+- artifacts/nexus/src/pages/case-detail.tsx
+- artifacts/nexus/src/pages/case-tabs/documents-tab.tsx
+
+==================================================
+T001 — ADMISSION FIREWALL 2.0
+FILE: entity-extractor.ts
+==================================================
+
+HARD RULE:
+For serious investigative seeds, entities are NOT equally trustworthy across the page.
+
+Implement a source-zone trust model:
+- TITLE = strongest
+- DEK / subheadline = strong
+- FIRST 2–3 BODY PARAGRAPHS = medium-high
+- mid-body = medium
+- tail/body after paragraph 8 = weak
+- sidebars / share rails / related links / footer / nav / promo / newsletter / “more stories” = reject
+
+Create or strengthen extraction zones:
+- title
+- dek
+- lead
+- body
+- tail
+- sidebar
+- footer
+- related
+- boilerplate
+- unknown
+
+Change entity admission rules:
+1. AUTO-ADMIT candidates only if they appear in:
+   - title OR
+   - dek OR
+   - lead OR
+   - repeated in 2+ trustworthy zones
+2. DOWNWEIGHT heavily if:
+   - only appears in tail
+   - only appears in one weak paragraph
+   - only appears near social/share text
+   - only appears in “more news”, “top stories”, “read more”, “watch”, “listen”, “newsletter”, “advertisement”, “sponsored”, etc.
+3. HARD REJECT if candidate looks like:
+   - merged names
+   - line-stitched fragments
+   - city/state/newsroom mashups
+   - role/title + unrelated proper noun concat
+   - unrelated locality cluster
+   - cross-story bleed
+
+ADD EXPLICIT PATTERN REJECTION FOR THESE TYPES OF FAILURES:
+- STEVE BENEN JAMES COMER
+- LOS ANGELESROANOKE CITY
+- NEXT MIKE CRAPO
+- MORE NEWS EAU CLAIRE CITY COUNCIL
+- anything where:
+  - 3+ title-case tokens stitched unnaturally
+  - no normal punctuation spacing around merged capitalized segments
+  - “MORE NEWS”, “NEXT”, “READ MORE”, “WATCH”, “LISTEN”, “TOP STORIES” prefix a candidate
+  - candidate contains newsroom / navigation residue
+  - candidate begins or ends with article chrome words
+
+ADD a “merged-line artifact” rejection function.
+ADD a “cross-story contamination” rejection function.
+ADD a “navigation residue” rejection function.
+
+==================================================
+T002 — LEAD-FIRST ENTITY EXTRACTION
+FILE: entity-extractor.ts
+==================================================
+
+For serious seed intents:
+- crime_corruption
+- legal_lawsuit
+- policy_government
+- housing_homelessness
+- finance_funding
+
+Create a lead-first extraction path:
+- title
+- dek
+- first 3 paragraphs
+- then rest of article only as supporting evidence
+
+Scoring rules:
+- entities in title/dek get strong bonus
+- entities in first 3 paragraphs get strong bonus
+- entities only outside first 6 paragraphs get strong penalty
+- entities repeated in multiple trustworthy paragraphs get repeat bonus
+- entities seen in title + body get major bonus
+- entities seen only once in weak zone should never auto-promote
+
+For these serious intents:
+- single-doc entities should usually remain HELD unless title/dek/lead evidence is extremely strong
+- one-off weak mentions should not be promoted into graph
+
+==================================================
+T003 — MULTI-DOC PROMOTION GATES
+FILE: web_ingest.ts
+==================================================
+
+Rewrite promotion rules so the graph is cleaner.
+
+NEW PROMOTION TIERS
+
+T1_CONFIRMED:
+- 2+ docs minimum
+- role-bearing OR institution-bearing
+- HIGH or MED topic relevance
+- appears in title/dek/lead in at least one doc
+- not rejected by artifact filters
+- trust high enough
+
+T1_STRONG_SINGLE_DOC:
+- allowed ONLY if:
+  - appears in title or dek
+  - appears in lead
+  - has strong role/institution quality
+  - doc is PRIORITY_A
+  - seed intent is aligned
+  - no artifact flags
+Use this sparingly.
+
+T2_HELD:
+- anything plausible but not proven enough
+- visible in triage, not graph
+
+AUTO-REJECT:
+- off-topic
+- artifact
+- navigation residue
+- tail-only junk
+- single common first name
+- stitched locality phrases
+- cross-story bleed
+
+Add a hard rule:
+For serious investigative seeds, if an entity appears in only 1 doc and does NOT appear in title/dek/lead, it cannot be auto-promoted.
+
+==================================================
+T004 — GRAPH SEED HYGIENE
+FILE: web_ingest.ts
+==================================================
+
+Current graph is still letting junk in.
+
+New graph seed rules:
+- max promoted starter entities: 6 for serious investigation seeds
+- prefer:
+  - people with clear role-bearing context
+  - agencies
+  - institutions
+  - prosecutors / courts / committees / departments
+  - named programs only if clearly central
+- suppress:
+  - vague locations
+  - generic city fragments
+  - random publications
+  - side-story people
+  - entertainment/sports/publicity names
+  - one-off incidental actors
+
+New edge rules:
+- only build starter edges from PRIORITY_A / PRIORITY_B docs
+- do not build edges from LOW_SIGNAL docs
+- do not build edges from docs flagged contaminated / partial-noisy
+- prefer edges when both entities co-occur in:
+  - title + body
+  - lead paragraph
+  - multiple clean paragraphs
+- do not create graph edges from tail-only or weak-zone co-mentions
+
+==================================================
+T005 — AUTOMATIC WEAK-BUILD RECOVERY
+FILE: web_ingest.ts
+==================================================
+
+This is critical.
+
+If starter ingest returns a weak build, ATLAS should auto-expand instead of stopping.
+
+After initial 8-doc starter run:
+If any of the below are true:
+- promoted entities < 3 for serious intent
+- auto_build_quality == WEAK or FAILED
+- rejected_fw is very high
+- graph entities are mostly held / junk
+- usable docs are present but trustworthy promoted entities are too low
+
+THEN:
+- automatically run recovery ingest
+- expand from 8 docs to 12 or 16 max
+- only add new docs that improve diversity and topic alignment
+- tighten relevance rules during recovery
+- prioritize government, investigative, court, watchdog, committee, public records, reputable local reporting
+
+Recovery search variations for investigation seeds should include:
+- investigation
+- files
+- court
+- committee
+- released documents
+- department / doj / fbi if appropriate
+- audit
+- oversight
+- records
+- indictment / lawsuit / deposition if intent fits
+
+This is NOT endless recursion.
+Do one recovery pass only.
+
+Add explicit seed diagnostics:
+- recovery_triggered=0/1
+- recovery_reason=
+- starter_promoted=
+- final_promoted=
+- final_build_quality=
+
+==================================================
+T006 — DOCUMENT CONTAMINATION SCORING
+FILE: entity-extractor.ts + web_ingest.ts
+==================================================
+
+Add a contamination score per document.
+
+Signals that should raise contamination:
+- lots of social/share words
+- many “more stories” type fragments
+- many repeated promo/navigation snippets
+- too many unrelated named entities from distinct topics
+- many timestamps/video teaser fragments
+- footer/newsletter/copyright clutter
+- obvious site chrome residue
+- article body includes multiple unrelated headlines
+
+If contamination score is high:
+- doc can still be stored
+- but entity extraction should be restricted to title/dek/lead only
+- doc should never be used for starter graph edges
+- doc should not contribute strong trust unless title/dek/lead are very clean
+
+Expose this in diag:
+- contamination=low/med/high
+- extraction_mode=full/lead_only/restricted
+
+==================================================
+T007 — ENTITY NORMALIZATION / CANONICALIZATION HARDENING
+FILE: entity-extractor.ts
+==================================================
+
+Stop variants and stitched names from slipping through.
+
+Strengthen canonicalization:
+- trim punctuation junk at ends
+- reject possessive endings that should not define entity names
+- reject obvious concatenations
+- collapse dept/department, auth/authority, svc/services where valid
+- preserve real agencies, but reject malformed compounds
+- strip nav residues like:
+  - next
+  - more news
+  - read more
+  - watch
+  - listen
+  - live
+  - share
+  - copy link
+  - subscribe
+
+Canonicalization must not merge unrelated people.
+Be conservative.
+
+==================================================
+T008 — CASE BRIEF / AUTO-BUILD QUALITY HONESTY
+FILE: web_ingest.ts + case-detail.tsx
+==================================================
+
+The brief must stop sounding confident when the case is weak.
+
+If build quality is weak:
+- say so plainly
+- mention that auto-build was limited
+- mention recovery ran if it ran
+- mention that analyst review is required
+
+New build statuses:
+- STRONG BUILD
+- MODERATE BUILD
+- WEAK BUILD
+- FAILED BUILD
+- RECOVERED BUILD
+
+Brief should include:
+- what ATLAS found
+- whether recovery was triggered
+- how many trustworthy promoted entities survived
+- whether graph is starter-quality or analyst-review-only
+
+In case-detail UI:
+- make this visible in CASE HEALTH
+- show recovery state
+- show contamination pressure
+- show how many candidates were held vs promoted vs rejected
+
+==================================================
+T009 — TRIAGE ACTIONS FOR THIS NEW FIREWALL
+FILE: cases.ts + case-detail.tsx
+==================================================
+
+Add bulk controls that match the new system:
+- REJECT ARTIFACT MENTIONS
+- REJECT NAV / BOILERPLATE
+- HOLD SINGLE-DOC LOW-TRUST
+- PROMOTE TITLE/LEAD HIGH-CONF
+- PROMOTE MULTI-DOC ROLE-BEARING
+
+These should act on pending mentions using the new metadata:
+- role
+- topic relevance
+- zone
+- contamination
+- artifact flags
+
+==================================================
+T010 — UI HONESTY IN DOC VIEW / TRIAGE
+FILE: documents-tab.tsx + case-detail.tsx
+==================================================
+
+When a doc is noisy, say so.
+
+In the document inspector / vault:
+show:
+- contamination level
+- extraction mode
+- lead-only mode if used
+- whether doc contributed to graph seeding
+- whether doc was excluded from graph
+
+In triage:
+show tiny metadata chips if possible:
+- TITLE HIT
+- LEAD HIT
+- MULTI-DOC
+- HELD
+- ARTIFACT
+- OFF-TOPIC
+- LOW-ROLE
+- NAV NOISE
+
+Do not redesign the whole UI.
+Only add targeted intelligence indicators.
+
+==================================================
+ACCEPTANCE TESTS — MUST PASS
+==================================================
+
+TEST 1 — JEFFREY EPSTEIN INVESTIGATION
+Expected:
+- vault still around ~8–16 docs max
+- promoted entities are central and believable
+- no junk graph nodes like:
+  - STEVE BENEN JAMES COMER
+  - IRANIAN SCHOOL
+  - LOS ANGELESROANOKE CITY
+  - NEXT MIKE CRAPO
+  - MORE NEWS EAU CLAIRE CITY COUNCIL
+- if no trustworthy entities exist yet, system should HOLD rather than promote junk
+
+TEST 2 — HOUSING / HOMELESSNESS CASE
+Expected:
+- institutions / agencies / programs beat side-story junk
+- graph size smaller but cleaner
+- flow trace not polluted by irrelevant consumer/sports/publicity amounts
+
+TEST 3 — FINANCE / FUNDING CASE
+Expected:
+- money extraction only from relevant funding/budget/grant/investment contexts
+- not from ads, prices, sports salaries, TV listings, random unrelated copy
+
+==================================================
+IMPLEMENTATION STYLE
+==================================================
+
+- Work directly in the files
+- Be conservative
+- Prefer precision over recall
+- Prefer HOLD over bad promotion
+- Keep current architecture; do not rebuild app structure
+- Add comments where logic is non-obvious
+- After coding, restart both services
+- Run at least one real seed case and inspect:
+  - vault
+  - promoted entities
+  - graph
+  - brief
+  - build quality
+- Then summarize exactly what changed and whether the acceptance tests improved
+
+CRITICAL FINAL RULE
+If the system must choose between:
+A) promoting more entities
+B) promoting fewer but trustworthy entities
+
+choose B every time.

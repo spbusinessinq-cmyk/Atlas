@@ -764,6 +764,7 @@ interface SeedDiag {
   failed: number;
   wrapper: number;
   noise: number;
+  highContam: number;
   priorityA: number;
   priorityB: number;
   detected: number;
@@ -777,8 +778,13 @@ interface SeedDiag {
   suppressedNoise: number;
   seedIntent: string;
   fallback: boolean;
+  recoveryTriggered: boolean;
+  recoveryReason: string;
+  starterPromoted: number;
+  finalPromoted: number;
+  recoveryDocs: number;
   buildStatus: string;
-  autoBuildQuality: "STRONG" | "MODERATE" | "WEAK" | "FAILED" | null;
+  autoBuildQuality: "STRONG" | "MODERATE" | "WEAK" | "FAILED" | "RECOVERED" | null;
   trustRating: string;
   nextQueries: string[];
 }
@@ -823,6 +829,7 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     failed: n("failed"),
     wrapper: n("wrapper"),
     noise: n("noise"),
+    highContam: n("high_contam"),
     priorityA: n("priority_a"),
     priorityB: n("priority_b"),
     detected: n("detected"),
@@ -836,8 +843,13 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     suppressedNoise: n("suppressed_noise"),
     seedIntent: kv["seed_intent"] || "general",
     fallback: kv["fallback"] === "1",
+    recoveryTriggered: kv["recovery_triggered"] === "1",
+    recoveryReason: dec(kv["recovery_reason"]) || "",
+    starterPromoted: n("starter_promoted"),
+    finalPromoted: n("final_promoted"),
+    recoveryDocs: n("recovery_docs"),
     buildStatus: kv["build_status"] || "unknown",
-    autoBuildQuality: (abq === "STRONG" || abq === "MODERATE" || abq === "WEAK" || abq === "FAILED") ? abq : null,
+    autoBuildQuality: (abq === "STRONG" || abq === "MODERATE" || abq === "WEAK" || abq === "FAILED" || abq === "RECOVERED") ? abq as SeedDiag["autoBuildQuality"] : null,
     trustRating: dec(kv["trust"]) || "UNKNOWN",
     nextQueries: nextQueriesRaw ? nextQueriesRaw.split("||").filter(Boolean) : [],
   };
@@ -1679,11 +1691,21 @@ function DefaultInspector({
                     const abqColor =
                       abq === "STRONG" ? "text-green-400 border-green-900/40" :
                       abq === "MODERATE" ? "text-cyan-500 border-cyan-900/40" :
+                      abq === "RECOVERED" ? "text-teal-400 border-teal-900/40" :
                       abq === "WEAK" ? "text-amber-600 border-amber-900/40" :
                       "text-red-700 border-red-900/40";
                     return (
                       <span className={`text-[8px] font-mono border px-1 uppercase ${abqColor}`}>
-                        {abq}
+                        {abq === "RECOVERED" ? "RECOVERED" : abq}
+                      </span>
+                    );
+                  })()}
+                  {(() => {
+                    const sd = parseSeedDiag(caseData.description);
+                    if (!sd || sd.highContam < 1) return null;
+                    return (
+                      <span className="text-[8px] font-mono border px-1 uppercase text-orange-500 border-orange-900/40" title={`${sd.highContam} high-contamination doc(s) restricted to lead-only extraction`}>
+                        {sd.highContam}✗ CONTAM
                       </span>
                     );
                   })()}
@@ -1825,6 +1847,38 @@ function DefaultInspector({
                 className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-500 hover:border-amber-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
               >
                 <span className="text-[10px]">◌</span> HOLD LOW-ROLE (UNKNOWN)
+              </button>
+              <button
+                disabled={ctrlWorking}
+                onClick={() => bulkReject("artifact")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">✕</span> REJECT ARTIFACT MENTIONS
+              </button>
+              <button
+                disabled={ctrlWorking}
+                onClick={() => bulkReject("nav-boilerplate")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">✕</span> REJECT NAV / BOILERPLATE
+              </button>
+              <button
+                disabled={ctrlWorking}
+                onClick={async () => {
+                  setCtrlWorking(true); setCtrlMsg(null);
+                  try {
+                    const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ type: "title-lead-highconf" })
+                    });
+                    const d = await r.json();
+                    setCtrlMsg(`Promoted ${d.approved ?? "?"} title/lead high-conf mention(s).`);
+                    await invalidate();
+                  } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+                }}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-teal-400 hover:border-teal-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                <span className="text-[10px]">▲</span> PROMOTE TITLE/LEAD HIGH-CONF
               </button>
               <button
                 disabled={ctrlWorking}

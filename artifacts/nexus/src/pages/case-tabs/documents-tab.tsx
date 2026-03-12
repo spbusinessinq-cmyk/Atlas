@@ -464,6 +464,11 @@ function parseAtlasDiag(rawText: string) {
     srcUrl: dec(kv.src_url),
     entities: kv.entities !== undefined ? parseInt(kv.entities) : undefined,
     analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
+    contamination: (kv.contamination as "low" | "med" | "high" | undefined) || undefined,
+    extractionMode: (kv.extraction_mode as "full" | "lead_only" | undefined) || undefined,
+    score: kv.score !== undefined ? parseInt(kv.score) : undefined,
+    priority: kv.priority,
+    alignment: kv.alignment,
   };
 }
 
@@ -827,6 +832,32 @@ export function DocumentInspector({
                       </span>
                     </div>
                   )}
+                  {diagInspector?.contamination && (
+                    <div>
+                      CONTAM:{" "}
+                      <span className={
+                        diagInspector.contamination === "high" ? "text-orange-500" :
+                        diagInspector.contamination === "med" ? "text-amber-600" :
+                        "text-neutral-600"
+                      }>
+                        {diagInspector.contamination.toUpperCase()}
+                        {diagInspector.extractionMode === "lead_only" ? " — LEAD ONLY" : ""}
+                      </span>
+                    </div>
+                  )}
+                  {diagInspector?.priority && (
+                    <div>
+                      PRIORITY:{" "}
+                      <span className={
+                        diagInspector.priority === "A" ? "text-green-500" :
+                        diagInspector.priority === "B" ? "text-cyan-600" :
+                        "text-neutral-600"
+                      }>
+                        {diagInspector.priority}
+                        {diagInspector.alignment ? ` · ${diagInspector.alignment.toUpperCase()}` : ""}
+                      </span>
+                    </div>
+                  )}
                   {diagInspector?.rssUrl && (
                     <div>
                       URL SRC:{" "}
@@ -1061,6 +1092,25 @@ function MentionCard({
     "text-neutral-400 border-neutral-400/40 bg-neutral-400/5";
   const confidencePct = Math.round((mention.confidence || 0) * 100);
 
+  // Parse context encoding [A:r=ROLE|t=TOPIC|z=ZONE]
+  const ctx = mention.context ?? "";
+  const ctxMatch = ctx.match(/^\[A:r=([^|]+)\|t=([^|]+)\|z=([^\]]+)\]/);
+  const ctxRole = ctxMatch ? ctxMatch[1] : null;
+  const ctxTopic = ctxMatch ? ctxMatch[2] : null;
+  const ctxZone = ctxMatch ? ctxMatch[3] : null;
+  const plainCtx = ctxMatch ? ctx.slice(ctxMatch[0].length).trim() : ctx;
+
+  // Derive triage signal chips
+  type ChipDef = { label: string; cls: string };
+  const chips: ChipDef[] = [];
+  if (ctxZone === "title") chips.push({ label: "TITLE HIT", cls: "text-green-400 border-green-900/40" });
+  else if (ctxZone === "dek" || ctxZone === "lead") chips.push({ label: "LEAD HIT", cls: "text-teal-400 border-teal-900/40" });
+  if (ctxTopic === "OFF_TOPIC") chips.push({ label: "OFF-TOPIC", cls: "text-red-500 border-red-900/40" });
+  if (ctxRole === "UNKNOWN") chips.push({ label: "LOW-ROLE", cls: "text-amber-600 border-amber-900/40" });
+  if (/NAV_RESIDUE|ARTIFACT|CROSS_STORY|ZONE_REJECT/.test(ctx)) chips.push({ label: "NAV NOISE", cls: "text-orange-500 border-orange-900/40" });
+  if (/BLOCKLIST|BOILERPLATE/.test(ctx)) chips.push({ label: "JUNK", cls: "text-red-700 border-red-900/40" });
+  if (/multi.?doc|T1_CONFIRMED|T1_STRONG/.test(ctx)) chips.push({ label: "MULTI-DOC", cls: "text-cyan-500 border-cyan-900/40" });
+
   return (
     <div className="p-2 border border-[#ffffff06] bg-[#070b10] space-y-1.5">
       <div className="flex items-center gap-2 flex-wrap">
@@ -1079,9 +1129,23 @@ function MentionCard({
           {confidencePct}%
         </span>
       </div>
-      {mention.context && (
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {chips.map((chip) => (
+            <span key={chip.label} className={cn("font-mono text-[8px] border px-1 uppercase tracking-wider", chip.cls)}>
+              {chip.label}
+            </span>
+          ))}
+          {ctxRole && ctxRole !== "UNKNOWN" && (
+            <span className="font-mono text-[8px] border px-1 uppercase tracking-wider text-neutral-600 border-neutral-800">
+              {ctxRole}
+            </span>
+          )}
+        </div>
+      )}
+      {plainCtx && (
         <p className="text-[9px] text-neutral-600 font-mono truncate">
-          &ldquo;{mention.context}&rdquo;
+          &ldquo;{plainCtx}&rdquo;
         </p>
       )}
       <div className="flex items-center gap-1">

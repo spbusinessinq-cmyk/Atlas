@@ -18,7 +18,18 @@ export type EntityRole =
   | "UNKNOWN";
 
 export type TopicRelevance = "HIGH" | "MEDIUM" | "LOW" | "OFF_TOPIC";
-export type DocumentZone = "title" | "lead" | "body" | "tail";
+export type DocumentZone =
+  | "title"
+  | "dek"
+  | "lead"
+  | "body"
+  | "tail"
+  | "sidebar"
+  | "footer"
+  | "related"
+  | "boilerplate"
+  | "unknown";
+
 export type AdmissionRejectReason =
   | "BLOCKLIST"
   | "COMMON_FIRST_NAME"
@@ -26,7 +37,12 @@ export type AdmissionRejectReason =
   | "BOILERPLATE_CONTEXT"
   | "TOPIC_MISMATCH"
   | "LOW_CONFIDENCE"
-  | "SHORT_FRAGMENT";
+  | "SHORT_FRAGMENT"
+  | "ARTIFACT"           // merged-line artifact / stitched name
+  | "NAV_RESIDUE"        // navigation / share-rail residue
+  | "CROSS_STORY"        // cross-story / unrelated-article bleed
+  | "ZONE_REJECT"        // appeared only in rejected zone (sidebar/footer/related)
+  | "WEAK_ZONE_SINGLE";  // serious intent + single doc + not in title/dek/lead
 
 export interface ExtractedMention {
   entityName: string;
@@ -219,12 +235,182 @@ function classifyEntityRole(name: string, context: string, entityType: string): 
   return { role: "UNKNOWN", roleConfidence: 0.30 };
 }
 
+// ── Artifact / Contamination Detection ────────────────────────────────────────
+
+// Navigation action words that prefix stitched names
+const NAV_PREFIX_WORDS = new Set([
+  "next", "more", "watch", "listen", "read", "share", "top", "latest", "live",
+  "breaking", "related", "also", "see", "get", "sign", "follow", "subscribe",
+  "download", "load", "view", "show", "hide", "back", "continue", "skip",
+]);
+
+// Navigation / share-rail patterns that appear inline with entity names
+const NAV_RESIDUE_RE = /\b(more\s+news|more\s+stories|top\s+stories|breaking\s+news|read\s+more|watch\s+now|listen\s+now|next\s+up|related\s+stories?|related\s+articles?|copy\s+link|share\s+via|subscribe\s+now|sign\s+in\s+to|sign\s+up\s+for|email\s+this|save\s+article|print\s+article|advertisement|sponsored\s+content)\b/i;
+
+/**
+ * Detect merged-line artifacts — names like "STEVE BENEN JAMES COMER"
+ * where two or more separate proper nouns have been stitched together
+ * without natural connectors (and/of/at/etc) or punctuation.
+ */
+export function isMergedLineArtifact(name: string): boolean {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 3) return false;
+
+  // All words must be title-case with no connectors
+  const allTitleCase = words.every(w => /^[A-Z][a-zA-Z'-]+$/.test(w));
+  if (!allTitleCase) return false;
+
+  // Connectors are OK: of, at, and, the, for, in, by, with, to, a
+  const connectors = new Set(["of", "at", "and", "the", "for", "in", "by", "with", "to", "a", "an"]);
+  const nonConnectors = words.filter(w => !connectors.has(w.toLowerCase()));
+
+  // If 4+ title-case proper-looking words with no connectors → likely stitched
+  if (nonConnectors.length >= 4 && words.every(w => !connectors.has(w.toLowerCase()))) {
+    // Extra signal: contains two runs that look like first+last name combos
+    // Pattern: [FIRST LAST FIRST LAST] or [FIRST LAST FIRST] with no connectors
+    const firstLastPairs = name.match(/\b[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}\b/g) || [];
+    if (firstLastPairs.length >= 2) return true;
+  }
+
+  // Hard check: name contains a nav prefix word as first token
+  if (NAV_PREFIX_WORDS.has(words[0].toLowerCase()) && nonConnectors.length >= 2) return true;
+
+  // Check for mixed locality + name pattern: e.g. "Los AngelesRoanoke City"
+  // No space between what looks like two separate place names
+  if (/[a-z][A-Z]/.test(name)) return true; // CamelCase merge = artifact
+
+  return false;
+}
+
+/**
+ * Detect cross-story contamination — names that span an article boundary
+ * or contain fragments from an unrelated story/headline.
+ */
+export function isCrossStoryContamination(name: string, context: string): boolean {
+  // Name contains nav residue in it
+  if (NAV_RESIDUE_RE.test(name)) return true;
+
+  // Name begins with a navigation action word followed by proper noun
+  const firstWord = name.trim().split(/\s+/)[0].toLowerCase();
+  if (NAV_PREFIX_WORDS.has(firstWord) && name.length > firstWord.length + 1) return true;
+
+  // Context around it contains clear nav/more-stories signal
+  const ctxL = context.toLowerCase();
+  if (/\b(more news|top stories|read more|watch now|related|also from|breaking)\b/.test(ctxL)) {
+    // If the entity itself appears to come right after nav text, it's bleed
+    const navPos = ctxL.search(/\b(more news|top stories|read more|watch now)\b/);
+    const namePos = context.toLowerCase().indexOf(name.toLowerCase());
+    if (navPos >= 0 && namePos > navPos && namePos - navPos < 60) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Detect navigation residue in entity names — things like
+ * "MORE NEWS EAU CLAIRE CITY COUNCIL" or "NEXT MIKE CRAPO".
+ */
+export function isNavigationResidue(name: string): boolean {
+  // Starts with nav prefix word (ALL CAPS or title case)
+  const upper = name.toUpperCase();
+  for (const nav of ["MORE NEWS", "NEXT ", "READ MORE", "WATCH ", "LISTEN ", "TOP STORIES", "RELATED ", "SIGN UP", "SUBSCRIBE"]) {
+    if (upper.startsWith(nav)) return true;
+  }
+
+  // Contains newsroom chrome words anywhere
+  if (/\b(MORE NEWS|READ MORE|WATCH NOW|LISTEN NOW|COPY LINK|SHARE VIA|ADVERTISEMENT|SPONSORED)\b/i.test(name)) return true;
+
+  // Ends with nav suffix
+  if (/\b(MORE|NEXT|SHARE|WATCH|LISTEN|READ|SIGN IN|LOG IN|SUBSCRIBE)\s*$/i.test(name)) return true;
+
+  return false;
+}
+
+export interface DocContaminationResult {
+  score: "low" | "med" | "high";
+  signals: string[];
+  restrictToLead: boolean;
+  boilerplateRatio: number;
+}
+
+/**
+ * Score a document body for contamination from nav/share/cross-story bleed.
+ * High contamination → restrict entity extraction to title/dek/lead only.
+ */
+export function computeDocContaminationScore(text: string, boilerplateRatio: number): DocContaminationResult {
+  const signals: string[] = [];
+  let score = 0;
+
+  // Boilerplate ratio from cleanBodyText
+  if (boilerplateRatio > 0.45) { score += 3; signals.push("high-boilerplate"); }
+  else if (boilerplateRatio > 0.25) { score += 2; signals.push("med-boilerplate"); }
+  else if (boilerplateRatio > 0.12) { score += 1; signals.push("some-boilerplate"); }
+
+  const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+  const totalLines = lines.length;
+
+  // Count nav/share line density
+  let navLines = 0;
+  let moreStoriesLines = 0;
+  let timestampLines = 0;
+  let promoLines = 0;
+
+  for (const line of lines) {
+    const ll = line.toLowerCase();
+    if (/\b(more news|more stories|top stories|read more|watch now|listen now|related articles?|related stories?)\b/.test(ll)) {
+      moreStoriesLines++;
+    }
+    if (/\b(share|email|facebook|twitter|whatsapp|copy link|print|subscribe|sign in|log in|follow us)\b/.test(ll) && line.length < 80) {
+      navLines++;
+    }
+    if (/^\d{1,2}:\d{2}\s*(am|pm)/i.test(line) || /^(updated|published|posted)\s+\d/i.test(line)) {
+      timestampLines++;
+    }
+    if (/\b(advertisement|sponsored|promoted|paid\s+content|in\s+partnership)\b/i.test(ll)) {
+      promoLines++;
+    }
+  }
+
+  if (totalLines > 0) {
+    const navRatio = navLines / totalLines;
+    const moreRatio = moreStoriesLines / totalLines;
+    if (navRatio > 0.15) { score += 3; signals.push("heavy-nav-density"); }
+    else if (navRatio > 0.08) { score += 1; signals.push("nav-density"); }
+    if (moreRatio > 0.05) { score += 2; signals.push("more-stories-bleed"); }
+  }
+
+  if (moreStoriesLines >= 3) { score += 2; signals.push("multiple-more-stories"); }
+  if (promoLines >= 1) { score += 1; signals.push("promo-content"); }
+  if (timestampLines >= 5) { score += 1; signals.push("timestamp-clusters"); }
+
+  // Detect multiple unrelated headline-like fragments (short ALL CAPS or title-case lines)
+  const headlineFragments = lines.filter(l =>
+    l.length > 15 && l.length < 100 &&
+    (/^[A-Z][A-Z\s]+$/.test(l) || /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){2,4}$/.test(l))
+  ).length;
+  if (headlineFragments >= 6) { score += 2; signals.push("headline-fragments"); }
+  else if (headlineFragments >= 3) { score += 1; signals.push("some-headline-fragments"); }
+
+  // Short text with multiple promo/nav signals = almost certainly a wrapper
+  if (text.length < 2000 && score >= 3) { score += 2; signals.push("short-noisy"); }
+
+  const level: "low" | "med" | "high" = score >= 6 ? "high" : score >= 3 ? "med" : "low";
+  return {
+    score: level,
+    signals,
+    restrictToLead: level === "high",
+    boilerplateRatio,
+  };
+}
+
 // ── Document Zone Extraction ───────────────────────────────────────────────────
 
 interface DocZones {
   titleEnd: number;
+  dekEnd: number;
   leadEnd: number;
   bodyEnd: number;
+  sidebarStart: number;  // estimated start of sidebar/footer zone
 }
 
 function extractDocumentZones(text: string): DocZones {
@@ -232,35 +418,59 @@ function extractDocumentZones(text: string): DocZones {
   let offset = 0;
   let paraCount = 0;
   let titleEnd = -1;
+  let dekEnd = -1;
   let leadEnd = -1;
+  let sidebarStart = text.length; // default: no sidebar detected
+
   for (const line of lines) {
-    if (line.trim().length > 40) {
+    const trimmed = line.trim();
+    if (trimmed.length > 40) {
       paraCount++;
       if (paraCount === 1 && titleEnd === -1) titleEnd = offset + line.length;
-      if (paraCount === 3) leadEnd = offset + line.length;
+      if (paraCount === 2 && dekEnd === -1) dekEnd = offset + line.length;
+      if (paraCount === 4) leadEnd = offset + line.length;
+    }
+    // Heuristic: lines that look like "More stories" / nav aggregation = sidebar zone start
+    if (sidebarStart === text.length && /^(more\s+(news|stories|from)|top\s+stories|related\s+(articles?|stories?)|advertisement|sponsored)/i.test(trimmed)) {
+      sidebarStart = offset;
     }
     offset += line.length + 1;
   }
+
   if (titleEnd === -1) titleEnd = Math.min(200, text.length);
+  if (dekEnd === -1) dekEnd = Math.min(titleEnd + 300, text.length);
   if (leadEnd === -1) leadEnd = Math.min(Math.floor(text.length * 0.35), text.length);
-  const bodyEnd = Math.floor(text.length * 0.80);
-  return { titleEnd, leadEnd, bodyEnd };
+  const bodyEnd = Math.min(Math.floor(text.length * 0.80), sidebarStart);
+  return { titleEnd, dekEnd, leadEnd, bodyEnd, sidebarStart };
 }
 
 function getZoneForPosition(pos: number, zones: DocZones): DocumentZone {
   if (pos <= zones.titleEnd) return "title";
+  if (pos <= zones.dekEnd) return "dek";
   if (pos <= zones.leadEnd) return "lead";
+  if (pos >= zones.sidebarStart) return "sidebar";
   if (pos <= zones.bodyEnd) return "body";
   return "tail";
 }
 
 function getZoneConfidenceMultiplier(zone: DocumentZone): number {
   switch (zone) {
-    case "title": return 1.30;
-    case "lead":  return 1.15;
-    case "body":  return 1.00;
-    case "tail":  return 0.65;
+    case "title":      return 1.35;
+    case "dek":        return 1.25;
+    case "lead":       return 1.15;
+    case "body":       return 1.00;
+    case "tail":       return 0.60;
+    case "sidebar":    return 0.20;
+    case "footer":     return 0.10;
+    case "related":    return 0.10;
+    case "boilerplate":return 0.05;
+    default:           return 0.50;
   }
+}
+
+/** True if the zone is a rejected extraction zone for serious seeds */
+function isRejectedZone(zone: DocumentZone): boolean {
+  return zone === "sidebar" || zone === "footer" || zone === "related" || zone === "boilerplate";
 }
 
 // Common first names — single-occurrence person with only one of these is rejected
@@ -413,6 +623,12 @@ export function computeTopicRelevance(
 
 // ── Entity Admission Firewall ──────────────────────────────────────────────────
 
+// Serious investigative intents — stricter admission rules apply
+const SERIOUS_INTENTS = new Set<SeedIntent>([
+  "crime_corruption", "legal_lawsuit", "policy_government",
+  "housing_homelessness", "finance_funding",
+]);
+
 /**
  * Final admission gate — a mention must pass ALL rules to enter triage.
  * Returns { admit: true } or { admit: false, rejectReason }.
@@ -425,9 +641,25 @@ export function shouldAdmitMention(
   const { entityName, entityType, confidence, topicRelevance, role, context, zone } = mention;
   const nameL = entityName.toLowerCase().trim();
   const words  = nameL.split(/\s+/);
+  const isSerious = SERIOUS_INTENTS.has(seedIntent);
 
   // SHORT_FRAGMENT
   if (entityName.trim().length < 3) return { admit: false, rejectReason: "SHORT_FRAGMENT" };
+
+  // ZONE_REJECT — hard reject from sidebar/footer/related/boilerplate zones
+  if (isRejectedZone(zone)) return { admit: false, rejectReason: "ZONE_REJECT" };
+
+  // NAV_RESIDUE — entity name contains navigation residue
+  if (isNavigationResidue(entityName))
+    return { admit: false, rejectReason: "NAV_RESIDUE" };
+
+  // ARTIFACT — merged-line / stitched names
+  if (isMergedLineArtifact(entityName))
+    return { admit: false, rejectReason: "ARTIFACT" };
+
+  // CROSS_STORY — cross-article contamination
+  if (isCrossStoryContamination(entityName, context))
+    return { admit: false, rejectReason: "CROSS_STORY" };
 
   // BLOCKLIST
   if (MEDIA_SOURCE_BLOCKLIST.has(entityName) || SKIP_NAMES.has(entityName))
@@ -435,7 +667,6 @@ export function shouldAdmitMention(
 
   // COMMON_FIRST_NAME — single first name person with no title/role context
   if (entityType === "person" && words.length === 1 && COMMON_FIRST_NAMES.has(nameL)) {
-    // Only reject if role context doesn't elevate it
     if (role === "UNKNOWN" || role === "PERSON")
       return { admit: false, rejectReason: "COMMON_FIRST_NAME" };
   }
@@ -445,7 +676,7 @@ export function shouldAdmitMention(
     return { admit: false, rejectReason: "TITLE_FRAGMENT" };
 
   // BOILERPLATE_CONTEXT — tail zone with very short context = junk
-  if (zone === "tail" && context.trim().length < 40 && confidence < 0.60)
+  if ((zone === "tail" || zone === "sidebar") && context.trim().length < 40 && confidence < 0.60)
     return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
 
   // TOPIC_MISMATCH — OFF_TOPIC entities are never admitted
@@ -456,13 +687,17 @@ export function shouldAdmitMention(
   if (confidence < 0.42)
     return { admit: false, rejectReason: "LOW_CONFIDENCE" };
 
-  // LOW topic relevance + UNKNOWN role + below threshold → suppress
-  if (topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.62)
+  // For serious intents: entity only in tail with no role-bearing and LOW topic = reject
+  if (isSerious && zone === "tail" && topicRelevance === "LOW" && role === "UNKNOWN")
+    return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
+
+  // For serious intents: LOW topic + UNKNOWN role + low confidence = reject
+  if (isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.68)
     return { admit: false, rejectReason: "LOW_CONFIDENCE" };
 
-  // Tail-only + LOW relevance + no role-bearing = suppressed
-  if (zone === "tail" && topicRelevance === "LOW" && role === "UNKNOWN")
-    return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
+  // General: LOW topic relevance + UNKNOWN role + below threshold → suppress
+  if (!isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.62)
+    return { admit: false, rejectReason: "LOW_CONFIDENCE" };
 
   return { admit: true };
 }
@@ -699,13 +934,18 @@ function getContext(text: string, name: string, idx?: number): string {
 export function extractEntities(
   text: string,
   queryTerms: string[] = [],
-  seedIntent: SeedIntent = "general"
+  seedIntent: SeedIntent = "general",
+  restrictToLeadOnly = false   // set true for high-contamination docs
 ): ExtractedMention[] {
   if (!text || text.trim().length < 10) return [];
 
+  const isSerious = SERIOUS_INTENTS.has(seedIntent);
   const mentions: ExtractedMention[] = [];
   const seen = new Set<string>();
   const zones = extractDocumentZones(text);
+
+  // For contaminated docs: only accept entities in title/dek/lead
+  const leadCutoff = restrictToLeadOnly ? zones.leadEnd : text.length;
 
   function addMention(
     entityName: string,
@@ -715,15 +955,35 @@ export function extractEntities(
   ) {
     const name = entityName.trim();
     if (!isValidName(name, entityType)) return;
+
+    // Pre-admission artifact checks before dedup
+    if (isNavigationResidue(name)) return;
+    if (isMergedLineArtifact(name)) return;
+
     if (seen.has(name.toLowerCase())) return;
     seen.add(name.toLowerCase());
     const pos = matchIndex ?? text.indexOf(name);
     const ctx = getContext(text, name, matchIndex);
 
+    // Skip if beyond lead cutoff (contamination restriction)
+    if (restrictToLeadOnly && pos > leadCutoff) return;
+
+    // Skip cross-story contamination
+    if (isCrossStoryContamination(name, ctx)) return;
+
     const zone = getZoneForPosition(pos, zones);
     const zoneMultiplier = getZoneConfidenceMultiplier(zone);
     const { boost, penaltyFactor } = scoreContextWindow(ctx);
-    const adjustedConf = Math.min(0.99, (confidence + boost) * penaltyFactor * zoneMultiplier);
+    let adjustedConf = Math.min(0.99, (confidence + boost) * penaltyFactor * zoneMultiplier);
+
+    // Lead-first extraction for serious intents:
+    // Heavy penalty for entities that only appear deep in document body (past para 7 heuristic)
+    if (isSerious && !restrictToLeadOnly) {
+      const deepBodyThreshold = Math.min(zones.leadEnd * 3, zones.bodyEnd);
+      if (pos > deepBodyThreshold && (zone === "tail" || zone === "body")) {
+        adjustedConf *= 0.55; // strong penalty for deep-body-only mentions
+      }
+    }
 
     const { role, roleConfidence } = classifyEntityRole(name, ctx, entityType);
     const topicRelevance = computeTopicRelevance(name, ctx, queryTerms, seedIntent);

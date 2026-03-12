@@ -281,6 +281,32 @@ router.post("/cases/:caseId/mentions/bulk-reject", async (req, res) => {
       const ctx = m.context ?? "";
       return /\[A:r=UNKNOWN/.test(ctx);
     }).map(m => m.id);
+  } else if (type === "artifact") {
+    // Reject mentions from sidebar/footer/nav zones (ZONE_REJECT, ARTIFACT, NAV_RESIDUE, CROSS_STORY)
+    toReject = pending.filter(m => {
+      const ctx = m.context ?? "";
+      const nameL = m.entityName.toLowerCase();
+      // Zone-based: sidebar, footer, related
+      const zoneSidebar = /\|z=(sidebar|footer|related|boilerplate)\b/.test(ctx);
+      // Name looks like a nav artifact
+      const navPrefix = /^(next|more|watch|listen|read|share|top|latest|live|breaking|related)\s/i.test(m.entityName);
+      // Short all-caps that look like UI chrome
+      const uiChrome = /^[A-Z]{2,6}$/.test(m.entityName.trim()) && m.entityName.length < 7;
+      return zoneSidebar || navPrefix || uiChrome;
+    }).map(m => m.id);
+  } else if (type === "nav-boilerplate") {
+    // Reject navigation/share-rail fragments and boilerplate UI text
+    toReject = pending.filter(m => {
+      const ctx = m.context ?? "";
+      const nameL = m.entityName.toLowerCase();
+      // Context contains share/nav keywords
+      const navCtx = /\b(share|email|subscribe|sign in|log in|newsletter|cookie|advertisement|sponsored|copy link|print article|read more|more stories|top stories)\b/i.test(ctx);
+      // Entity is only from tail/boilerplate zone
+      const tailZone = /\|z=tail\b/.test(ctx) || /\|z=boilerplate\b/.test(ctx);
+      // Name is very short generic word
+      const genericShort = nameL.length < 8 && /^(share|email|menu|search|close|back|next|more|open|save|edit|view|load|clear|reset|submit|cancel|follow|donate)$/.test(nameL);
+      return navCtx || genericShort || (tailZone && (m.confidence ?? 1) < 0.60);
+    }).map(m => m.id);
   }
 
   if (toReject.length > 0) {
@@ -323,6 +349,20 @@ router.post("/cases/:caseId/mentions/bulk-approve", async (req, res) => {
       const role = roleMatch ? roleMatch[1] : "UNKNOWN";
       const conf = m.confidence ?? 0;
       return role !== "UNKNOWN" && conf >= 0.72;
+    }).map(m => m.id);
+  } else if (type === "title-lead-highconf") {
+    // Promote mentions from title/dek/lead zone with high confidence and real role
+    toApprove = pending.filter(m => {
+      const ctx = m.context ?? "";
+      const zoneMatch = ctx.match(/\|z=([^\]]+)/);
+      const zone = zoneMatch ? zoneMatch[1] : "";
+      const inTitleDekLead = zone === "title" || zone === "dek" || zone === "lead";
+      const roleMatch = ctx.match(/\[A:r=([^|]+)\|/);
+      const role = roleMatch ? roleMatch[1] : "UNKNOWN";
+      const topicMatch = ctx.match(/\|t=([^|]+)\|/);
+      const topic = topicMatch ? topicMatch[1] : "LOW";
+      const conf = m.confidence ?? 0;
+      return inTitleDekLead && role !== "UNKNOWN" && (topic === "HIGH" || topic === "MEDIUM") && conf >= 0.68;
     }).map(m => m.id);
   }
 
