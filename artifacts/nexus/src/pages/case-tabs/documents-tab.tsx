@@ -39,6 +39,7 @@ import {
   Globe,
   AlertTriangle,
   Trash2,
+  ShieldAlert,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -334,17 +335,6 @@ export function DocumentViewer({
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {isWeb && extDoc.sourceUrl && (
-            <a
-              href={extDoc.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 font-mono text-[9px] text-cyan-700 hover:text-cyan-400 uppercase transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              OPEN SOURCE
-            </a>
-          )}
           {doc.filePath && (
             <a
               href={`/api/documents/${doc.id}/file`}
@@ -415,21 +405,99 @@ export function DocumentViewer({
   );
 }
 
+// ─── Parse ATLAS-DIAG prefix ───────────────────────────────────────────────────
+
+function parseAtlasDiag(rawText: string) {
+  const m = rawText.match(/^\[ATLAS-DIAG:([^\]]+)\]/);
+  if (!m) return null;
+  const kv: Record<string, string> = {};
+  m[1].split("|").forEach((pair) => {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx === -1) return;
+    kv[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
+  });
+  return {
+    status: (kv.status as "ok" | "partial" | "failed" | "wrapper") || "failed",
+    chars: parseInt(kv.chars || "0"),
+    paras: parseInt(kv.paras || "0"),
+    sel: kv.sel || "unknown",
+    strategy: kv.strategy || "unknown",
+    finalUrl: kv.final_url ? decodeURIComponent(kv.final_url) : undefined,
+  };
+}
+
+function cleanDisplayText(rawText: string): string {
+  return rawText
+    .replace(/^\[ATLAS-DIAG:[^\]]+\]\n?/, "")
+    .replace(/^\[EXTRACTION_INCOMPLETE\]\n?/, "")
+    .replace(/^\[EXTRACTION_FAILED\]\n?/, "")
+    .replace(/^\[WRAPPER_BLOCKED\]\n?/, "")
+    .replace(/^\[FETCH_FAILED\]\n?/, "")
+    .trim();
+}
+
 // ─── Web Article Viewer ────────────────────────────────────────────────────────
 
 function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
+  const [showDiag, setShowDiag] = useState(false);
   const rawText = doc.rawText || "";
-  const isIncomplete = rawText.startsWith("[EXTRACTION_INCOMPLETE]");
-  const isFailed = rawText.startsWith("[EXTRACTION_FAILED]");
-  const displayText = (isIncomplete || isFailed)
-    ? rawText
-        .replace("[EXTRACTION_INCOMPLETE]\n", "")
-        .replace("[EXTRACTION_INCOMPLETE]", "")
-        .replace("[EXTRACTION_FAILED]\n", "")
-        .replace("[EXTRACTION_FAILED]", "")
-        .trim()
-    : rawText.trim();
-  const hasText = displayText.length > 20;
+
+  const diag = parseAtlasDiag(rawText);
+
+  // Determine extraction state
+  const hasWrapper = rawText.includes("[WRAPPER_BLOCKED]");
+  const hasFetchFail = rawText.includes("[FETCH_FAILED]");
+  const hasLegacyFailed = rawText.includes("[EXTRACTION_FAILED]");
+  const hasLegacyIncomplete = rawText.includes("[EXTRACTION_INCOMPLETE]") && !hasLegacyFailed;
+
+  const diagStatus = diag?.status
+    ?? (hasWrapper ? "wrapper" : hasLegacyFailed || hasFetchFail ? "failed" : hasLegacyIncomplete ? "partial" : "ok");
+
+  const displayText = cleanDisplayText(rawText);
+  const hasText = displayText.length > 30;
+
+  // Extraction state labels
+  const stateConfig = {
+    ok: {
+      label: "EXTRACTION SUCCESS",
+      color: "text-green-500",
+      border: "border-green-500/20",
+      bg: "bg-green-500/5",
+      icon: <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />,
+      msg: `Article body recovered — ${diag?.chars.toLocaleString() ?? "?"} chars, ${diag?.paras ?? "?"} paragraphs.`,
+    },
+    partial: {
+      label: "EXTRACTION PARTIAL",
+      color: "text-orange-500",
+      border: "border-orange-500/20",
+      bg: "bg-orange-500/5",
+      icon: <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />,
+      msg: `Partial article body recovered (${diag?.chars.toLocaleString() ?? "?"} chars, ${diag?.paras ?? "?"} paragraphs). Full article may require opening the original source.`,
+    },
+    failed: {
+      label: "EXTRACTION FAILED",
+      color: "text-red-500",
+      border: "border-red-500/30",
+      bg: "bg-red-500/5",
+      icon: <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />,
+      msg: "No usable article body was recovered. The page may be behind a paywall, JS-only, or returned insufficient content. Entity analysis was skipped.",
+    },
+    wrapper: {
+      label: "WRAPPER / REDIRECT BLOCKED",
+      color: "text-red-400",
+      border: "border-red-500/30",
+      bg: "bg-red-950/30",
+      icon: <AlertTriangle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />,
+      msg: "This URL resolved to a redirect wrapper, Google News aggregator, or cookie-consent gate — no article content was accessible. Entity analysis was skipped.",
+    },
+  }[diagStatus] ?? {
+    label: "EXTRACTION STATUS UNKNOWN",
+    color: "text-neutral-500",
+    border: "border-[#ffffff10]",
+    bg: "bg-[#ffffff03]",
+    icon: <AlertTriangle className="w-3.5 h-3.5 text-neutral-600 flex-shrink-0 mt-0.5" />,
+    msg: "Extraction state could not be determined.",
+  };
 
   return (
     <div className="h-full overflow-auto bg-[#050709]">
@@ -466,38 +534,49 @@ function WebArticleViewer({ doc }: { doc: ExtendedDoc }) {
         </h1>
       </div>
 
-      {/* Extraction failed banner — wrapper / paywall / redirect */}
-      {isFailed && (
-        <div className="mx-6 mt-4 p-3 border border-red-500/30 bg-red-500/5 flex items-start gap-2.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <div className="font-mono text-[9px] text-red-500 uppercase tracking-widest">
-              EXTRACTION FAILED — WRAPPER / PAYWALLED PAGE
+      {/* Extraction state banner */}
+      <div className={`mx-6 mt-4 p-3 border ${stateConfig.border} ${stateConfig.bg}`}>
+        <div className="flex items-start gap-2.5">
+          {stateConfig.icon}
+          <div className="flex-1 space-y-0.5">
+            <div className={`font-mono text-[9px] ${stateConfig.color} uppercase tracking-widest`}>
+              {stateConfig.label}
             </div>
-            <div className="font-mono text-[8px] text-red-800 uppercase">
-              ATLAS could not retrieve article content. This URL is a redirect wrapper, paywall, or
-              cookie-consent gate. No entity analysis was performed. Open the original source to
-              access the article directly.
+            <div className="font-mono text-[8px] text-neutral-600 uppercase leading-relaxed">
+              {stateConfig.msg}
             </div>
           </div>
+          {diag && (
+            <button
+              onClick={() => setShowDiag((v) => !v)}
+              className="font-mono text-[8px] text-neutral-700 hover:text-neutral-400 uppercase tracking-widest flex-shrink-0 transition-colors"
+            >
+              {showDiag ? "HIDE" : "DIAG"}
+            </button>
+          )}
         </div>
-      )}
 
-      {/* Extraction incomplete warning */}
-      {isIncomplete && !isFailed && (
-        <div className="mx-6 mt-4 p-3 border border-orange-500/30 bg-orange-500/5 flex items-start gap-2.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <div className="font-mono text-[9px] text-orange-500 uppercase tracking-widest">
-              EXTRACTION INCOMPLETE
-            </div>
-            <div className="font-mono text-[8px] text-orange-700 uppercase">
-              Full article body could not be retrieved. Content below is a partial snapshot.
-              Open the original source to read the complete article.
-            </div>
+        {/* Diagnostics panel */}
+        {showDiag && diag && (
+          <div className="mt-3 pt-3 border-t border-[#ffffff08] grid grid-cols-2 gap-x-6 gap-y-1">
+            {[
+              { k: "STATUS", v: diag.status.toUpperCase() },
+              { k: "CHARS", v: diag.chars.toLocaleString() },
+              { k: "PARAGRAPHS", v: diag.paras.toString() },
+              { k: "SELECTOR", v: diag.sel },
+              { k: "STRATEGY", v: diag.strategy },
+              ...(diag.finalUrl && diag.finalUrl !== doc.sourceUrl
+                ? [{ k: "FINAL URL", v: diag.finalUrl.slice(0, 60) + (diag.finalUrl.length > 60 ? "…" : "") }]
+                : []),
+            ].map(({ k, v }) => (
+              <div key={k} className="flex gap-2 font-mono text-[8px] uppercase">
+                <span className="text-neutral-700 tracking-widest flex-shrink-0">{k}:</span>
+                <span className="text-neutral-400 truncate">{v}</span>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Article body */}
       <div className="px-6 py-5">
@@ -668,6 +747,32 @@ export function DocumentInspector({
                 {caseId.toString().padStart(6, "0")}
               </span>
             </div>
+            {isWeb && extDoc.rawText && (() => {
+              const diagInspector = parseAtlasDiag(extDoc.rawText!);
+              const rawInspector = extDoc.rawText!;
+              const inspStatus = diagInspector?.status
+                ?? (rawInspector.includes("[WRAPPER_BLOCKED]") ? "wrapper"
+                  : rawInspector.includes("[EXTRACTION_FAILED]") || rawInspector.includes("[FETCH_FAILED]") ? "failed"
+                  : rawInspector.includes("[EXTRACTION_INCOMPLETE]") ? "partial"
+                  : "ok");
+              const statusColors: Record<string, string> = {
+                ok: "text-green-600",
+                partial: "text-orange-500",
+                failed: "text-red-500",
+                wrapper: "text-red-400",
+              };
+              return (
+                <div>
+                  BODY:{" "}
+                  <span className={statusColors[inspStatus] ?? "text-neutral-400"}>
+                    {inspStatus === "ok" ? `OK — ${diagInspector?.chars.toLocaleString() ?? "?"} chars`
+                      : inspStatus === "partial" ? `PARTIAL — ${diagInspector?.chars.toLocaleString() ?? "?"} chars`
+                      : inspStatus === "wrapper" ? "WRAPPER BLOCKED"
+                      : "FAILED"}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -717,17 +822,32 @@ export function DocumentInspector({
           )}
         </div>
 
-        {analyzeMutation.isSuccess && analyzeMutation.data && (
-          <div className="p-2 border border-cyan-500/20 bg-cyan-500/5 font-mono text-[9px] text-cyan-400 flex items-center gap-2">
-            <Cpu className="w-3 h-3 flex-shrink-0" />
-            EXTRACTION COMPLETE —{" "}
-            {analyzeMutation.data.mentionsCreated} ENTITIES DETECTED
-          </div>
-        )}
+        {analyzeMutation.isSuccess && analyzeMutation.data && (() => {
+          const data = analyzeMutation.data as {
+            mentionsCreated?: number;
+            extractionMethod?: string;
+            warning?: string;
+          };
+          const skipped = data.extractionMethod === "wrapper-blocked" || data.extractionMethod === "failed";
+          if (skipped) {
+            return (
+              <div className="p-2 border border-red-500/20 bg-red-500/5 font-mono text-[9px] text-red-400 flex items-start gap-2">
+                <ShieldAlert className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                <span>ANALYSIS SKIPPED — {data.warning || "Usable article body not recovered."}</span>
+              </div>
+            );
+          }
+          return (
+            <div className="p-2 border border-cyan-500/20 bg-cyan-500/5 font-mono text-[9px] text-cyan-400 flex items-center gap-2">
+              <Cpu className="w-3 h-3 flex-shrink-0" />
+              ANALYSIS COMPLETE — {data.mentionsCreated ?? 0} ENTITY SIGNALS DETECTED
+            </div>
+          );
+        })()}
         {analyzeMutation.isError && (
           <div className="p-2 border border-red-500/20 bg-red-500/5 font-mono text-[9px] text-red-400 flex items-center gap-2">
             <AlertCircle className="w-3 h-3 flex-shrink-0" />
-            EXTRACTION FAILED
+            ANALYSIS REQUEST FAILED
           </div>
         )}
 

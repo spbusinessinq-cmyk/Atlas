@@ -1,0 +1,181 @@
+ATLAS PATCH — ARTICLE EXTRACTION DIAGNOSTICS + SOURCE BUTTON CLEANUP
+
+System:
+RSR // ATLAS
+Advanced Tracking & Link Analysis System
+
+IMPORTANT:
+Do NOT redesign the app.
+Do NOT add new major systems.
+This is a focused extraction-debug and cleanup pass.
+
+PRIMARY GOALS
+
+1. Remove duplicate source-opening buttons
+2. Fix article-body extraction reliability
+3. Add diagnostics so we can see why extraction is failing
+4. Prevent false “extraction complete” states when only teaser/metadata text exists
+
+========================================================
+1. REMOVE DUPLICATE SOURCE BUTTONS
+========================================================
+
+In the document viewer / inspector UI,
+OPEN SOURCE and OPEN ORIGINAL are redundant.
+
+Keep only ONE action:
+OPEN ORIGINAL
+
+Remove OPEN SOURCE everywhere it duplicates the same destination.
+
+Make sure:
+- the remaining button opens the real article source URL
+- no duplicate source-open buttons remain in the same document view
+
+========================================================
+2. ARTICLE BODY EXTRACTION DEBUGGING
+========================================================
+
+Extraction still appears to fail or return only shallow snippet content.
+
+Add extraction diagnostics so we can understand exactly what is happening per document.
+
+For each web-ingested document, record and expose:
+
+- resolved source URL
+- final fetched URL
+- extraction status:
+  SUCCESS
+  PARTIAL
+  FAILED
+  WRAPPER_BLOCKED
+- extracted text length
+- paragraph count
+- selector or extraction strategy used
+- whether fallback extraction was used
+
+Show this in the document inspector in a compact diagnostics section.
+
+========================================================
+3. DO NOT MARK TEASER TEXT AS SUCCESS
+========================================================
+
+Right now some docs appear to be treated as usable even though they likely only contain:
+- title
+- metadata
+- short teaser
+- partial wrapper body
+
+Fix this.
+
+A document should NOT be treated as fully extracted if:
+- extracted text length is too short
+- there are too few paragraphs
+- body is mostly headline / metadata
+- body is mostly boilerplate / teaser text
+
+In those cases mark it as:
+PARTIAL
+or
+FAILED
+
+Do NOT show “EXTRACTION COMPLETE” unless real article text exists.
+
+========================================================
+4. IMPROVE ARTICLE BODY EXTRACTION
+========================================================
+
+Strengthen extraction from real source pages.
+
+Expand / improve:
+- article selectors
+- paragraph aggregation
+- main content container detection
+- cleanup of nav/footer/related links text
+- suppression of metadata-only extraction
+
+When a page is valid but hard to parse, prefer:
+- extracting real paragraph blocks
+over
+- using junk wrapper text
+
+========================================================
+5. ANALYSIS HANDOFF SAFETY
+========================================================
+
+NER / timeline / financial extraction should only run if extracted article text is actually usable.
+
+If extraction status is:
+FAILED
+WRAPPER_BLOCKED
+or severe PARTIAL with almost no body
+
+Then:
+- do not run normal entity extraction
+- do not show fake “0 entities detected” as if it analyzed a full article
+- instead show:
+  “Analysis skipped: usable article body not recovered.”
+
+========================================================
+6. INSPECTOR MESSAGING
+========================================================
+
+Improve the right-side inspector states.
+
+Possible states:
+
+EXTRACTION SUCCESS
+- show extracted length
+- show analysis counts
+
+EXTRACTION PARTIAL
+- explain article body is incomplete
+- allow user to open original
+
+EXTRACTION FAILED
+- explain analysis was skipped because usable body was not recovered
+
+WRAPPER BLOCKED
+- explain source resolved to wrapper / non-article content
+
+This should be very clear.
+
+========================================================
+7. DEBUG THE CURRENT FAILURE CASES
+========================================================
+
+Use the current problematic cases shown in the UI as test examples.
+
+Examples from the screenshots:
+- Los Angeles Times editorial
+- CBS News funding article
+- Business Wire / Xsolla piece
+
+For each:
+- verify whether usable article text is actually being stored
+- verify whether analysis is being run on real body text
+- verify whether the extraction state shown in UI is truthful
+
+========================================================
+8. KEEP THE REST STABLE
+========================================================
+
+Do NOT break:
+- seed launcher
+- delete controls
+- graph controls
+- dossiers
+- entity registry
+- document vault routing
+
+========================================================
+9. FINAL SUMMARY
+========================================================
+
+Report:
+1. what caused OPEN SOURCE / OPEN ORIGINAL duplication
+2. which button remains
+3. what diagnostics were added
+4. how extraction success vs partial vs failed is now determined
+5. why the previous “extraction complete, 0 entities” state was happening
+6. what files changed

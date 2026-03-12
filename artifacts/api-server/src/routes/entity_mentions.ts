@@ -44,14 +44,34 @@ router.post("/documents/:id/analyze", async (req, res) => {
     extractionMethod = "metadata-fallback";
   }
 
-  // Guard: don't run NER on failed/wrapper content
-  const isExtractionFailed = text.startsWith("[EXTRACTION_FAILED]");
+  // Parse extraction diagnostics from ATLAS-DIAG prefix (new format)
+  const diagMatch = text.match(/^\[ATLAS-DIAG:([^\]]+)\]/);
+  const diagData: Record<string, string> = {};
+  if (diagMatch) {
+    diagMatch[1].split("|").forEach((pair) => {
+      const [k, v] = pair.split("=");
+      if (k && v !== undefined) diagData[k] = v;
+    });
+  }
+
+  const diagStatus = diagData.status || null;
+
+  // Strip all known prefixes to get clean article text
   const cleanText = text
-    .replace(/^\[EXTRACTION_INCOMPLETE\]\n/, "")
-    .replace(/^\[EXTRACTION_FAILED\]\n/, "")
+    .replace(/^\[ATLAS-DIAG:[^\]]+\]\n?/, "")
+    .replace(/^\[EXTRACTION_INCOMPLETE\]\n?/, "")
+    .replace(/^\[EXTRACTION_FAILED\]\n?/, "")
+    .replace(/^\[WRAPPER_BLOCKED\]\n?/, "")
+    .replace(/^\[FETCH_FAILED\]\n?/, "")
     .trim();
 
-  if (isExtractionFailed) {
+  // Guard: don't run NER on failed/wrapper content
+  const isSkipped = diagStatus === "failed" || diagStatus === "wrapper"
+    || text.includes("[WRAPPER_BLOCKED]")
+    || text.includes("[EXTRACTION_FAILED]")
+    || text.includes("[FETCH_FAILED]");
+
+  if (isSkipped) {
     return res.json({
       documentId: docId,
       mentionsCreated: 0,
@@ -59,8 +79,10 @@ router.post("/documents/:id/analyze", async (req, res) => {
       financialSignalsCreated: 0,
       mentions: [],
       textLength: 0,
-      extractionMethod: "failed",
-      warning: "Document extraction failed (wrapper/junk page) — entity analysis skipped.",
+      extractionMethod: diagStatus === "wrapper" ? "wrapper-blocked" : "failed",
+      warning: diagStatus === "wrapper"
+        ? "Document is a wrapper/redirect page — no usable article body recovered. Analysis skipped."
+        : "Document extraction failed — no usable article body recovered. Analysis skipped.",
     });
   }
 

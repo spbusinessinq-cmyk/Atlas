@@ -200,83 +200,278 @@ function tryHostname(url: string): string {
 
 // ── Article text extraction ────────────────────────────────────────────────────
 
-const ARTICLE_SELECTORS = [
-  "article",
-  "main",
-  "[role=main]",
-  ".article-body",
-  ".post-content",
-  ".entry-content",
-  ".story-body",
-  ".article-content",
-  ".content-body",
-  ".post-body",
-  "#article",
-  "#main",
-  ".article__body",
-  ".article-text",
-  ".news-article",
-  ".newsArticle",
-  ".body-content",
-  ".article_body",
-  ".story-content",
-  ".story-text",
-  ".article-copy",
-  "[itemprop=articleBody]",
-  "[data-component=article-body]",
+// Prioritized selectors — tried in order, first large-body match wins
+const ARTICLE_SELECTORS: { sel: string; label: string }[] = [
+  // Semantic HTML5
+  { sel: "article", label: "article" },
+  // Explicit main content
+  { sel: "[role=main]", label: "role-main" },
+  { sel: "main", label: "main" },
+  // Schema.org
+  { sel: "[itemprop=articleBody]", label: "itemprop-articleBody" },
+  // Common CMS classes
+  { sel: ".article-body", label: ".article-body" },
+  { sel: ".article__body", label: ".article__body" },
+  { sel: ".article__content-body", label: ".article__content-body" },
+  { sel: ".ArticleBody-articleBody", label: ".ArticleBody-articleBody" }, // LA Times
+  { sel: ".richtext", label: ".richtext" }, // LA Times / syndicated
+  { sel: ".post-content", label: ".post-content" },
+  { sel: ".entry-content", label: ".entry-content" },
+  { sel: ".story-body", label: ".story-body" },
+  { sel: ".story-body__inner", label: ".story-body__inner" },
+  { sel: ".story-content", label: ".story-content" },
+  { sel: ".story-text", label: ".story-text" },
+  { sel: ".article-content", label: ".article-content" },
+  { sel: ".article-text", label: ".article-text" },
+  { sel: ".article-copy", label: ".article-copy" },
+  { sel: ".article_body", label: ".article_body" },
+  { sel: ".article__content", label: ".article__content" },
+  { sel: ".content-body", label: ".content-body" },
+  { sel: ".body-content", label: ".body-content" },
+  { sel: ".post-body", label: ".post-body" },
+  { sel: ".news-article", label: ".news-article" },
+  { sel: ".newsArticle", label: ".newsArticle" },
+  { sel: "#article", label: "#article" },
+  { sel: "#main", label: "#main" },
+  // CBS News / CBS interactive
+  { sel: ".article__content-body", label: ".article__content-body" },
+  { sel: '[data-component="text"]', label: "data-component=text" },
+  { sel: ".content__body", label: ".content__body" },
+  // Business Wire / PR Newswire
+  { sel: ".bw-release-story", label: ".bw-release-story" },
+  { sel: ".bw-press-release-story", label: ".bw-press-release-story" },
+  { sel: "#release-body", label: "#release-body" },
+  { sel: ".release-body", label: ".release-body" },
+  { sel: ".prnews-paragraph", label: ".prnews-paragraph" },
+  // Generic fallbacks
+  { sel: "[data-component=article-body]", label: "data-component=article-body" },
+  { sel: ".c-article__body", label: ".c-article__body" },
+  { sel: ".a-article-body", label: ".a-article-body" },
+  { sel: "#story", label: "#story" },
+  { sel: "#content", label: "#content" },
 ];
 
-function extractArticleText(html: string, fallback: string): { text: string; status: "ok" | "incomplete" } {
+// Elements that should always be stripped before extraction
+const STRIP_SELECTORS = [
+  "script", "style", "nav", "header", "footer",
+  "aside", "noscript", "iframe", "figure figcaption",
+  ".ad", ".ads", ".advertisement", ".ad-container",
+  ".social-share", ".share-buttons", ".share-bar",
+  ".related-articles", ".related-links", ".related",
+  ".newsletter", ".newsletter-signup",
+  ".sidebar", ".widget", ".widget-area",
+  ".popup", ".modal", ".overlay",
+  ".breadcrumb", ".breadcrumbs",
+  ".tags", ".tag-list", ".article-tags",
+  ".comments", ".comment-section",
+  ".promo", ".teaser-list", ".rec-list",
+  "[aria-label='Advertisement']",
+  "[data-testid='ad-unit']",
+];
+
+// Boilerplate phrases that indicate junk text (not real article content)
+const BOILERPLATE_PHRASES = [
+  "sign up for our newsletter",
+  "subscribe to our newsletter",
+  "click here to subscribe",
+  "follow us on",
+  "share this article",
+  "terms of service",
+  "privacy policy",
+  "all rights reserved",
+  "javascript is required",
+  "enable javascript",
+  "please enable",
+  "cookie policy",
+  "we use cookies",
+  "your subscription",
+  "sign in to continue",
+  "create a free account",
+  "buy a subscription",
+];
+
+function countRealParagraphs(text: string): number {
+  // A "real" paragraph is >= 80 chars, not pure boilerplate
+  return text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => {
+      if (p.length < 80) return false;
+      const lower = p.toLowerCase();
+      if (BOILERPLATE_PHRASES.some((b) => lower.includes(b))) return false;
+      return true;
+    }).length;
+}
+
+function isBoilerplateHeavy(text: string): boolean {
+  const lower = text.toLowerCase();
+  const boilerplateHits = BOILERPLATE_PHRASES.filter((b) => lower.includes(b)).length;
+  return boilerplateHits >= 3;
+}
+
+export interface ExtractionResult {
+  text: string;
+  status: "ok" | "partial" | "failed";
+  paragraphCount: number;
+  charCount: number;
+  selectorUsed: string;
+  strategy: "selector" | "paragraph-agg" | "body-text" | "fallback";
+}
+
+export function extractArticleText(html: string, fallback: string): ExtractionResult {
   try {
     const root = parseHtml(html);
 
-    // Strip non-content elements
-    for (const sel of [
-      "script", "style", "nav", "header", "footer",
-      "aside", "noscript", "iframe", ".ad", ".advertisement",
-      ".social-share", ".share-buttons", ".related-articles",
-      ".newsletter", ".sidebar", ".widget", ".popup",
-    ]) {
-      root.querySelectorAll(sel).forEach((el) => el.remove());
+    // Strip non-content elements first
+    for (const sel of STRIP_SELECTORS) {
+      try { root.querySelectorAll(sel).forEach((el) => el.remove()); } catch { /* bad selector ok */ }
     }
 
     let text = "";
+    let selectorUsed = "none";
+    let strategy: ExtractionResult["strategy"] = "fallback";
 
-    // Try article body selectors in priority order
-    for (const sel of ARTICLE_SELECTORS) {
-      const el = root.querySelector(sel);
-      if (el) {
-        const t = el.text.replace(/\s+/g, " ").trim();
-        if (t.length > text.length && t.length > 200) {
-          text = t;
-          if (text.length > 1000) break;
+    // Pass 1: Try article body selectors in priority order
+    for (const { sel, label } of ARTICLE_SELECTORS) {
+      try {
+        const el = root.querySelector(sel);
+        if (el) {
+          // Extract paragraph blocks from this container
+          const paras = el.querySelectorAll("p");
+          let candidate = "";
+          if (paras.length >= 2) {
+            const paraTexts = paras
+              .map((p) => p.text.replace(/\s+/g, " ").trim())
+              .filter((t) => t.length > 50);
+            candidate = paraTexts.join("\n\n");
+          }
+          // Fall back to raw element text if paragraph extraction insufficient
+          if (candidate.length < 300) {
+            candidate = el.text.replace(/\s+/g, " ").trim();
+          }
+          if (candidate.length > text.length && candidate.length > 250) {
+            text = candidate;
+            selectorUsed = label;
+            strategy = "selector";
+            if (text.length > 2000) break; // Good enough
+          }
+        }
+      } catch { /* bad selector ok */ }
+    }
+
+    // Pass 2: Global paragraph aggregation if no selector worked well
+    if (text.length < 400) {
+      const paragraphs = root.querySelectorAll("p");
+      const paraTexts = paragraphs
+        .map((p) => p.text.replace(/\s+/g, " ").trim())
+        .filter((t) => t.length > 60);
+      if (paraTexts.length >= 2) {
+        const aggregated = paraTexts.join("\n\n");
+        if (aggregated.length > text.length) {
+          text = aggregated;
+          selectorUsed = "p-aggregate";
+          strategy = "paragraph-agg";
         }
       }
     }
 
-    // Paragraph aggregation fallback — collect all <p> tags
+    // Pass 3: Body text as last resort (noisy but better than nothing)
     if (text.length < 200) {
-      const paragraphs = root.querySelectorAll("p");
-      const paraTexts = paragraphs
-        .map((p) => p.text.replace(/\s+/g, " ").trim())
-        .filter((t) => t.length > 40);
-      if (paraTexts.length > 0) {
-        const aggregated = paraTexts.join("\n\n");
-        if (aggregated.length > text.length) text = aggregated;
-      }
+      const bodyEl = root.querySelector("body");
+      const bodyText = bodyEl ? bodyEl.text : root.text;
+      text = bodyText.replace(/\s+/g, " ").trim();
+      selectorUsed = "body";
+      strategy = "body-text";
     }
 
-    // Last resort: body text
-    if (text.length < 100) {
-      text = root.text.replace(/\s+/g, " ").trim();
+    const truncated = text.slice(0, 18000);
+    const paragraphCount = countRealParagraphs(truncated);
+
+    // Determine extraction status
+    let status: ExtractionResult["status"];
+    if (truncated.length >= 800 && paragraphCount >= 3 && !isBoilerplateHeavy(truncated)) {
+      status = "ok";
+    } else if (truncated.length >= 200 && !isBoilerplateHeavy(truncated)) {
+      status = "partial";
+    } else {
+      status = "failed";
     }
 
-    const truncated = text.slice(0, 15000);
-    const status = truncated.length < 300 ? "incomplete" : "ok";
-    return { text: truncated, status };
+    return {
+      text: truncated,
+      status,
+      paragraphCount,
+      charCount: truncated.length,
+      selectorUsed,
+      strategy,
+    };
   } catch {
-    return { text: fallback, status: "incomplete" };
+    return {
+      text: fallback,
+      status: "failed",
+      paragraphCount: 0,
+      charCount: fallback.length,
+      selectorUsed: "none",
+      strategy: "fallback",
+    };
   }
+}
+
+// ── Encode/decode extraction diagnostics in rawText prefix ────────────────────
+
+/**
+ * Encodes extraction diagnostics as a compact prefix in the rawText field so
+ * the frontend can display them without a DB schema change.
+ * Format: [ATLAS-DIAG:status=ok|chars=4523|paras=12|sel=article|strategy=selector]\n
+ */
+function encodeDiagPrefix(result: ExtractionResult, finalUrl?: string): string {
+  const parts = [
+    `status=${result.status}`,
+    `chars=${result.charCount}`,
+    `paras=${result.paragraphCount}`,
+    `sel=${result.selectorUsed}`,
+    `strategy=${result.strategy}`,
+  ];
+  if (finalUrl) parts.push(`final_url=${encodeURIComponent(finalUrl)}`);
+  return `[ATLAS-DIAG:${parts.join("|")}]\n`;
+}
+
+/**
+ * Parses diagnostics from the rawText prefix.
+ * Returns null if no prefix found.
+ */
+export function parseAtlasDiag(rawText: string): {
+  status: "ok" | "partial" | "failed" | "wrapper";
+  chars: number;
+  paras: number;
+  sel: string;
+  strategy: string;
+  finalUrl?: string;
+} | null {
+  const m = rawText.match(/^\[ATLAS-DIAG:([^\]]+)\]/);
+  if (!m) return null;
+  const kv: Record<string, string> = {};
+  m[1].split("|").forEach((pair) => {
+    const [k, v] = pair.split("=");
+    if (k && v !== undefined) kv[k] = v;
+  });
+  return {
+    status: (kv.status as "ok" | "partial" | "failed" | "wrapper") || "failed",
+    chars: parseInt(kv.chars || "0"),
+    paras: parseInt(kv.paras || "0"),
+    sel: kv.sel || "unknown",
+    strategy: kv.strategy || "unknown",
+    finalUrl: kv.final_url ? decodeURIComponent(kv.final_url) : undefined,
+  };
+}
+
+/** Strip all known prefixes from rawText to get clean article text */
+export function cleanRawText(rawText: string): string {
+  return rawText
+    .replace(/^\[ATLAS-DIAG:[^\]]+\]\n?/, "")
+    .replace(/^\[EXTRACTION_INCOMPLETE\]\n?/, "")
+    .replace(/^\[EXTRACTION_FAILED\]\n?/, "")
+    .trim();
 }
 
 // ── Wrapper / junk content detection ─────────────────────────────────────────
@@ -395,7 +590,7 @@ router.post("/web-ingest", async (req, res) => {
   let previewType = "web-article";
 
   // Attempt to fetch full article content
-  let extractionStatus: "ok" | "incomplete" | "failed" = "incomplete";
+  let extractionStatus: "ok" | "partial" | "failed" | "wrapper" = "failed";
   try {
     const articleResp = await fetch(url, {
       headers: {
@@ -421,25 +616,27 @@ router.post("/web-ingest", async (req, res) => {
       filePath = `/uploads/${filename}`;
       previewType = "file";
       extractionStatus = "ok";
+      const diagPrefix = encodeDiagPrefix({ text: "", status: "ok", paragraphCount: 0, charCount: 0, selectorUsed: "pdf", strategy: "selector" }, finalUrl);
+      rawText = diagPrefix + title;
     } else if (ct.includes("text/html") || ct.includes("text/plain")) {
       const html = await articleResp.text();
       const extracted = extractArticleText(html, snippet || title);
 
       if (isWrapperOrJunk(html, finalUrl, extracted.text)) {
-        rawText = `[EXTRACTION_FAILED]\n${snippet || title}`;
-        extractionStatus = "failed";
-      } else if (extracted.status === "incomplete") {
-        rawText = `[EXTRACTION_INCOMPLETE]\n${extracted.text || snippet || title}`;
-        extractionStatus = "incomplete";
+        const diagPrefix = encodeDiagPrefix({ ...extracted, status: "failed" as const, strategy: "fallback" as const }, finalUrl);
+        rawText = `${diagPrefix}[WRAPPER_BLOCKED]\n${snippet || title}`;
+        extractionStatus = "wrapper";
       } else {
-        rawText = extracted.text;
-        extractionStatus = "ok";
+        const diagPrefix = encodeDiagPrefix(extracted, finalUrl);
+        rawText = diagPrefix + extracted.text;
+        extractionStatus = extracted.status === "ok" ? "ok" : extracted.status === "partial" ? "partial" : "failed";
       }
     }
   } catch (fetchErr) {
     console.warn("Article fetch failed, using snippet:", String(fetchErr).substring(0, 120));
-    rawText = `[EXTRACTION_INCOMPLETE]\n${snippet || title}`;
-    extractionStatus = "incomplete";
+    const diagPrefix = encodeDiagPrefix({ text: snippet || title, status: "failed", paragraphCount: 0, charCount: (snippet || title).length, selectorUsed: "none", strategy: "fallback" });
+    rawText = `${diagPrefix}[FETCH_FAILED]\n${snippet || title}`;
+    extractionStatus = "failed";
   }
 
   // Create document record in vault
@@ -467,15 +664,14 @@ router.post("/web-ingest", async (req, res) => {
     { caseId: doc.caseId, documentId: doc.id }
   );
 
-  // Skip entity extraction for failed extractions (wrapper/junk content)
+  // Skip entity extraction for failed/wrapper extractions
   let mentionsCreated = 0;
-  if (extractionStatus !== "failed") {
-    const textForAnalysis = (rawText || `${title} ${sourceDomain || ""}`)
-      .replace(/^\[EXTRACTION_INCOMPLETE\]\n/, "")
-      .replace(/^\[EXTRACTION_FAILED\]\n/, "");
-    const extracted = extractEntities(textForAnalysis);
+  const canAnalyze = extractionStatus === "ok" || extractionStatus === "partial";
+  if (canAnalyze) {
+    const textForAnalysis = cleanRawText(rawText || `${title} ${sourceDomain || ""}`);
+    const entities = extractEntities(textForAnalysis);
 
-    for (const m of extracted) {
+    for (const m of entities) {
       if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
       try {
         await db.insert(entityMentionsTable).values({
@@ -505,7 +701,7 @@ router.post("/web-ingest", async (req, res) => {
   } else {
     await logEvent(
       "extraction_failed",
-      `Wrapper/junk page detected for "${title}" — entity extraction skipped`,
+      `${extractionStatus === "wrapper" ? "Wrapper" : "Failed"} extraction for "${title}" — entity analysis skipped`,
       { caseId: doc.caseId, documentId: doc.id }
     );
   }
@@ -513,7 +709,7 @@ router.post("/web-ingest", async (req, res) => {
   res.status(201).json({
     document: formatDoc(doc),
     mentionsCreated,
-    analysisRan: extractionStatus !== "failed",
+    analysisRan: canAnalyze,
     extractionStatus,
   });
 });
@@ -608,7 +804,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   for (const result of toIngest) {
     try {
       let rawText = result.snippet || result.title;
-      let docExtractionStatus: "ok" | "incomplete" | "failed" = "incomplete";
+      let docExtractionStatus: "ok" | "partial" | "failed" | "wrapper" = "failed";
 
       try {
         const articleResp = await fetch(result.url, {
@@ -627,19 +823,19 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           const html = await articleResp.text();
           const extracted = extractArticleText(html, rawText);
           if (isWrapperOrJunk(html, finalUrl, extracted.text)) {
-            rawText = `[EXTRACTION_FAILED]\n${result.snippet || result.title}`;
-            docExtractionStatus = "failed";
-          } else if (extracted.status === "incomplete") {
-            rawText = `[EXTRACTION_INCOMPLETE]\n${extracted.text || rawText}`;
-            docExtractionStatus = "incomplete";
+            const diagPrefix = encodeDiagPrefix({ ...extracted, status: "failed" as const, strategy: "fallback" as const }, finalUrl);
+            rawText = `${diagPrefix}[WRAPPER_BLOCKED]\n${result.snippet || result.title}`;
+            docExtractionStatus = "wrapper";
           } else {
-            rawText = extracted.text;
-            docExtractionStatus = "ok";
+            const diagPrefix = encodeDiagPrefix(extracted, finalUrl);
+            rawText = diagPrefix + extracted.text;
+            docExtractionStatus = extracted.status === "ok" ? "ok" : extracted.status === "partial" ? "partial" : "failed";
           }
         }
       } catch {
-        rawText = `[EXTRACTION_INCOMPLETE]\n${result.snippet || result.title}`;
-        docExtractionStatus = "incomplete";
+        const diagPrefix = encodeDiagPrefix({ text: result.snippet || result.title, status: "failed", paragraphCount: 0, charCount: (result.snippet || result.title).length, selectorUsed: "none", strategy: "fallback" });
+        rawText = `${diagPrefix}[FETCH_FAILED]\n${result.snippet || result.title}`;
+        docExtractionStatus = "failed";
       }
 
       const docRows = await db
@@ -666,20 +862,19 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         { caseId, documentId: doc.id }
       );
 
-      // Skip entity extraction for wrapper/junk content
-      if (docExtractionStatus === "failed") {
+      // Skip entity extraction for wrapper/failed content
+      const canAnalyze = docExtractionStatus === "ok" || docExtractionStatus === "partial";
+      if (!canAnalyze) {
         await logEvent(
           "extraction_failed",
-          `Wrapper page detected: "${result.title}" — entity extraction skipped`,
+          `${docExtractionStatus === "wrapper" ? "Wrapper" : "Failed"} extraction: "${result.title}" — entity extraction skipped`,
           { caseId, documentId: doc.id }
         );
         continue;
       }
 
       validDocsIngested++;
-      const textForAnalysis = rawText
-        .replace(/^\[EXTRACTION_INCOMPLETE\]\n/, "")
-        .replace(/^\[EXTRACTION_FAILED\]\n/, "");
+      const textForAnalysis = cleanRawText(rawText);
       const entities = extractEntities(textForAnalysis);
 
       for (const m of entities) {
