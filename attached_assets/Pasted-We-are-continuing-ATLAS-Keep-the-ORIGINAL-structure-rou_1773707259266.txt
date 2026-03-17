@@ -1,0 +1,254 @@
+We are continuing ATLAS. Keep the ORIGINAL structure, routing, and workflow. Do not redesign the app into something new. Do not add side features outside this pass. This is a combined production hardening pass.
+
+GOAL:
+Ship PASS 23 — ACCESS CONTROL + AUTO-BUILDER AUDIT + GLASS COMMAND UI
+
+NON-NEGOTIABLE:
+- Keep the current ATLAS information architecture:
+  CASE CONTROL
+  ENTITY REGISTRY
+  DOCUMENT VAULT
+  SYSTEM LOG
+  case detail left rail / center workspace / right intelligence rail
+- Do NOT replace the app structure
+- Do NOT add unrelated modules
+- Do NOT remove current intelligence logic
+- This pass is refinement + hardening + security
+- Preserve current dark tactical ATLAS identity
+
+==================================================
+PART A — ACCESS CONTROL / SECURITY LOGIN GATE
+==================================================
+
+ATLAS now needs a proper access gate before viewing cases.
+
+Build a clean internal operator login flow:
+- Full-screen ATLAS access screen before the app loads
+- Dark black/navy background with subtle grid, faint scanlines, low red/cyan glow
+- Branding:
+  RSR // ATLAS
+  INTERNAL ACCESS GATE
+  CLASSIFIED CASE ENVIRONMENT
+- Simple but premium login card
+- Fields:
+  operator id / email
+  password
+- Button:
+  ACCESS ATLAS
+- Small status strip under button:
+  AUTH NODE / INTERNAL / ENCRYPTED SESSION
+
+Behavior:
+- If not authenticated, user cannot access dashboard/cases/entities/documents
+- Redirect all protected routes to /login or access gate
+- If authenticated, allow app access normally
+- Persist session with secure local strategy appropriate for current stack
+- Add logout action in top bar or left rail footer
+- Add very lightweight session state:
+  operator name / logged in / last auth time
+
+If the app already has auth primitives, reuse them.
+If not, implement a practical internal-only auth layer suitable for alpha:
+- route guard
+- session context/store
+- protected layout wrapper
+- avoid overengineering
+
+Also add:
+- simple lock screen / session expired state
+- if session invalid, bounce back to gate
+
+==================================================
+PART B — AUTO CASE BUILDER FULL AUDIT + REPAIR
+==================================================
+
+This is the most important part.
+
+I need a REAL end-to-end audit of the ATLAS seed pipeline and auto-case builder.
+Do not just say it works. Verify the full chain and patch weak points.
+
+AUDIT THE FULL PIPELINE:
+1. seed target input
+2. query generation
+3. source fetching
+4. article extraction
+5. cleaning/boilerplate removal
+6. document scoring
+7. entity extraction
+8. entity admission firewall
+9. entity promotion rules
+10. graph starter construction
+11. timeline extraction
+12. financial signal extraction
+13. brief generation
+14. dossier generation
+15. build quality assignment
+
+REQUIRED OUTPUT OF THIS PASS:
+- Fix any broken handoff where cases seed but produce weak/garbage entities
+- Fix any broken handoff where docs ingest but graph stays weak for the wrong reasons
+- Fix any broken handoff where timelines/financial signals are empty even when the docs clearly contain useful data
+- Tighten precision so obvious junk like stitched names, navigation residue, fragments, promo text, and side-rail contamination do not become entities
+- Strengthen serious-case behavior so investigative seeds do not get diluted by broad unrelated news
+
+ADD A REAL AUTO-BUILD DIAGNOSTIC MODE:
+For every new case build, store a machine-readable build report that includes:
+- seed target
+- seed intent
+- queries run
+- results found
+- docs ingested
+- docs usable
+- docs blocked
+- docs partial
+- docs contaminated
+- entities detected
+- entities admitted
+- entities rejected
+- rejection reasons counts
+- promoted entities
+- held entities
+- graph edges created
+- timelines extracted
+- financial signals extracted
+- final build quality
+
+Expose this cleanly in UI:
+- add AUTO-BUILD REPORT section in the overview or right rail
+- render as a tactical diagnostics block, not raw JSON
+- include PASS/WEAK flags
+- include top failure reasons if build quality is weak
+
+CRITICAL FIXES TO IMPLEMENT:
+- strengthen entity promotion so single weak doc artifacts do not auto-promote
+- require stronger topic alignment for serious investigative seeds
+- down-rank broad entertainment/sports/culture drift even harder
+- improve source-to-seed relevance weighting
+- improve article cleaning for repeated nav/share/live-update junk
+- ensure title/dek/lead hits matter more than footer/sidebar fragments
+- ensure graph starter nodes are role-bearing, topic-aligned, and not stitched garbage
+- if build is weak but usable docs exist, use controlled recovery logic instead of promoting junk
+
+AUTO-BUILDER ACCEPTANCE STANDARD:
+After this pass, when I seed a case, the system should usually produce:
+- a sane case brief
+- a believable starter graph
+- a small set of promoted entities that look human-reviewed
+- real timelines when available
+- real money/funding signals when available
+- honest WEAK/PROVISIONAL status when the source set is bad
+
+==================================================
+PART C — MODERN GLASS COMMAND UI UPGRADE
+==================================================
+
+Upgrade the shell visually WITHOUT changing the architecture.
+
+Current problem:
+ATLAS still feels too flat / too web-app-like in some areas.
+We need a glossier, more modern, more premium command-console look.
+
+Target aesthetic:
+- premium dark intelligence console
+- subtle glassmorphism
+- black / deep navy base
+- restrained cyan + red + amber accents
+- soft internal glows
+- frosted panels with low-opacity blur
+- clearer depth separation between shell / panel / content surface
+- keep tactical tone, do NOT become a generic SaaS dashboard
+
+Apply UI improvements to:
+1. left rail
+2. top status header
+3. dashboard seed launcher
+4. telemetry strip/cards
+5. dossier registry list
+6. case detail left rail
+7. center workspace frame
+8. right intelligence rail
+9. table/list rows
+10. graph canvas framing
+11. overview cards
+12. empty states
+13. buttons / pills / toggles / badges
+
+DESIGN RULES:
+- preserve current spacing hierarchy, just refine it
+- add depth through layered surfaces, not giant shadows
+- introduce subtle panel blur / glass only where it improves quality
+- improve border treatment:
+  faint inner border
+  faint outer glow
+  slightly brighter top edges
+- make card headers feel premium and crisp
+- tighten typography rhythm:
+  labels smaller, titles cleaner, better contrast
+- improve status badges:
+  STRONG / PROVISIONAL / WEAK / FAILED
+  HIGH SIG / MED SIG / LOW SIG
+  triage status
+- make seed launcher feel more premium and alive
+- improve the right rail so it feels like an intelligence sidecar, not just a sidebar
+- improve left nav active state depth and polish
+- keep everything tactical and readable
+
+Do NOT:
+- make it look like a landing page
+- add giant gradients everywhere
+- add cartoon glow
+- make it soft or rounded like consumer SaaS
+- change the app into O.R.I.O.N or BLACKDOG
+This is still ATLAS.
+
+==================================================
+PART D — SYSTEM LOG / AUDIT TRAIL IMPROVEMENT
+==================================================
+
+The SYSTEM LOG should become more useful.
+
+Add or improve:
+- auth events
+- case seeded
+- auto-build started
+- query run
+- document ingested
+- extraction partial/failed
+- entity promoted
+- entity held
+- graph built
+- dossier generated
+- build quality assigned
+
+If there is already an audit/event stream, enhance it.
+Expose it in a readable tactical log style.
+
+==================================================
+PART E — IMPLEMENTATION ORDER
+==================================================
+
+Work in this exact order:
+
+1. Access gate / protected routes / session handling
+2. Auto-builder audit instrumentation
+3. Seed pipeline fixes and promotion hardening
+4. Timeline / financial extraction validation
+5. UI shell modernization
+6. System log improvements
+7. Smoke test the full experience
+
+==================================================
+PART F — FINAL RESPONSE FORMAT
+==================================================
+
+When done, respond with:
+1. What was broken
+2. What was fixed
+3. What files changed
+4. What the new access flow is
+5. What the new auto-build diagnostic flow is
+6. Whether ATLAS now blocks unauthenticated access
+7. Whether auto case building is materially stronger after this pass
+
+Do not give a vague marketing summary.
+Give a real engineering summary.

@@ -943,6 +943,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       if (!resp.ok) continue;
       const xml = await resp.text();
       const items = parseRssItems(xml, query);
+      await logEvent("query_run", `Query: "${query}" → ${items.length} result(s)`, { caseId });
       for (const r of items) allResults.push({ ...r, _query: query });
     } catch {
       // Continue with next query variant
@@ -2180,6 +2181,12 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     .update(casesTable)
     .set({ description, updatedAt: new Date() })
     .where(eq(casesTable.id, caseId));
+
+  await logEvent(
+    "build_quality_assigned",
+    `Build quality: ${autoBuildQuality} (${trustRating}) — ${finalPromoted} promoted, ${usableDocCount} usable docs, mainEntityDocSupport=${mainEntityDocSupport}`,
+    { caseId }
+  );
 
   await logEvent(
     "seed_complete",

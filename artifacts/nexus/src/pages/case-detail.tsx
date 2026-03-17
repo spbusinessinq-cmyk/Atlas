@@ -1655,85 +1655,165 @@ function DefaultInspector({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-3">
-        {/* ── Case health block ── */}
+        {/* ── AUTO-BUILD REPORT ── */}
         {(() => {
-          const seedDiagRaw = parseSeedDiag(caseData.description);
-          const usableDocs = seedDiagRaw ? (seedDiagRaw.ok + seedDiagRaw.partial) : documents.length;
-          const blockedDocs = seedDiagRaw ? (seedDiagRaw.failed + seedDiagRaw.wrapper) : 0;
-          const noiseDocs = seedDiagRaw?.noise ?? 0;
-          const localTrustRating = seedDiagRaw?.trustRating || (
-            entities.length >= 3 && usableDocs >= 3 ? "STRONG BUILD" :
-            entities.length >= 1 && usableDocs >= 1 ? "MODERATE BUILD" :
-            usableDocs >= 1 ? "LOW CONFIDENCE" : "EMPTY CASE"
-          );
-          const localTrustColor =
-            localTrustRating === "STRONG BUILD" ? "text-green-400" :
-            localTrustRating === "MODERATE BUILD" ? "text-cyan-400" :
-            localTrustRating === "DEGRADED BUILD" ? "text-amber-400" :
-            localTrustRating === "LOW CONFIDENCE" ? "text-amber-600" :
-            "text-red-600";
-          const healthItems = [
-            { label: "DOCS", val: documents.length, color: documents.length > 0 ? "text-white" : "text-neutral-700" },
-            { label: "USABLE", val: usableDocs, color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
-            ...(blockedDocs > 0 ? [{ label: "BLOCKED", val: blockedDocs, color: "text-red-600" }] : []),
-            ...(noiseDocs > 0 ? [{ label: "NOISE", val: noiseDocs, color: "text-neutral-600" }] : []),
-            { label: "ENTITIES", val: entities.length, color: entities.length > 0 ? "text-cyan-500" : "text-neutral-700" },
-            ...(pendingMentions > 0 ? [{ label: "TRIAGE", val: pendingMentions, color: "text-orange-400" }] : []),
+          const sd = parseSeedDiag(caseData.description);
+          const usableDocs = sd ? (sd.ok + sd.partial) : documents.length;
+          const blockedDocs = sd ? (sd.failed + sd.wrapper) : 0;
+          const abq = sd?.autoBuildQuality ?? null;
+
+          const abqMeta: Record<string, { color: string; bar: string; label: string; desc: string }> = {
+            STRONG:      { color: "text-green-400",  bar: "bg-green-500",  label: "STRONG",      desc: "Graph verified — high-confidence entity network assembled." },
+            PROVISIONAL: { color: "text-sky-400",    bar: "bg-sky-500",    label: "PROVISIONAL", desc: "Two entities promoted. Additional sourcing recommended." },
+            MODERATE:    { color: "text-cyan-400",   bar: "bg-cyan-500",   label: "MODERATE",    desc: "Moderate graph confidence. Review held candidates." },
+            RECOVERED:   { color: "text-teal-400",   bar: "bg-teal-500",   label: "RECOVERED",   desc: `Recovered via expanded search (${sd?.recoveryDocs ?? 0} extra docs).` },
+            WEAK:        { color: "text-amber-500",  bar: "bg-amber-600",  label: "WEAK",        desc: "Low entity confidence. Manual review recommended." },
+            FAILED:      { color: "text-red-600",    bar: "bg-red-700",    label: "FAILED",      desc: "No usable entity graph — all sources blocked or JS-rendered." },
+          };
+          const meta = abq ? (abqMeta[abq] ?? abqMeta.WEAK) : null;
+
+          // Pipeline funnel: searched → ingested → usable → promoted
+          const funnelSteps = sd ? [
+            { label: "SEARCHED",  val: sd.total,       color: "text-neutral-400" },
+            { label: "INGESTED",  val: sd.ingested,    color: "text-cyan-600" },
+            { label: "USABLE",    val: usableDocs,      color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
+            { label: "PROMOTED",  val: sd.finalPromoted, color: sd.finalPromoted > 0 ? "text-green-400" : "text-red-700" },
+          ] : [
+            { label: "DOCS",     val: documents.length, color: documents.length > 0 ? "text-white" : "text-neutral-700" },
+            { label: "USABLE",   val: usableDocs,       color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
+            { label: "ENTITIES", val: entities.length,  color: entities.length > 0 ? "text-cyan-500" : "text-neutral-700" },
+            { label: "TRIAGE",   val: pendingMentions,  color: pendingMentions > 0 ? "text-orange-400" : "text-neutral-700" },
           ];
+
+          // Top rejection reasons
+          const rejectEntries = sd ? Object.entries(sd.rejectReasons)
+            .filter(([, v]) => v > 0)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3) : [];
+
           return (
-            <div className="border border-[#ffffff0a] bg-[#ffffff02]">
-              <div className="px-2 py-1 font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] flex items-center justify-between">
-                <span>CASE HEALTH</span>
+            <div className="atlas-panel">
+              {/* Header bar */}
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#ffffff08] bg-[#ffffff02]">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[8px] text-neutral-700 uppercase tracking-[0.18em]">AUTO-BUILD REPORT</span>
+                  {sd?.seedIntent && sd.seedIntent !== "general" && (
+                    <span className="font-mono text-[7px] text-violet-500 border border-violet-900/30 px-1 uppercase">
+                      {SEED_INTENT_LABELS[sd.seedIntent] || sd.seedIntent}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5">
-                  {(() => {
-                    const sd = parseSeedDiag(caseData.description);
-                    const si = sd?.seedIntent;
-                    if (si && si !== "general") {
-                      return (
-                        <span className="text-[8px] font-mono text-violet-500 border border-violet-900/30 px-1 uppercase">
-                          {SEED_INTENT_LABELS[si] || si}
-                        </span>
-                      );
-                    }
-                    return null;
-                  })()}
-                  {(() => {
-                    const sd = parseSeedDiag(caseData.description);
-                    const abq = sd?.autoBuildQuality;
-                    if (!abq) return null;
-                    const abqColor =
-                      abq === "STRONG" ? "text-green-400 border-green-900/40" :
-                      abq === "PROVISIONAL" ? "text-sky-400 border-sky-900/40" :
-                      abq === "MODERATE" ? "text-cyan-500 border-cyan-900/40" :
-                      abq === "RECOVERED" ? "text-teal-400 border-teal-900/40" :
-                      abq === "WEAK" ? "text-amber-600 border-amber-900/40" :
-                      "text-red-700 border-red-900/40";
-                    return (
-                      <span className={`text-[8px] font-mono border px-1 uppercase ${abqColor}`}>
-                        {abq}
-                      </span>
-                    );
-                  })()}
-                  {(() => {
-                    const sd = parseSeedDiag(caseData.description);
-                    if (!sd || sd.highContam < 1) return null;
-                    return (
-                      <span className="text-[8px] font-mono border px-1 uppercase text-orange-500 border-orange-900/40" title={`${sd.highContam} high-contamination doc(s) restricted to lead-only extraction`}>
-                        {sd.highContam}✗ CONTAM
-                      </span>
-                    );
-                  })()}
-                  <span className={`${localTrustColor} text-[8px] font-bold`}>{localTrustRating}</span>
+                  {sd?.highContam > 0 && (
+                    <span className="font-mono text-[7px] text-orange-500 border border-orange-900/30 px-1 uppercase" title={`${sd.highContam} high-contamination doc(s) restricted`}>
+                      {sd.highContam}× CONTAM
+                    </span>
+                  )}
+                  {sd?.recoveryTriggered && (
+                    <span className="font-mono text-[7px] text-teal-500 border border-teal-900/30 px-1 uppercase">RECOVERED</span>
+                  )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-0">
-                {healthItems.map((item) => (
-                  <div key={item.label} className="px-2 py-1.5 border-b border-r border-[#ffffff06]">
-                    <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider">{item.label}</div>
-                    <div className={`font-mono text-base font-bold tabular-nums leading-tight ${item.color}`}>{item.val.toString().padStart(2, "0")}</div>
+
+              {/* Build quality badge — full width accent strip */}
+              {meta && (
+                <div className={`px-3 py-2.5 flex items-center gap-3 border-b border-[#ffffff07]`}>
+                  <div className={`w-1 self-stretch rounded-full ${meta.bar} opacity-70`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`font-mono text-xs font-bold uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
+                      <span className="font-mono text-[8px] text-neutral-700">BUILD</span>
+                    </div>
+                    <div className="font-mono text-[8px] text-neutral-600">{meta.desc}</div>
+                  </div>
+                  {sd && (
+                    <div className="flex-shrink-0 text-right">
+                      <div className="font-mono text-[8px] text-neutral-700 uppercase">ENTITIES</div>
+                      <div className={`font-mono text-xl font-bold tabular-nums leading-none ${sd.finalPromoted > 0 ? "text-green-400" : "text-neutral-700"}`}>
+                        {sd.finalPromoted.toString().padStart(2, "0")}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pipeline funnel */}
+              <div className="grid divide-x divide-[#ffffff06]" style={{ gridTemplateColumns: `repeat(${funnelSteps.length}, minmax(0, 1fr))` }}>
+                {funnelSteps.map((step, i) => (
+                  <div key={step.label} className="px-2.5 py-2 border-b border-[#ffffff06]">
+                    <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-wider mb-0.5">{step.label}</div>
+                    <div className={`font-mono text-base font-bold tabular-nums leading-tight ${step.color}`}>
+                      {typeof step.val === "number" ? step.val.toString().padStart(2, "0") : step.val}
+                    </div>
+                    {i < funnelSteps.length - 1 && (
+                      <div className="font-mono text-[6px] text-neutral-800 mt-0.5">↓</div>
+                    )}
                   </div>
                 ))}
               </div>
+
+              {/* Flags row */}
+              <div className="flex items-center gap-0 divide-x divide-[#ffffff06] border-b border-[#ffffff07]">
+                {/* Tier breakdown */}
+                {sd && (sd.promotedConfirmed > 0 || sd.promotedStrong > 0) && (
+                  <div className="px-3 py-1.5 flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">TIER</span>
+                    {sd.promotedConfirmed > 0 && (
+                      <span className="font-mono text-[8px] text-green-600 uppercase">{sd.promotedConfirmed} T1-CONF</span>
+                    )}
+                    {sd.promotedStrong > 0 && (
+                      <span className="font-mono text-[8px] text-cyan-700 uppercase">{sd.promotedStrong} T1b-STR</span>
+                    )}
+                  </div>
+                )}
+                {/* Held + triage */}
+                {(pendingMentions > 0 || (sd?.heldCandidates ?? 0) > 0) && (
+                  <div className="px-3 py-1.5 flex items-center gap-2">
+                    <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">HELD</span>
+                    {(sd?.heldCandidates ?? 0) > 0 && (
+                      <span className="font-mono text-[8px] text-amber-600 uppercase">{sd!.heldCandidates} CAND</span>
+                    )}
+                    {pendingMentions > 0 && (
+                      <span className="font-mono text-[8px] text-orange-500 uppercase animate-pulse">{pendingMentions} TRIAGE</span>
+                    )}
+                  </div>
+                )}
+                {/* Blocked */}
+                {blockedDocs > 0 && (
+                  <div className="px-3 py-1.5 flex items-center gap-2">
+                    <span className="font-mono text-[7px] text-neutral-800 uppercase">BLOCKED</span>
+                    <span className="font-mono text-[8px] text-red-700 uppercase">{blockedDocs} SRC</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Rejection reasons */}
+              {rejectEntries.length > 0 && (
+                <div className="px-3 py-1.5 flex items-center gap-3 flex-wrap border-b border-[#ffffff06] bg-[#0a0000]/40">
+                  <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">REJECT REASONS</span>
+                  {rejectEntries.map(([reason, count]) => (
+                    <span key={reason} className="font-mono text-[8px] uppercase">
+                      <span className="text-red-800">{count}×</span>
+                      <span className="text-neutral-700 ml-1">{reason.replace(/_/g, "-")}</span>
+                    </span>
+                  ))}
+                  {sd && sd.rejectedFw > 0 && (
+                    <span className="font-mono text-[7px] text-neutral-800 ml-auto">{sd.rejectedFw} TOTAL FW-BLOCKED</span>
+                  )}
+                </div>
+              )}
+
+              {/* No-promotion warning */}
+              {sd && sd.finalPromoted === 0 && sd.detected > 0 && (
+                <div className="px-3 py-2 font-mono text-[8px] text-amber-600 uppercase tracking-wide bg-amber-950/10 border-b border-amber-900/20">
+                  {sd.detected} SIGNALS DETECTED — NONE PASSED PROMOTION GATES. REVIEW TRIAGE QUEUE.
+                </div>
+              )}
+              {sd && sd.finalPromoted === 0 && sd.detected === 0 && usableDocs === 0 && (
+                <div className="px-3 py-2 font-mono text-[8px] text-red-700 uppercase tracking-wide bg-red-950/10 border-b border-red-900/20">
+                  ALL SOURCES BLOCKED OR JAVASCRIPT-RENDERED. ADD SOURCES MANUALLY.
+                </div>
+              )}
             </div>
           );
         })()}

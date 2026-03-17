@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-// Layout & Pages
+import { AuthProvider, useAuth } from "@/context/auth-context";
 import { Layout } from "@/components/layout";
+import { BootScreen } from "@/components/BootScreen";
 import Dashboard from "@/pages/dashboard";
 import CaseDetail from "@/pages/case-detail";
 import EntityList from "@/pages/entities";
@@ -13,7 +14,7 @@ import EntityProfile from "@/pages/entity-profile";
 import DocumentLibrary from "@/pages/documents";
 import SystemLog from "@/pages/logs";
 import NotFound from "@/pages/not-found";
-import { BootScreen } from "@/components/BootScreen";
+import LoginPage from "@/pages/login";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,15 +25,49 @@ const queryClient = new QueryClient({
   },
 });
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  const [location] = useLocation();
+  if (!isAuthenticated && location !== "/login") {
+    return <Redirect to="/login" />;
+  }
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/cases/:id" component={CaseDetail} />
-      <Route path="/entities" component={EntityList} />
-      <Route path="/entities/:id" component={EntityProfile} />
-      <Route path="/documents" component={DocumentLibrary} />
-      <Route path="/logs" component={SystemLog} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/">
+        <AuthGate>
+          <Layout><Dashboard /></Layout>
+        </AuthGate>
+      </Route>
+      <Route path="/cases/:id">
+        <AuthGate>
+          <Layout><CaseDetail /></Layout>
+        </AuthGate>
+      </Route>
+      <Route path="/entities">
+        <AuthGate>
+          <Layout><EntityList /></Layout>
+        </AuthGate>
+      </Route>
+      <Route path="/entities/:id">
+        <AuthGate>
+          <Layout><EntityProfile /></Layout>
+        </AuthGate>
+      </Route>
+      <Route path="/documents">
+        <AuthGate>
+          <Layout><DocumentLibrary /></Layout>
+        </AuthGate>
+      </Route>
+      <Route path="/logs">
+        <AuthGate>
+          <Layout><SystemLog /></Layout>
+        </AuthGate>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -51,13 +86,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {!booted && <BootScreen onComplete={handleBootComplete} />}
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Layout>
+        <AuthProvider>
+          {!booted && <BootScreen onComplete={handleBootComplete} />}
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <Router />
-          </Layout>
-        </WouterRouter>
-        <Toaster />
+          </WouterRouter>
+          <Toaster />
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

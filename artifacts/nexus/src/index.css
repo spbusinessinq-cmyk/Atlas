@@ -61,24 +61,24 @@
 }
 
 :root, .dark {
-  --background: 220 20% 4%;        /* #080a0d */
-  --foreground: 0 0% 95%;          /* near white */
-  --border: 220 20% 12%;           /* very dark border */
-  --card: 220 20% 7%;              /* #0d1117 */
+  --background: 222 24% 5%;
+  --foreground: 0 0% 95%;
+  --border: 220 20% 11%;
+  --card: 222 22% 7%;
   --card-foreground: 0 0% 90%;
   --card-border: 220 20% 10%;
-  --sidebar: 220 20% 5%;
+  --sidebar: 222 24% 4%;
   --sidebar-foreground: 0 0% 85%;
   --sidebar-border: 220 20% 8%;
-  --sidebar-primary: 0 72% 51%;    /* red */
+  --sidebar-primary: 0 72% 51%;
   --sidebar-primary-foreground: 0 0% 98%;
   --sidebar-accent: 220 20% 9%;
   --sidebar-accent-foreground: 0 0% 85%;
   --sidebar-ring: 0 72% 51%;
-  --popover: 220 20% 7%;
+  --popover: 222 22% 7%;
   --popover-foreground: 0 0% 90%;
   --popover-border: 220 20% 12%;
-  --primary: 0 72% 51%;            /* red */
+  --primary: 0 72% 51%;
   --primary-foreground: 0 0% 98%;
   --secondary: 220 20% 12%;
   --secondary-foreground: 0 0% 80%;
@@ -100,90 +100,220 @@
 
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
-  --opaque-button-border-intensity: 9;  
+  --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  
-  --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
-  --shadow-xs: 0px 2px 4px 0px rgba(0,0,0,0.5);
-  --shadow-sm: 0px 4px 8px -1px rgba(0,0,0,0.5), 0px 2px 4px -2px rgba(0,0,0,0.5);
-  --shadow: 0px 8px 16px -2px rgba(0,0,0,0.5), 0px 4px 8px -4px rgba(0,0,0,0.5);
-  --shadow-md: 0px 12px 24px -4px rgba(0,0,0,0.5), 0px 8px 16px -8px rgba(0,0,0,0.5);
-  --shadow-lg: 0px 16px 32px -4px rgba(0,0,0,0.5), 0px 12px 24px -12px rgba(0,0,0,0.5);
-  --shadow-xl: 0px 24px 48px -8px rgba(0,0,0,0.5), 0px 16px 32px -16px rgba(0,0,0,0.5);
-  --shadow-2xl: 0px 32px 64px -12px rgba(0,0,0,0.5);
+
+  --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.6);
+  --shadow-xs:  0px 2px 4px 0px rgba(0,0,0,0.6);
+  --shadow-sm:  0px 4px 8px -1px rgba(0,0,0,0.6), 0px 2px 4px -2px rgba(0,0,0,0.5);
+  --shadow:     0px 8px 16px -2px rgba(0,0,0,0.6), 0px 4px 8px -4px rgba(0,0,0,0.5);
+  --shadow-md:  0px 12px 24px -4px rgba(0,0,0,0.6), 0px 8px 16px -8px rgba(0,0,0,0.5);
+  --shadow-lg:  0px 16px 32px -4px rgba(0,0,0,0.6), 0px 12px 24px -12px rgba(0,0,0,0.5);
+  --shadow-xl:  0px 24px 48px -8px rgba(0,0,0,0.6), 0px 16px 32px -16px rgba(0,0,0,0.5);
+  --shadow-2xl: 0px 32px 64px -12px rgba(0,0,0,0.7);
+
+  /* ATLAS depth tokens */
+  --atlas-surface-0: #020306;   /* deepest */
+  --atlas-surface-1: #03050a;   /* shell */
+  --atlas-surface-2: #06080d;   /* panel */
+  --atlas-surface-3: #0a0d14;   /* card */
+  --atlas-surface-4: #0e1218;   /* raised */
+
+  --atlas-border-0: rgba(255,255,255,0.04);
+  --atlas-border-1: rgba(255,255,255,0.07);
+  --atlas-border-2: rgba(255,255,255,0.10);
+
+  --atlas-glow-red:  rgba(220, 38, 38, 0.14);
+  --atlas-glow-cyan: rgba(6, 182, 212, 0.12);
+  --atlas-glow-amber: rgba(245, 158, 11, 0.12);
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply font-sans antialiased bg-background text-foreground;
-  }
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    @apply bg-background border-l border-border;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 hover:bg-muted-foreground/50 transition-colors;
-  }
+  * { @apply border-border; }
+  body { @apply font-sans antialiased bg-background text-foreground; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #02040a; border-left: 1px solid rgba(255,255,255,0.03); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 }
 
 @layer utilities {
+  /* ── Nexus legacy ──────────────────────────────────── */
   .nexus-panel {
-    @apply bg-[#0d1117] border border-[#ffffff0d];
+    @apply bg-[#0a0d14] border border-[#ffffff0d];
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
   }
   .nexus-card {
-    @apply bg-[#111820] border border-[#ffffff0d];
+    @apply bg-[#0e1218] border border-[#ffffff0d];
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
   }
   .nexus-header-strip {
-    @apply bg-[#ffffff05] border-b border-[#ffffff0d] px-3 py-1.5 flex items-center justify-between;
+    @apply bg-[#ffffff05] border-b border-[#ffffff0a] px-3 py-1.5 flex items-center justify-between;
   }
   .nexus-label {
-    @apply uppercase tracking-widest text-[9px] font-mono text-neutral-500;
+    @apply uppercase tracking-widest text-[9px] font-mono text-neutral-600;
   }
   .nexus-row {
     @apply flex items-center border-b border-[#ffffff06] px-3 py-1 font-mono text-[10px] transition-colors;
   }
   .nexus-glow-focus:focus-within {
-    box-shadow: 0 0 0 1px #dc262620;
+    box-shadow: 0 0 0 1px rgba(220,38,38,0.2);
   }
   .nexus-glow-active {
-    box-shadow: 0 0 0 1px #dc262640;
+    box-shadow: 0 0 0 1px rgba(220,38,38,0.35);
   }
+
+  /* ── ATLAS glass panel system ──────────────────────── */
+  .atlas-panel {
+    background: var(--atlas-surface-2);
+    border: 1px solid var(--atlas-border-1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      0 4px 12px rgba(0,0,0,0.35);
+  }
+  .atlas-panel-raised {
+    background: var(--atlas-surface-3);
+    border: 1px solid var(--atlas-border-1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 2px 8px rgba(0,0,0,0.3);
+  }
+  .atlas-card {
+    background: var(--atlas-surface-3);
+    border: 1px solid var(--atlas-border-0);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 1px 4px rgba(0,0,0,0.25);
+  }
+  .atlas-card:hover {
+    border-color: var(--atlas-border-1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      0 2px 8px rgba(0,0,0,0.35);
+  }
+
+  /* ── Glow borders ─────────────────────────────────── */
+  .atlas-border-red {
+    border: 1px solid rgba(220,38,38,0.2);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 0 16px rgba(220,38,38,0.08);
+  }
+  .atlas-border-cyan {
+    border: 1px solid rgba(6,182,212,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 0 16px rgba(6,182,212,0.07);
+  }
+  .atlas-border-amber {
+    border: 1px solid rgba(245,158,11,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 0 16px rgba(245,158,11,0.07);
+  }
+
+  /* ── Glass surfaces ────────────────────────────────── */
+  .atlas-glass {
+    background: rgba(6, 9, 14, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.07);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .atlas-glass-red {
+    background: rgba(18, 4, 4, 0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(220,38,38,0.22);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 0 24px rgba(220,38,38,0.1);
+  }
+  .atlas-glass-cyan {
+    background: rgba(0, 14, 18, 0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(6,182,212,0.2);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 0 24px rgba(6,182,212,0.09);
+  }
+
+  /* ── Ambient glow pools ────────────────────────────── */
+  .atlas-glow-red  { box-shadow: 0 0 32px rgba(220,38,38,0.14), 0 0 8px rgba(220,38,38,0.07); }
+  .atlas-glow-cyan { box-shadow: 0 0 32px rgba(6,182,212,0.12), 0 0 8px rgba(6,182,212,0.06); }
+
+  /* ── Scanline texture overlay ──────────────────────── */
+  .atlas-scanline {
+    background-image: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ── Dashboard depth planes (legacy compat) ────────── */
+  .atlas-shell {
+    background: var(--atlas-surface-1);
+    border: 1px solid var(--atlas-border-0);
+  }
+  .atlas-control-panel {
+    background: var(--atlas-surface-2);
+    border: 1px solid var(--atlas-border-0);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.4);
+  }
+  .atlas-content-surface {
+    background: var(--atlas-surface-1);
+    border: 1px solid var(--atlas-border-0);
+  }
+
+  /* ── Build quality badge helpers ───────────────────── */
+  .atlas-badge-strong     { @apply text-green-400 border-green-900/40 bg-green-950/20; }
+  .atlas-badge-provisional{ @apply text-sky-400 border-sky-900/40 bg-sky-950/20; }
+  .atlas-badge-moderate   { @apply text-cyan-500 border-cyan-900/40 bg-cyan-950/20; }
+  .atlas-badge-recovered  { @apply text-teal-400 border-teal-900/40 bg-teal-950/20; }
+  .atlas-badge-weak       { @apply text-amber-600 border-amber-900/40 bg-amber-950/20; }
+  .atlas-badge-failed     { @apply text-red-700 border-red-900/40 bg-red-950/20; }
 }
 
-/* ── Focus / outline reset ──────────────────────────────────────────────────── */
-/* Remove browser default blue focus rings across the entire app.               */
-/* Keyboard users still get a subtle white glow via :focus-visible.             */
-*:focus {
-  outline: none;
-}
+/* ── Focus / outline reset ─────────────────────────────────────────────────── */
+*:focus { outline: none; }
 *:focus-visible {
-  outline: 1px solid rgba(255, 255, 255, 0.12);
+  outline: 1px solid rgba(255,255,255,0.10);
   outline-offset: 1px;
 }
-a:focus-visible,
-button:focus-visible {
-  outline: 1px solid rgba(220, 38, 38, 0.35);
+a:focus-visible, button:focus-visible {
+  outline: 1px solid rgba(220,38,38,0.3);
   outline-offset: 1px;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: none !important;
 }
 
+/* ── Radar sweep animation ─────────────────────────────────────────────────── */
 @keyframes radar-sweep {
-  0% { opacity: 0.55; }
-  50% { opacity: 0.9; }
-  100% { opacity: 0.55; }
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+.atlas-radar-sweep { animation: radar-sweep 3.5s ease-in-out infinite; }
+
+/* ── Boot screen ───────────────────────────────────────────────────────────── */
+@keyframes atlas-radar-sweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes atlas-boot-progress {
+  0%   { width: 0%; }
+  60%  { width: 70%; }
+  80%  { width: 88%; }
+  100% { width: 100%; }
 }
 
-.atlas-radar-sweep {
-  animation: radar-sweep 3.5s ease-in-out infinite;
-}
-
-/* ── ReactFlow focus ring suppression ── */
+/* ── ReactFlow overrides ───────────────────────────────────────────────────── */
 .react-flow__node:focus,
 .react-flow__node:focus-visible,
 .react-flow__node-default:focus,
@@ -200,102 +330,9 @@ button:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
-
-/* ── ReactFlow selected-node blue outline suppression ── */
-/* React Flow applies a blue box-shadow to .react-flow__node when it enters
-   the "selected" state via its internal selection mechanism. Our custom nodes
-   handle their own selected-state styling, so we suppress the library default. */
 .react-flow__node.selected,
 .react-flow__node.selected:focus,
 .react-flow__node.selected:focus-visible {
   outline: none !important;
   box-shadow: none !important;
-}
-
-/* ── Input / textarea focus ring suppression (no browser blue glow) ── */
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: 1px solid rgba(255, 255, 255, 0.10) !important;
-  box-shadow: none !important;
-}
-
-/* ── Glass morphism utilities ── */
-.atlas-glass {
-  background: rgba(9, 13, 18, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.atlas-glass-red {
-  background: rgba(20, 5, 5, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(220, 38, 38, 0.18);
-}
-
-.atlas-glass-cyan {
-  background: rgba(0, 18, 20, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(6, 182, 212, 0.18);
-}
-
-.atlas-glow-red {
-  box-shadow: 0 0 24px rgba(220, 38, 38, 0.12), 0 0 6px rgba(220, 38, 38, 0.06);
-}
-
-.atlas-glow-cyan {
-  box-shadow: 0 0 24px rgba(6, 182, 212, 0.12), 0 0 6px rgba(6, 182, 212, 0.06);
-}
-
-.atlas-scanline {
-  background-image: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.08) 2px,
-    rgba(0, 0, 0, 0.08) 4px
-  );
-  pointer-events: none;
-}
-
-/* ── Boot screen animations ──────────────────────────────────────────────────── */
-
-@keyframes atlas-radar-sweep {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-@keyframes atlas-boot-progress {
-  0%   { width: 0%; }
-  60%  { width: 70%; }
-  80%  { width: 88%; }
-  100% { width: 100%; }
-}
-
-/* ── Dashboard depth planes ──────────────────────────────────────────────────── */
-
-.atlas-shell {
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.atlas-control-panel {
-  background: #0a0c0f;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.4);
-}
-
-.atlas-content-surface {
-  background: #060810;
-  border: 1px solid rgba(255, 255, 255, 0.04);
 }
