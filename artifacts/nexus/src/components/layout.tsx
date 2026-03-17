@@ -146,7 +146,8 @@ export function Layout({ children }: LayoutProps) {
               <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">OPERATOR</div>
               <div className="font-mono text-[9px] text-neutral-500 uppercase">{operator.displayName}</div>
               <div className="font-mono text-[7px] text-neutral-800 uppercase">
-                {new Date(operator.lastAuth).toLocaleDateString("en-US", { month: "short", day: "numeric" })} SESSION
+                {new Date(operator.lastAuth).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                {new Date(operator.lastAuth).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} SESSION
               </div>
             </div>
           )}

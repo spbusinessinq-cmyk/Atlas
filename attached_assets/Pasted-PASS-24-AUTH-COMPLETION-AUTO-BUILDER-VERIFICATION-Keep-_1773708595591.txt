@@ -1,0 +1,101 @@
+PASS 24 — AUTH COMPLETION + AUTO-BUILDER VERIFICATION
+
+Keep the current ATLAS structure exactly as-is. Do not redesign the app. Do not add side features.
+
+This pass has 2 goals only:
+
+1. COMPLETE THE LOGIN / ACCESS GATE
+2. VERIFY THE AUTO-BUILDER ACTUALLY WORKS END-TO-END
+
+==================================================
+PART A — COMPLETE AUTH
+==================================================
+
+The access gate UI exists, but I need the login to be fully usable right now.
+
+Do the following:
+
+- Audit the current auth implementation end-to-end
+- Determine exactly where operator credentials are read from
+- If credentials are not actually wired, fix it now
+- Use a practical alpha approach:
+  - operator id / password from environment variables or a simple internal config
+  - protected routes must block dashboard/cases/entities/documents until authenticated
+  - invalid credentials must show a clear inline error
+  - successful login must redirect into ATLAS
+  - logout must fully clear the session and return to the access gate
+- Add a tiny session panel in the shell/footer or top bar:
+  - operator
+  - auth status
+  - last auth time
+- Final response must explicitly say:
+  - what the login credential source is
+  - what file(s) control auth
+  - how I log in right now for alpha use
+
+If a dev fallback is added, it must be clearly labeled and easy to disable.
+
+==================================================
+PART B — VERIFY AUTO-BUILDER END-TO-END
+==================================================
+
+I do not want vague claims. I want a real audit and repair pass.
+
+Verify this chain:
+
+seed input
+→ query generation
+→ source fetch
+→ extraction
+→ cleaning
+→ relevance scoring
+→ entity extraction
+→ admission firewall
+→ promotion
+→ graph starter
+→ timeline extraction
+→ financial extraction
+→ brief/dossier
+
+Do the following:
+
+- identify any broken or weak handoff in the current auto-build flow
+- fix any step where usable docs are not turning into strong evidence
+- fix any step where garbage still becomes promoted entities
+- fix any step where timeline/financial signals fail to populate when the docs clearly support them
+- ensure title/dek/lead evidence is weighted strongest
+- ensure artifact/sidebar/nav contamination is heavily penalized
+- ensure auto-promotion is evidence-based and confidence-based
+- ensure weak builds stay honest instead of pretending to be strong
+
+==================================================
+PART C — REQUIRED TEST / VALIDATION
+==================================================
+
+Run a real smoke test on at least one seeded case and verify:
+
+- login works
+- protected routes work
+- logout works
+- case build runs
+- documents ingest
+- at least some entities are admitted
+- only strong candidates are auto-promoted
+- graph starter is populated when evidence supports it
+- build report reflects reality
+
+==================================================
+PART D — FINAL RESPONSE FORMAT
+==================================================
+
+When done, respond with:
+
+1. whether login is now fully usable
+2. exactly how I log in
+3. what auth file(s) were changed
+4. what auto-builder issues were found
+5. what was fixed in the pipeline
+6. whether ATLAS is now actually auto-building evidence-backed starter cases
+7. what still remains weak, if anything
+
+Do not give a marketing summary. Give an engineering summary.

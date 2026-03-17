@@ -202,6 +202,20 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* Alpha dev credentials hint */}
+        <div className="mt-3 border border-amber-900/30 bg-amber-950/10 px-4 py-2.5">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-1 h-1 rounded-full bg-amber-600 inline-block" />
+            <span className="font-mono text-[7px] text-amber-700/80 uppercase tracking-widest">Alpha Build — Dev Credentials</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider">OPERATOR ID</div>
+            <div className="font-mono text-[8px] text-amber-600/70 tracking-wider">ATLAS</div>
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider">ACCESS CODE</div>
+            <div className="font-mono text-[8px] text-amber-600/70 tracking-wider">atlas2024</div>
+          </div>
+        </div>
+
         <p className="text-center font-mono text-[7px] text-neutral-800 uppercase tracking-widest mt-4">
           UNAUTHORIZED ACCESS IS PROHIBITED AND MONITORED
         </p>

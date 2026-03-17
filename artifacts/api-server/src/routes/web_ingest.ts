@@ -6,6 +6,8 @@ import {
   casesTable,
   entitiesTable,
   relationshipsTable,
+  timelineEntriesTable,
+  financialSignalsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import path from "path";
@@ -13,6 +15,8 @@ import fs from "fs";
 import { parse as parseHtml } from "node-html-parser";
 import {
   extractEntities,
+  extractTimelineEvents,
+  extractFinancialSignals,
   computeDocRelevanceScore,
   normalizeEntityName,
   resolveToCanonical,
@@ -1176,6 +1180,54 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         pipelineRejectReasons[r] = (pipelineRejectReasons[r] ?? 0) + n;
       }
 
+      // ── Auto-extract timeline events ─────────────────────────────────────
+      if (relevance.priority !== "NOISE") {
+        try {
+          const timelineEvents = extractTimelineEvents(textForAnalysis);
+          for (const ev of timelineEvents) {
+            try {
+              await db.insert(timelineEntriesTable).values({
+                title: `[${ev.eventType}] ${ev.summary.slice(0, 120)}`,
+                description: ev.summary,
+                eventDate: ev.eventDate,
+                linkedDocumentId: doc.id,
+                caseId,
+              });
+            } catch {
+              // skip duplicate/constraint errors
+            }
+          }
+        } catch {
+          // don't let timeline extraction crash the pipeline
+        }
+      }
+
+      // ── Auto-extract financial signals ────────────────────────────────────
+      if (relevance.priority !== "NOISE") {
+        try {
+          const signals = extractFinancialSignals(textForAnalysis);
+          for (const sig of signals) {
+            try {
+              await db.insert(financialSignalsTable).values({
+                amountRaw: sig.amountRaw,
+                normalizedAmount: sig.normalizedAmount ?? null,
+                currency: sig.currency ?? "USD",
+                signalType: sig.signalType,
+                eventSummary: sig.eventSummary ?? null,
+                entityName: sig.entityName ?? null,
+                documentId: doc.id,
+                documentTitle: result.title,
+                caseId,
+              });
+            } catch {
+              // skip duplicate/constraint errors
+            }
+          }
+        } catch {
+          // don't let financial extraction crash the pipeline
+        }
+      }
+
       // Track contamination counts
       if (contaminationResult.score === "high") highContaminationDocs++;
 
@@ -1802,6 +1854,42 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         for (const [r, n] of Object.entries(rejectReasonCounts)) {
           pipelineRejectReasons[r] = (pipelineRejectReasons[r] ?? 0) + n;
         }
+
+        // ── Auto-extract timeline events (recovery pass) ──────────────────
+        try {
+          const timelineEvents = extractTimelineEvents(textForAnalysis);
+          for (const ev of timelineEvents) {
+            try {
+              await db.insert(timelineEntriesTable).values({
+                title: `[${ev.eventType}] ${ev.summary.slice(0, 120)}`,
+                description: ev.summary,
+                eventDate: ev.eventDate,
+                linkedDocumentId: doc.id,
+                caseId,
+              });
+            } catch { /* skip duplicates */ }
+          }
+        } catch { /* don't crash pipeline */ }
+
+        // ── Auto-extract financial signals (recovery pass) ────────────────
+        try {
+          const signals = extractFinancialSignals(textForAnalysis);
+          for (const sig of signals) {
+            try {
+              await db.insert(financialSignalsTable).values({
+                amountRaw: sig.amountRaw,
+                normalizedAmount: sig.normalizedAmount ?? null,
+                currency: sig.currency ?? "USD",
+                signalType: sig.signalType,
+                eventSummary: sig.eventSummary ?? null,
+                entityName: sig.entityName ?? null,
+                documentId: doc.id,
+                documentTitle: result.title,
+                caseId,
+              });
+            } catch { /* skip duplicates */ }
+          }
+        } catch { /* don't crash pipeline */ }
 
         const updatedRawText = rawText.replace(
           /(\[ATLAS-DIAG:[^\]]+)\]/,
