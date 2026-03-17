@@ -209,17 +209,42 @@ function DocumentRow({
           >
             {doc.title}
           </div>
-          <div className="flex items-center gap-2 text-[8px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
-            <span className="truncate max-w-[100px]">
+          <div className="flex items-center gap-1.5 flex-wrap text-[8px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
+            <span className="truncate max-w-[90px]">
               {(doc as ExtendedDoc).sourceDomain || doc.source || "UNKNOWN"}
             </span>
             <span className="text-[#ffffff10]">·</span>
             <span className="flex-shrink-0 tabular-nums" title={`Ingested: ${formatDate(doc.uploadedAt)}`}>
               {formatDate(doc.uploadedAt).split(",")[0]}
             </span>
+            <span className="text-[#ffffff10]">·</span>
             <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${signalBadge.cls}`}>
               {signalBadge.text}
             </span>
+            {diag?.priority && (() => {
+              const tierMap: Record<string, string> = {
+                "TIER-1": "text-red-500 border-red-500/40 bg-red-500/5",
+                "TIER-2": "text-amber-500 border-amber-500/40 bg-amber-500/5",
+                "TIER-3": "text-neutral-600 border-[#ffffff10] bg-transparent",
+              };
+              return (
+                <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${tierMap[diag.priority!] ?? "text-neutral-700 border-[#ffffff10]"}`}>
+                  {diag.priority}
+                </span>
+              );
+            })()}
+            {diag?.alignment && (() => {
+              const alignMap: Record<string, string> = {
+                "CORE":       "text-cyan-600 border-cyan-500/30",
+                "RELEVANT":   "text-sky-700 border-sky-500/20",
+                "PERIPHERAL": "text-neutral-700 border-[#ffffff08]",
+              };
+              return (
+                <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${alignMap[diag.alignment!] ?? "text-neutral-700 border-[#ffffff08]"}`}>
+                  {diag.alignment}
+                </span>
+              );
+            })()}
           </div>
         </div>
       </div>

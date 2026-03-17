@@ -587,8 +587,124 @@ export type SeedIntent =
   | "legal_lawsuit"
   | "general";
 
+// ── Master Target Mode (Pass 28) ─────────────────────────────────────────────
+
+export type TargetMode =
+  | "person_target"
+  | "organization_target"
+  | "government_agency_target"
+  | "place_target"
+  | "program_target"
+  | "funding_target"
+  | "event_target"
+  | "scandal_target"
+  | "topic_investigation"
+  | "general";
+
+export interface TargetClassification {
+  mode: TargetMode;
+  label: string;           // clean display label
+  confidence: number;      // 0.0–1.0
+  seedIntent: SeedIntent;  // backward-compat
+  intentLabel: string;     // human readable
+}
+
 /**
- * Classify the seed target into a primary investigative intent.
+ * Master target classifier — determines what kind of investigative target this is.
+ * More granular than classifySeedIntent; replaces it where full classification needed.
+ */
+export function classifyTarget(target: string): TargetClassification {
+  const t = target.trim();
+  const tl = t.toLowerCase();
+
+  let mode: TargetMode = "general";
+  let confidence = 0.5;
+
+  // ── Scandal / Investigation indicators (highest priority) ─────────────────
+  if (/\b(investigation|lawsuit|indictment|audit|corruption|fraud|probe|bribery|embezzl|kickback|misconduct|scandal|subpoena|affidavit|deposition|court|filing|charges|plea|conviction|verdict|whistleblower)\b/i.test(t)) {
+    mode = "scandal_target";
+    confidence = 0.85;
+  }
+  // ── Funding / Spending targets ─────────────────────────────────────────────
+  else if (/\b(funding|grant|budget|contract|appropriation|spending|procurement|allocation|subsidy|award|reimbursement|invoice|payment|PAC|donation|contribution)\b/i.test(t)) {
+    mode = "funding_target";
+    confidence = 0.82;
+  }
+  // ── Government agency patterns ─────────────────────────────────────────────
+  else if (/\b(Department of|Agency for|Bureau of|Office of|Administration|Commission|Authority|Federal|National|U\.S\.|USDA|FDA|EPA|FBI|CIA|NSA|DOJ|DHS|HHS|DOD|DEA|ATF|ICE|CBP|FEMA|SBA|CFPB|SEC|FTC|FCC|CISA)\b/i.test(t)) {
+    mode = "government_agency_target";
+    confidence = 0.88;
+  }
+  // ── Program / Initiative patterns ─────────────────────────────────────────
+  else if (/\b(program|initiative|project|committee|board|council|task force|working group|division|office|center|institute|authority)\b/i.test(tl)) {
+    mode = "program_target";
+    confidence = 0.75;
+  }
+  // ── Organization patterns ─────────────────────────────────────────────────
+  else if (/\b(inc\.|llc|corp\.|corporation|company|organization|nonprofit|foundation|firm|associates|group|holdings|partners|ventures|trust|PAC|committee)\b/i.test(t)) {
+    mode = "organization_target";
+    confidence = 0.84;
+  }
+  // ── Person name patterns: 2-4 capitalized tokens, no org keywords ─────────
+  else if (/^[A-Z][a-z]{1,15}(\s+[A-Z]\.?)?(\s+[A-Z][a-z]{1,20}){1,3}$/.test(t) && !/\b(Inc|LLC|Corp|Foundation|Agency|Department|University|School|College|Institute|County|City|State)\b/.test(t)) {
+    mode = "person_target";
+    confidence = 0.88;
+  }
+  // ── Place / Location patterns ─────────────────────────────────────────────
+  else if (/\b(city|county|state|country|district|region|territory|municipality|township|borough|village|province|nation|republic|kingdom)\b/i.test(tl) || /^[A-Z][a-z]+,?\s+[A-Z]{2}$/.test(t)) {
+    mode = "place_target";
+    confidence = 0.78;
+  }
+  // ── Event patterns ────────────────────────────────────────────────────────
+  else if (/\b(election|vote|referendum|summit|conference|hearing|trial|raid|attack|disaster|crisis|outbreak|protest|riot|coup)\b/i.test(tl)) {
+    mode = "event_target";
+    confidence = 0.75;
+  }
+  // ── Topic investigation (multi-word investigative phrase) ─────────────────
+  else if (t.split(/\s+/).length >= 3) {
+    mode = "topic_investigation";
+    confidence = 0.60;
+  }
+
+  // Legacy seedIntent for backward compat
+  const seedIntent = classifySeedIntent(t);
+
+  const INTENT_LABELS: Record<SeedIntent, string> = {
+    policy_government: "Policy / Government",
+    finance_funding: "Finance / Funding",
+    housing_homelessness: "Housing / Homelessness",
+    education_university: "Education / University",
+    crime_corruption: "Crime / Corruption",
+    entertainment_film: "Entertainment / Film",
+    sports: "Sports",
+    legal_lawsuit: "Legal / Lawsuit",
+    general: "General Investigation",
+  };
+
+  const MODE_LABELS: Record<TargetMode, string> = {
+    person_target: "Person of Interest",
+    organization_target: "Organization",
+    government_agency_target: "Government Agency",
+    place_target: "Place / Location",
+    program_target: "Program / Initiative",
+    funding_target: "Funding / Financial Target",
+    event_target: "Event / Incident",
+    scandal_target: "Scandal / Investigation",
+    topic_investigation: "Topic Investigation",
+    general: "General Target",
+  };
+
+  return {
+    mode,
+    label: `${t} [${MODE_LABELS[mode]}]`,
+    confidence,
+    seedIntent,
+    intentLabel: INTENT_LABELS[seedIntent],
+  };
+}
+
+/**
+ * Classify the seed target into a primary investigative intent (legacy, used internally).
  * Used to apply topic alignment scoring and suppression rules.
  */
 export function classifySeedIntent(target: string): SeedIntent {

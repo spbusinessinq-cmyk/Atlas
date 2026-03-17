@@ -6,6 +6,7 @@ import {
   entityMentionsTable,
   timelineEntriesTable,
   financialSignalsTable,
+  relationshipsTable,
 } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -55,13 +56,24 @@ export interface RankedFinancialSignal {
   documentTitle: string | null;
 }
 
+export interface KeyRelationship {
+  entityA: string;
+  entityB: string;
+  relationshipType: string;
+  confidence: number;
+  docCount?: number;
+}
+
 export interface CaseBrief {
   caseId: number;
   caseTitle: string;
   seedIntent: string | null;
+  targetMode: string | null;
+  targetLabel: string | null;
   compiledAt: string;
   dataQuality: "STRONG" | "MODERATE" | "WEAK" | "EMPTY";
   qualityNote: string;
+  autoGraphQuality: string | null;
 
   whatThisCaseIs: string;
   primaryActors: string[];
@@ -74,6 +86,9 @@ export interface CaseBrief {
   primaryEntities: RankedEntity[];
   secondaryEntities: RankedEntity[];
 
+  keyRelationships: KeyRelationship[];
+  likelyAngles: string[];
+
   currentState: string;
   knownGaps: string[];
   suggestedNextQueries: string[];
@@ -85,6 +100,7 @@ export interface CaseBrief {
     totalTimeline: number;
     totalFinancial: number;
     totalMentions: number;
+    totalRelationships: number;
   };
 }
 
@@ -147,7 +163,7 @@ const EVENT_TYPE_RANK: Record<string, number> = {
 
 export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
   // Load all data in parallel
-  const [caseRow, docs, entities, mentionStats, timelineEntries, financialSignals] = await Promise.all([
+  const [caseRow, docs, entities, mentionStats, timelineEntries, financialSignals, relationships] = await Promise.all([
     db.select().from(casesTable).where(eq(casesTable.id, caseId)).then(r => r[0]),
     db.select().from(documentsTable).where(eq(documentsTable.caseId, caseId)),
     db.select().from(entitiesTable).where(eq(entitiesTable.caseId, caseId)),
@@ -164,6 +180,7 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
       .groupBy(entityMentionsTable.entityName),
     db.select().from(timelineEntriesTable).where(eq(timelineEntriesTable.caseId, caseId)),
     db.select().from(financialSignalsTable).where(eq(financialSignalsTable.caseId, caseId)),
+    db.select().from(relationshipsTable).where(eq(relationshipsTable.caseId, caseId)),
   ]);
 
   if (!caseRow) throw new Error(`Case ${caseId} not found`);
@@ -449,13 +466,44 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
   const knownGaps = buildKnownGaps(usableCount, primaryEntities, topTimeline, topFinancial);
   const suggestedNextQueries = buildSuggestedQueries(caseRow.title, primaryEntities, seedIntent);
 
+  // ── Key Relationships (T004 Dossier 2.0) ─────────────────────────────────
+  const entityIdToName = new Map<number, string>();
+  for (const e of entities) {
+    if (e.id && e.name) entityIdToName.set(e.id, e.name);
+  }
+
+  const keyRelationships: KeyRelationship[] = relationships
+    .filter(r => r.entityAId && r.entityBId)
+    .sort((a, b) => Number(b.confidence ?? 0) - Number(a.confidence ?? 0))
+    .slice(0, 8)
+    .map(r => ({
+      entityA: entityIdToName.get(r.entityAId!) ?? `Entity ${r.entityAId}`,
+      entityB: entityIdToName.get(r.entityBId!) ?? `Entity ${r.entityBId}`,
+      relationshipType: r.relationshipType || "co_mention",
+      confidence: Number(r.confidence ?? 0),
+    }));
+
+  // ── Likely Investigative Angles (T004 Dossier 2.0) ───────────────────────
+  const targetMode = (caseRow as any).targetMode as string | null ?? null;
+  const likelyAngles = buildLikelyAngles(
+    targetMode,
+    seedIntent,
+    primaryEntities,
+    topTimeline,
+    topFinancial,
+    keyEvidence
+  );
+
   return {
     caseId,
     caseTitle: caseRow.title,
     seedIntent: seedIntent ?? null,
+    targetMode,
+    targetLabel: (caseRow as any).targetLabel as string | null ?? null,
     compiledAt: new Date().toISOString(),
     dataQuality,
     qualityNote,
+    autoGraphQuality: (caseRow as any).autoGraphQuality as string | null ?? null,
     whatThisCaseIs,
     primaryActors: persons,
     primaryOrganizations: orgs,
@@ -464,6 +512,8 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     topFinancial,
     primaryEntities,
     secondaryEntities,
+    keyRelationships,
+    likelyAngles,
     currentState,
     knownGaps,
     suggestedNextQueries,
@@ -474,6 +524,7 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
       totalTimeline: timelineEntries.length,
       totalFinancial: financialSignals.length,
       totalMentions: mentionStats.reduce((acc, m) => acc + m.mentionCount, 0),
+      totalRelationships: relationships.length,
     },
   };
 }
@@ -559,6 +610,68 @@ function buildKnownGaps(
   else if (timeline.length < 3) gaps.push("Timeline sparse — fewer than 3 events found.");
   if (financial.length === 0) gaps.push("No financial signals detected — money flow unknown.");
   return gaps;
+}
+
+function buildLikelyAngles(
+  targetMode: string | null,
+  intent: string | undefined,
+  entities: RankedEntity[],
+  timeline: RankedTimelineEvent[],
+  financial: RankedFinancialSignal[],
+  docs: RankedDocument[]
+): string[] {
+  const angles: string[] = [];
+  const hasPerson = entities.some(e => e.type === "person");
+  const hasOrg = entities.some(e => e.type !== "person" && e.type !== "location");
+  const hasFinancial = financial.length > 0;
+  const hasTimeline = timeline.length > 0;
+  const hasLegalDocs = docs.some(d => d.alignment === "matched" && (d.hasTimeline || d.hasFinancial));
+
+  // Mode-specific primary angles
+  switch (targetMode) {
+    case "person_target":
+      angles.push("Individual accountability — track decisions, roles, financial ties");
+      if (hasFinancial) angles.push("Follow the money — trace payments, donations, contracts tied to this person");
+      if (hasOrg) angles.push("Organizational affiliations — board memberships, employment history, conflicts");
+      break;
+    case "organization_target":
+    case "government_agency_target":
+      angles.push("Institutional oversight — contract awards, procurement patterns, governance failures");
+      if (hasFinancial) angles.push("Budget / spending analysis — compare appropriations to actual expenditures");
+      if (hasPerson) angles.push("Leadership accountability — identify decision-makers and their track records");
+      break;
+    case "funding_target":
+      angles.push("Grant/contract trail — who received funds, under what authority, for what purpose");
+      angles.push("Performance vs. delivery — did funded programs meet stated objectives?");
+      if (hasPerson) angles.push("Beneficiary identification — individuals profiting from public funding");
+      break;
+    case "scandal_target":
+      angles.push("Legal exposure — identify charges, filings, court records, and who faces liability");
+      angles.push("Cover-up indicators — timeline gaps, contradictory statements, document destruction");
+      if (hasFinancial) angles.push("Financial motive — money flows tied to alleged misconduct");
+      break;
+    case "program_target":
+      angles.push("Program effectiveness — stated vs. actual outcomes, audit findings");
+      angles.push("Contracting irregularities — sole-source awards, inflated costs, cronyism");
+      break;
+    case "place_target":
+      angles.push("Local corruption — municipal contracts, zoning decisions, political money");
+      if (hasFinancial) angles.push("Public funds allocation — where is public money going and who controls it");
+      break;
+    default:
+      if (intent === "crime_corruption") angles.push("Corruption pattern — map bribery, kickback, or embezzlement networks");
+      else if (intent === "finance_funding") angles.push("Financial irregularities — irregular grant awards or contract patterns");
+      else if (intent === "housing_homelessness") angles.push("Contract accountability — homeless/shelter program fund mismanagement");
+      else angles.push("Evidence aggregation — collect and cross-reference all available records");
+  }
+
+  // Universal evidence-based angles
+  if (hasTimeline && hasFinancial) angles.push("Chronological money trail — match timeline events to financial signals");
+  if (hasLegalDocs) angles.push("Primary source verification — cross-reference legal/official documents");
+  if (entities.length >= 4) angles.push("Network mapping — identify clusters and hidden links between entities");
+  if (docs.some(d => d.priority === "PRIORITY_A")) angles.push("High-value source follow-up — deepen coverage from top-tier documents");
+
+  return [...new Set(angles)].slice(0, 5);
 }
 
 function buildSuggestedQueries(

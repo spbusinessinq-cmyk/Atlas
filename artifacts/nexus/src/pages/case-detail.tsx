@@ -1219,7 +1219,7 @@ function OverviewPanel({
   onViewDocument,
 }: {
   caseId: number;
-  caseData: { title: string; description?: string | null; tags?: string[] | null };
+  caseData: { title: string; description?: string | null; tags?: string[] | null; targetMode?: string | null; targetLabel?: string | null; autoGraphQuality?: string | null; relationshipCount?: number };
   entities: Entity[];
   documents: Document[];
   timeline: TimelineEntry[];
@@ -1229,10 +1229,12 @@ function OverviewPanel({
 }) {
   const queryClient = useQueryClient();
   const seedDiag = parseSeedDiag(caseData.description);
-  const descText = cleanDescription(caseData.description);
   const isAutoSeeded = caseData.tags?.includes("auto-seeded");
 
-  // Compute case intelligence summary
+  const [actionState, setActionState] = React.useState<Record<string, "idle" | "running" | "done" | "error">>({});
+  const setAction = (key: string, state: "idle" | "running" | "done" | "error") =>
+    setActionState(prev => ({ ...prev, [key]: state }));
+
   const usableDocs = (documents as any[]).filter((d: any) => {
     const raw: string = d.rawText || "";
     const hasDiag = raw.includes("[ATLAS-DIAG:");
@@ -1240,209 +1242,336 @@ function OverviewPanel({
     return !raw.includes("status=failed") && !raw.includes("status=wrapper") &&
            !raw.includes("priority=NOISE");
   });
-  const highSignalCount = financialSignals.length;
-  const primaryEntities = entities.filter((e) => e.type !== "location").slice(0, 6);
 
-  // Compute trust rating
   const trustRating = seedDiag?.trustRating || (
     entities.length >= 3 && usableDocs.length >= 3 ? "STRONG BUILD" :
     entities.length >= 1 && usableDocs.length >= 1 ? "MODERATE BUILD" :
     usableDocs.length >= 1 ? "LOW CONFIDENCE" : "EMPTY CASE"
   );
-  const trustColor =
-    trustRating === "STRONG BUILD" ? "text-green-400 border-green-900/50 bg-green-500/5" :
-    trustRating === "MODERATE BUILD" ? "text-cyan-400 border-cyan-900/50 bg-cyan-500/5" :
-    trustRating === "DEGRADED BUILD" ? "text-amber-400 border-amber-900/50 bg-amber-500/5" :
-    trustRating === "LOW CONFIDENCE" ? "text-amber-600 border-amber-900/30 bg-amber-500/3" :
-    "text-red-600 border-red-900/40 bg-red-500/5";
 
-  // Generate next queries from seedDiag or entities
   const nextQueries = seedDiag?.nextQueries?.length
     ? seedDiag.nextQueries
-    : primaryEntities.slice(0, 2).flatMap(e => [`${e.name} contracts`, `${e.name} grant`]);
+    : entities.slice(0, 2).filter(e => e.type !== "location").flatMap(e => [`${e.name} contracts`, `${e.name} audit`]);
 
-  // ── Derive LIKELY THEMES from entity types + financial signals ────────────
-  const likelyThemes: string[] = [];
-  const seedIntent = seedDiag?.seedIntent || "general";
-  const intentLabel = SEED_INTENT_LABELS[seedIntent] || "";
-  if (intentLabel && seedIntent !== "general") likelyThemes.push(intentLabel);
-  if (moneyFlows.length > 0 || financialSignals.length > 0) likelyThemes.push("FINANCIAL");
-  const hasGovEntities = entities.some(e => e.type === "government_agency");
-  const hasPersonEntities = entities.some(e => e.type === "person");
-  if (hasGovEntities) likelyThemes.push("GOVERNMENT");
-  if (hasPersonEntities) likelyThemes.push("INDIVIDUALS");
-  if (timeline.length >= 3) likelyThemes.push("TIMELINE EVENTS");
-  // Unique + cap at 5
-  const uniqueThemes = [...new Set(likelyThemes)].slice(0, 5);
+  const targetMode = (caseData as any).targetMode as string | null | undefined;
+  const autoGraphQuality = (caseData as any).autoGraphQuality as string | null | undefined;
+  const relCount = (caseData as any).relationshipCount ?? 0;
+
+  const TARGET_MODE_LABEL: Record<string, string> = {
+    person_target: "PERSON OF INTEREST",
+    organization_target: "ORGANIZATION",
+    government_agency_target: "GOVT AGENCY",
+    place_target: "LOCATION / PLACE",
+    program_target: "PROGRAM / INITIATIVE",
+    funding_target: "FUNDING TARGET",
+    event_target: "EVENT / INCIDENT",
+    scandal_target: "SCANDAL / INVESTIGATION",
+    topic_investigation: "TOPIC INVESTIGATION",
+    general: "GENERAL TARGET",
+  };
+  const TARGET_MODE_COLOR: Record<string, string> = {
+    person_target: "text-amber-300 border-amber-900/40 bg-amber-500/5",
+    organization_target: "text-cyan-300 border-cyan-900/40 bg-cyan-500/5",
+    government_agency_target: "text-red-400 border-red-900/40 bg-red-500/5",
+    place_target: "text-blue-300 border-blue-900/40 bg-blue-500/5",
+    program_target: "text-violet-300 border-violet-900/40 bg-violet-500/5",
+    funding_target: "text-green-300 border-green-900/40 bg-green-500/5",
+    event_target: "text-orange-300 border-orange-900/40 bg-orange-500/5",
+    scandal_target: "text-red-400 border-red-900/50 bg-red-500/8",
+    topic_investigation: "text-violet-400 border-violet-900/40 bg-violet-500/5",
+    general: "text-neutral-500 border-neutral-800 bg-transparent",
+  };
+  const GRAPH_QUALITY_COLOR: Record<string, string> = {
+    STRONG: "text-green-400 border-green-900/40",
+    PROVISIONAL: "text-cyan-400 border-cyan-900/40",
+    RECOVERED: "text-amber-400 border-amber-900/40",
+    MODERATE: "text-cyan-400 border-cyan-900/40",
+    WEAK: "text-amber-600 border-amber-900/30",
+    FAILED: "text-red-700 border-red-900/30",
+  };
+
+  const handleRecompile = async () => {
+    setAction("recompile", "running");
+    try {
+      const r = await fetch(`/api/cases/${caseId}/compile`, { method: "POST" });
+      const d = await r.json();
+      setAction("recompile", d.ok ? "done" : "error");
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/brief`] });
+    } catch { setAction("recompile", "error"); }
+    setTimeout(() => setAction("recompile", "idle"), 3000);
+  };
+
+  const handleRebuildGraph = async () => {
+    setAction("graph", "running");
+    try {
+      const r = await fetch(`/api/cases/${caseId}/rebuild-graph`, { method: "POST" });
+      setAction("graph", r.ok ? "done" : "error");
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+    } catch { setAction("graph", "error"); }
+    setTimeout(() => setAction("graph", "idle"), 3000);
+  };
+
+  const handleRunRecovery = async () => {
+    setAction("recovery", "running");
+    try {
+      const r = await fetch(`/api/web-ingest/cases/${caseId}/seed/recovery`, { method: "POST" });
+      setAction("recovery", r.ok ? "done" : "error");
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+    } catch { setAction("recovery", "error"); }
+    setTimeout(() => setAction("recovery", "idle"), 3000);
+  };
+
+  const btnState = (key: string) => actionState[key] ?? "idle";
+  const btnLabel = (key: string, idle: string, running: string) =>
+    btnState(key) === "running" ? running :
+    btnState(key) === "done" ? "✓ DONE" :
+    btnState(key) === "error" ? "✗ ERROR" : idle;
+  const btnCls = (key: string, baseClass: string) => cn(
+    "atlas-btn transition-all",
+    btnState(key) === "running" ? "text-amber-500 border-amber-900/40 animate-pulse cursor-not-allowed" :
+    btnState(key) === "done" ? "text-green-500 border-green-900/40" :
+    btnState(key) === "error" ? "text-red-500 border-red-900/40" :
+    baseClass
+  );
 
   return (
-    <div className="p-3 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-max">
-      {/* ── Case Intelligence Briefing ── */}
-      <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
+    <div className="p-3 space-y-3">
+
+      {/* ── CASE HEALTH TILE GRID ── */}
+      <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
-          <span className="nexus-label">CASE INTELLIGENCE</span>
-          {seedIntent !== "general" && intentLabel && (
-            <span className="font-mono text-[8px] text-violet-400 border border-violet-900/40 bg-violet-500/5 px-1.5 py-0.5 uppercase tracking-widest">
-              {intentLabel}
+          <span className="nexus-label">CASE HEALTH</span>
+          {targetMode && targetMode !== "general" && (
+            <span className={cn("font-mono text-[8px] border px-2 py-0.5 uppercase tracking-widest",
+              TARGET_MODE_COLOR[targetMode] || "text-neutral-500 border-neutral-800"
+            )}>
+              {TARGET_MODE_LABEL[targetMode] || targetMode.replace(/_/g, " ")}
             </span>
           )}
-          <div className={cn("font-mono text-[9px] px-2 py-0.5 border uppercase tracking-widest mr-2", trustColor)}>
-            {trustRating}
-          </div>
-        </div>
-        {/* ── Core stats row ── */}
-        <div className="p-3 grid grid-cols-3 gap-3">
-          <div className="space-y-1">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">SOURCES INGESTED</div>
-            <div className="font-mono text-2xl font-bold text-white tabular-nums">{documents.length.toString().padStart(2, "0")}</div>
-            <div className="font-mono text-[8px] text-neutral-600 uppercase">
-              {usableDocs.length} USABLE{seedDiag?.noise ? ` · ${seedDiag.noise} NOISE` : ""}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">ENTITY REGISTRY</div>
-            <div className="font-mono text-2xl font-bold text-cyan-400 tabular-nums">{entities.length.toString().padStart(2, "0")}</div>
-            <div className="font-mono text-[8px] text-neutral-600 uppercase">
-              {entities.filter(e => e.type === "person").length} PERSONS · {entities.filter(e => e.type !== "person" && e.type !== "location").length} ORGS
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">TIMELINE EVENTS</div>
-            <div className={`font-mono text-2xl font-bold tabular-nums ${timeline.length > 0 ? "text-cyan-300" : "text-neutral-700"}`}>
-              {timeline.length.toString().padStart(2, "0")}
-            </div>
-            <div className="font-mono text-[8px] text-neutral-600 uppercase">
-              {highSignalCount > 0 ? `${highSignalCount} FINANCIAL SIGNALS` : "NO FINANCIAL SIGNALS"}
-            </div>
-          </div>
-        </div>
-
-        {/* ── PRIMARY SIGNALS ── top financial signals as bullets */}
-        {financialSignals.length > 0 && (
-          <div className="border-t border-[#ffffff06] px-3 pb-3 pt-2 space-y-2">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">PRIMARY SIGNALS</div>
-            <div className="space-y-1">
-              {financialSignals.slice(0, 4).map((sig: any, i: number) => (
-                <div key={i} className="flex items-start gap-2 font-mono text-[9px]">
-                  <span className="text-green-600 flex-shrink-0">▸</span>
-                  <span className="text-green-400 font-bold flex-shrink-0">{sig.amountDisplay || sig.amountRaw}</span>
-                  <span className="text-neutral-500 leading-tight">{sig.eventSummary?.slice(0, 120)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── PRIMARY ENTITIES chips ── */}
-        {primaryEntities.length > 0 && (
-          <div className="border-t border-[#ffffff06] px-3 pb-2 pt-2">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-1.5">PRIMARY ENTITIES</div>
-            <div className="flex flex-wrap gap-1.5">
-              {primaryEntities.map((e) => (
-                <span key={e.id} className={cn(
-                  "font-mono text-[9px] uppercase px-2 py-0.5 border bg-[#0a0e14]",
-                  e.type === "government_agency" ? "text-cyan-400 border-cyan-900/40" :
-                  e.type === "person" ? "text-amber-300 border-amber-900/30" :
-                  "text-white border-[#ffffff10]"
-                )}>
-                  {e.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── LIKELY THEMES ── */}
-        {uniqueThemes.length > 0 && (
-          <div className="border-t border-[#ffffff06] px-3 pb-2 pt-2">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-1.5">LIKELY THEMES</div>
-            <div className="flex flex-wrap gap-1.5">
-              {uniqueThemes.map((theme) => (
-                <span key={theme} className="font-mono text-[9px] uppercase px-2 py-0.5 border border-violet-900/30 bg-violet-500/5 text-violet-400">
-                  {theme}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Held candidates advisory ── */}
-        {seedDiag && seedDiag.heldCandidates > 0 && (
-          <div className="border-t border-[#ffffff06] px-3 py-2 flex items-center gap-2 bg-amber-500/3">
-            <span className="font-mono text-[8px] text-amber-600 uppercase tracking-widest">⚑</span>
-            <span className="font-mono text-[9px] text-amber-600 uppercase tracking-wide">
-              {seedDiag.heldCandidates} ENTITY CANDIDATE{seedDiag.heldCandidates !== 1 ? "S" : ""} HELD FOR REVIEW — approve or reject in the triage queue
+          {autoGraphQuality && (
+            <span className={cn("font-mono text-[8px] border px-2 py-0.5 uppercase tracking-widest",
+              GRAPH_QUALITY_COLOR[autoGraphQuality] || "text-neutral-500 border-neutral-800"
+            )}>
+              {autoGraphQuality} BUILD
             </span>
-          </div>
-        )}
-
-        {/* ── NEXT QUERIES ── */}
-        {nextQueries.length > 0 && (
-          <div className="border-t border-[#ffffff06] px-3 pb-3 pt-2 space-y-1.5">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">NEXT QUERIES</div>
-            <div className="flex flex-wrap gap-1.5">
-              {nextQueries.slice(0, 6).map((q, i) => (
-                <span key={i} className="font-mono text-[9px] text-neutral-400 uppercase px-2 py-0.5 border border-[#ffffff08] bg-[#050709] hover:border-red-900/50 hover:text-red-300 transition-colors cursor-default">
-                  {q}
-                </span>
-              ))}
+          )}
+        </div>
+        <div className="p-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
+          {[
+            { label: "SOURCES", val: documents.length, sub: `${usableDocs.length} usable`, color: "text-white" },
+            { label: "ENTITIES", val: entities.length, sub: `${entities.filter(e=>e.type==="person").length} persons · ${entities.filter(e=>e.type!=="person"&&e.type!=="location").length} orgs`, color: "text-cyan-400" },
+            { label: "GRAPH EDGES", val: relCount, sub: relCount > 0 ? "link analysis ready" : "no graph yet", color: relCount > 0 ? "text-violet-400" : "text-neutral-700" },
+            { label: "TIMELINE", val: timeline.length, sub: timeline.length > 0 ? "events mapped" : "no events found", color: timeline.length > 0 ? "text-cyan-300" : "text-neutral-700" },
+            { label: "FINANCIAL", val: financialSignals.length, sub: financialSignals.length > 0 ? "signals detected" : "none detected", color: financialSignals.length > 0 ? "text-green-400" : "text-neutral-700" },
+          ].map(({ label, val, sub, color }) => (
+            <div key={label} className="bg-[#080c12] border border-[#ffffff08] p-3 space-y-1">
+              <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">{label}</div>
+              <div className={cn("font-mono text-3xl font-bold tabular-nums", color)}>{String(val).padStart(2, "0")}</div>
+              <div className="font-mono text-[7px] text-neutral-600 uppercase">{sub}</div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+
+        {/* ── ACTION BUTTONS ── */}
+        <div className="border-t border-[#ffffff06] px-3 py-2 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest mr-1">ACTIONS</span>
+          <button
+            onClick={handleRecompile}
+            disabled={btnState("recompile") === "running"}
+            className={btnCls("recompile", "atlas-btn-red")}
+          >
+            {btnLabel("recompile", "RECOMPILE DOSSIER", "COMPILING...")}
+          </button>
+          <button
+            onClick={handleRebuildGraph}
+            disabled={btnState("graph") === "running"}
+            className={btnCls("graph", "atlas-btn-cyan")}
+          >
+            {btnLabel("graph", "REBUILD GRAPH", "REBUILDING...")}
+          </button>
+          <button
+            onClick={handleRunRecovery}
+            disabled={btnState("recovery") === "running"}
+            className={btnCls("recovery", "atlas-btn-amber")}
+          >
+            {btnLabel("recovery", "RUN RECOVERY", "RUNNING...")}
+          </button>
+        </div>
       </div>
 
-      {/* ── Extraction telemetry — honest empty-state reporting ── */}
-      {isAutoSeeded && seedDiag && usableDocs.length > 0 && (
+      {/* ── TWO-COLUMN: PRIMARY ENTITIES + TOP EVIDENCE ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Primary entities */}
         <div className="nexus-panel rounded-none">
           <div className="nexus-header-strip">
-            <span className="nexus-label">EXTRACTION TELEMETRY</span>
+            <span className="nexus-label">ENTITY REGISTRY ({entities.length})</span>
           </div>
-          <div className="p-3 space-y-2">
-            {/* Timeline */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", timeline.length > 0 ? "bg-cyan-500" : "bg-neutral-700")} />
-                <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Temporal Trace</span>
+          <div className="p-0">
+            {entities.length === 0 ? (
+              <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
+                NO ENTITIES PROMOTED
               </div>
-              {timeline.length > 0 ? (
-                <span className="font-mono text-[9px] text-cyan-400 uppercase">{timeline.length} events extracted</span>
+            ) : (
+              entities.filter(e => e.type !== "location").slice(0, 8).map((e) => (
+                <div key={e.id} className="px-3 py-1.5 border-b border-[#ffffff04] flex items-center gap-2">
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                    e.type === "person" ? "bg-amber-400" :
+                    e.type === "government_agency" ? "bg-red-500" :
+                    e.type === "organization" ? "bg-cyan-500" : "bg-violet-500"
+                  )} />
+                  <span className="font-mono text-[9px] text-white uppercase truncate flex-1">{e.name}</span>
+                  <span className={cn(
+                    "font-mono text-[7px] border px-1 py-0.5 flex-shrink-0",
+                    e.type === "person" ? "text-amber-400 border-amber-900/30" :
+                    e.type === "government_agency" ? "text-red-400 border-red-900/30" :
+                    "text-cyan-500 border-cyan-900/30"
+                  )}>
+                    {e.type.replace(/_/g, " ").toUpperCase()}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Document vault preview */}
+        <div className="nexus-panel rounded-none">
+          <div className="nexus-header-strip">
+            <span className="nexus-label">EVIDENCE VAULT ({documents.length})</span>
+            <span className="font-mono text-[8px] text-neutral-600">{usableDocs.length} USABLE</span>
+          </div>
+          <div className="p-0">
+            {documents.length === 0 ? (
+              <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
+                NO DOCUMENTS INGESTED
+              </div>
+            ) : (
+              (documents as any[]).sort((a: any, b: any) => {
+                const scoreA = (() => { const m = /score=(\d+)/.exec(a.rawText || ""); return m ? parseInt(m[1]) : 0; })();
+                const scoreB = (() => { const m = /score=(\d+)/.exec(b.rawText || ""); return m ? parseInt(m[1]) : 0; })();
+                return scoreB - scoreA;
+              }).slice(0, 8).map((d: any) => {
+                const diagM = /priority=([^\|]+)/.exec(d.rawText || "");
+                const priority = diagM ? diagM[1].trim() : null;
+                const isA = priority === "PRIORITY_A";
+                return (
+                  <div
+                    key={d.id}
+                    onClick={() => onViewDocument?.(d)}
+                    className={cn(
+                      "px-3 py-1.5 border-b border-[#ffffff04] flex items-center justify-between gap-2 transition-colors",
+                      onViewDocument ? "cursor-pointer hover:bg-[#ffffff04] group" : ""
+                    )}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {isA && <span className="w-1 h-1 rounded-full bg-red-500 flex-shrink-0" />}
+                      <span className="font-mono text-[9px] text-neutral-300 truncate group-hover:text-white transition-colors">
+                        {d.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {isA && <span className="font-mono text-[7px] text-red-600 border border-red-900/30 px-1">A</span>}
+                      <span className="font-mono text-[7px] text-neutral-700">{d.sourceDomain || ""}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── TWO-COLUMN: TIMELINE SNAPSHOT + FINANCIAL SNAPSHOT ── */}
+      {(timeline.length > 0 || financialSignals.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">TEMPORAL TRACE ({timeline.length})</span>
+            </div>
+            <div className="p-3 space-y-2">
+              {timeline.length === 0 ? (
+                <div className="py-3 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
+                  NO EVENTS EXTRACTED
+                </div>
               ) : (
-                <span className="font-mono text-[9px] text-neutral-700 uppercase">{usableDocs.length} docs analyzed · no date-anchored events found</span>
+                [...timeline]
+                  .sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime())
+                  .slice(0, 5)
+                  .map((t) => (
+                    <div key={t.id} className="flex gap-2.5 items-start">
+                      <div className="w-1 h-1 bg-cyan-600 rounded-full mt-1.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-mono text-[8px] text-cyan-700">
+                          {formatDate(t.eventDate).split(",")[0]}
+                        </div>
+                        <div className="font-mono text-[9px] text-neutral-300">{t.title}</div>
+                      </div>
+                    </div>
+                  ))
               )}
             </div>
-            {/* Financial signals */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", financialSignals.length > 0 ? "bg-green-500" : "bg-neutral-700")} />
-                <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Flow Trace</span>
-              </div>
-              {financialSignals.length > 0 ? (
-                <span className="font-mono text-[9px] text-green-400 uppercase">{financialSignals.length} financial signals extracted</span>
-              ) : (
-                <span className="font-mono text-[9px] text-neutral-700 uppercase">{usableDocs.length} docs analyzed · no financial amounts found</span>
-              )}
+          </div>
+
+          <div className="nexus-panel rounded-none">
+            <div className="nexus-header-strip">
+              <span className="nexus-label">FLOW TRACE ({financialSignals.length})</span>
             </div>
-            {/* Graph */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", entities.length > 0 ? "bg-amber-500" : "bg-neutral-700")} />
-                <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Entity Graph</span>
-              </div>
-              {entities.length > 0 ? (
-                <span className="font-mono text-[9px] text-amber-400 uppercase">{entities.length} entities promoted</span>
+            <div className="p-0">
+              {financialSignals.length === 0 ? (
+                <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
+                  NO FINANCIAL SIGNALS
+                </div>
               ) : (
-                <span className="font-mono text-[9px] text-neutral-700 uppercase">
-                  {seedDiag.detected > 0
-                    ? `${seedDiag.detected} signals detected · none met promotion threshold`
-                    : "no entity signals — evidence insufficient"}
-                </span>
+                financialSignals.slice(0, 5).map((sig: any, i: number) => (
+                  <div key={sig.id ?? i} className="px-3 py-2 border-b border-[#ffffff04] flex items-center gap-2">
+                    <span className="font-mono text-[9px] font-bold text-green-400 flex-shrink-0">{sig.amountRaw}</span>
+                    <span className="font-mono text-[7px] text-neutral-700 border border-[#ffffff08] px-1 flex-shrink-0">
+                      {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
+                    </span>
+                    {sig.entityName && <span className="font-mono text-[8px] text-cyan-500 truncate">{sig.entityName}</span>}
+                    <span className="font-mono text-[8px] text-neutral-600 truncate flex-1">{sig.eventSummary?.slice(0, 60)}</span>
+                  </div>
+                ))
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Seed Diagnostics Card — shown for auto-seeded cases ── */}
+      {/* ── NEXT QUERIES + TRIAGE WARNING ── */}
+      {(nextQueries.length > 0 || (seedDiag && seedDiag.heldCandidates > 0)) && (
+        <div className="nexus-panel rounded-none">
+          <div className="nexus-header-strip">
+            <span className="nexus-label">ANALYST GUIDANCE</span>
+          </div>
+          <div className="p-3 space-y-3">
+            {seedDiag && seedDiag.heldCandidates > 0 && (
+              <div className="flex items-center gap-2 bg-amber-500/4 border border-amber-900/20 px-3 py-2">
+                <span className="font-mono text-[8px] text-amber-600">⚑</span>
+                <span className="font-mono text-[9px] text-amber-600 uppercase">
+                  {seedDiag.heldCandidates} ENTITY CANDIDATE{seedDiag.heldCandidates !== 1 ? "S" : ""} HELD — approve or reject in entity registry
+                </span>
+              </div>
+            )}
+            {nextQueries.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">SUGGESTED NEXT QUERIES</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {nextQueries.slice(0, 8).map((q: string, i: number) => (
+                    <span key={i} className="font-mono text-[9px] text-neutral-400 uppercase px-2 py-0.5 border border-[#ffffff08] bg-[#050709] hover:border-red-900/50 hover:text-red-300 transition-colors cursor-default">
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Seed Diagnostics Card ── */}
       {isAutoSeeded && seedDiag && (
         <SeedDiagnosticsCard
           diag={seedDiag}
@@ -1463,127 +1592,6 @@ function OverviewPanel({
         onViewDocument={(docId) => onViewDocument?.({ id: docId } as any)}
       />
 
-      <div className="nexus-panel rounded-none">
-        <div className="nexus-header-strip">
-          <span className="nexus-label">ENTITY LIST ({entities.length})</span>
-        </div>
-        <div className="p-0">
-          {entities.length === 0 ? (
-            <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
-              NO ENTITIES
-            </div>
-          ) : (
-            entities.slice(0, 10).map((e) => (
-              <div
-                key={e.id}
-                className="px-3 py-1.5 border-b border-[#ffffff04] flex justify-between items-center"
-              >
-                <span className="text-xs font-semibold text-white uppercase truncate">{e.name}</span>
-                <span className="text-[8px] font-mono text-neutral-700 ml-2 flex-shrink-0">
-                  {e.type.replace(/_/g, " ").toUpperCase()}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="nexus-panel rounded-none">
-        <div className="nexus-header-strip">
-          <span className="nexus-label">DOCUMENT VAULT ({documents.length})</span>
-        </div>
-        <div className="p-0">
-          {documents.length === 0 ? (
-            <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
-              NO DOCUMENTS
-            </div>
-          ) : (
-            documents.slice(0, 10).map((d) => (
-              <div
-                key={d.id}
-                onClick={() => onViewDocument?.(d)}
-                className={cn(
-                  "px-3 py-1.5 border-b border-[#ffffff04] flex items-center justify-between transition-colors",
-                  onViewDocument
-                    ? "cursor-pointer hover:bg-[#ffffff05] group"
-                    : ""
-                )}
-              >
-                <span className="text-xs text-neutral-300 truncate group-hover:text-white transition-colors flex-1">
-                  {d.title}
-                </span>
-                <span className="text-[8px] font-mono text-neutral-700 flex-shrink-0 ml-2">
-                  {formatDate(d.uploadedAt).split(",")[0]}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="nexus-panel rounded-none">
-        <div className="nexus-header-strip">
-          <span className="nexus-label">TEMPORAL TRACE ({timeline.length})</span>
-        </div>
-        <div className="p-3 space-y-2.5">
-          {timeline.length === 0 ? (
-            <div className="py-4 font-mono text-[10px] text-neutral-700 text-center uppercase tracking-widest">
-              NO EVENTS
-            </div>
-          ) : (
-            [...timeline]
-              .sort(
-                (a, b) =>
-                  new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
-              )
-              .slice(0, 6)
-              .map((t) => (
-                <div key={t.id} className="flex gap-2.5">
-                  <div className="w-1.5 h-1.5 bg-red-600 rounded-full mt-1.5 shrink-0" />
-                  <div>
-                    <div className="text-[9px] font-mono text-red-500">
-                      {formatDate(t.eventDate).split(",")[0]}
-                    </div>
-                    <div className="text-sm text-white font-medium">{t.title}</div>
-                  </div>
-                </div>
-              ))
-          )}
-        </div>
-      </div>
-
-      {financialSignals.length > 0 && (
-        <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
-          <div className="nexus-header-strip">
-            <span className="nexus-label">FINANCIAL SIGNALS ({financialSignals.length})</span>
-          </div>
-          <div className="p-0">
-            {financialSignals.slice(0, 6).map((sig: any) => (
-              <div
-                key={sig.id}
-                className="px-3 py-2 border-b border-[#ffffff04] flex items-center gap-3"
-              >
-                <span className="text-[9px] font-mono text-neutral-500 uppercase bg-[#0a0e14] px-1.5 py-0.5 border border-[#ffffff08]">
-                  {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
-                </span>
-                {sig.entityName && (
-                  <span className="text-sm font-semibold text-cyan-400 uppercase truncate">
-                    {sig.entityName}
-                  </span>
-                )}
-                <span className="text-xs text-neutral-500 truncate flex-1">
-                  {sig.eventSummary?.slice(0, 80)}
-                </span>
-                {sig.amountRaw && (
-                  <span className="text-xs font-mono text-green-400 ml-auto flex-shrink-0">
-                    {sig.currency || "USD"} {sig.amountRaw}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1596,21 +1604,26 @@ interface CaseBriefData {
   caseId: number;
   caseTitle: string;
   seedIntent: string | null;
+  targetMode: string | null;
+  targetLabel: string | null;
+  autoGraphQuality: string | null;
   compiledAt: string;
   dataQuality: BriefQuality;
   qualityNote: string;
   whatThisCaseIs: string;
   primaryActors: string[];
   primaryOrganizations: string[];
-  keyEvidence: Array<{ id: number; title: string; source: string | null; score: number; scoreBreakdown: string; hasTimeline: boolean; hasFinancial: boolean }>;
+  keyEvidence: Array<{ id: number; title: string; source: string | null; score: number; scoreBreakdown: string; hasTimeline: boolean; hasFinancial: boolean; priority?: string; alignment?: string }>;
   topTimeline: Array<{ id: number; title: string; eventDate: string; eventType: string; priority: number }>;
   topFinancial: Array<{ id: number; amountRaw: string; normalizedAmount: number | null; signalType: string; eventSummary: string | null; entityName: string | null }>;
-  primaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number; promotionReason: string }>;
+  primaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number; promotionReason: string; isPrimary?: boolean }>;
   secondaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number }>;
+  keyRelationships: Array<{ entityA: string; entityB: string; relationshipType: string; confidence: number }>;
+  likelyAngles: string[];
   currentState: string;
   knownGaps: string[];
   suggestedNextQueries: string[];
-  stats: { totalDocs: number; usableDocs: number; totalEntities: number; totalTimeline: number; totalFinancial: number };
+  stats: { totalDocs: number; usableDocs: number; totalEntities: number; totalTimeline: number; totalFinancial: number; totalRelationships?: number; totalMentions?: number };
 }
 
 const QUALITY_CONFIG: Record<BriefQuality, { color: string; dot: string; label: string }> = {
@@ -1805,6 +1818,70 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
             </div>
           )}
 
+          {/* LIKELY INVESTIGATIVE ANGLES (Dossier 2.0) */}
+          {brief.likelyAngles && brief.likelyAngles.length > 0 && (
+            <div className="atlas-brief-section">
+              <button
+                onClick={() => toggleSection("angles")}
+                className="atlas-brief-section-header w-full text-left"
+              >
+                <span className="font-mono text-[8px] text-violet-500/80 uppercase tracking-widest flex-1">
+                  LIKELY INVESTIGATIVE ANGLES ({brief.likelyAngles.length})
+                </span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("angles") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("angles") && (
+                <div className="px-3 py-2 space-y-2">
+                  {brief.likelyAngles.map((angle, i) => {
+                    const [head, ...rest] = angle.split(" — ");
+                    return (
+                      <div key={i} className="flex gap-2 items-start">
+                        <span className="font-mono text-[8px] text-violet-700 mt-0.5 flex-shrink-0">◈</span>
+                        <div>
+                          <span className="font-mono text-[9px] text-violet-300 font-semibold">{head}</span>
+                          {rest.length > 0 && (
+                            <span className="font-mono text-[8px] text-neutral-500 ml-1">— {rest.join(" — ")}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* KEY RELATIONSHIPS (Dossier 2.0) */}
+          {brief.keyRelationships && brief.keyRelationships.length > 0 && (
+            <div className="atlas-brief-section">
+              <button
+                onClick={() => toggleSection("relationships")}
+                className="atlas-brief-section-header w-full text-left"
+              >
+                <span className="font-mono text-[8px] text-cyan-700/80 uppercase tracking-widest flex-1">
+                  KEY RELATIONSHIPS ({brief.keyRelationships.length})
+                </span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("relationships") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("relationships") && (
+                <div className="divide-y divide-[#ffffff04]">
+                  {brief.keyRelationships.map((rel, i) => (
+                    <div key={i} className="px-3 py-1.5 flex items-center gap-2">
+                      <span className="font-mono text-[9px] text-white uppercase truncate max-w-[30%]">{rel.entityA}</span>
+                      <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff08] px-1 py-0.5 flex-shrink-0">
+                        {rel.relationshipType.replace(/_/g, " ")}
+                      </span>
+                      <span className="font-mono text-[9px] text-cyan-300 uppercase truncate max-w-[30%]">{rel.entityB}</span>
+                      <span className="font-mono text-[8px] text-neutral-700 ml-auto flex-shrink-0">
+                        {(rel.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* KEY EVIDENCE */}
           {brief.keyEvidence.length > 0 && (
             <div className="atlas-brief-section">
@@ -1965,17 +2042,22 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
           </div>
 
           {/* Stats footer */}
-          <div className="flex items-center gap-3 pt-1 border-t border-[#ffffff05]">
+          <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[#ffffff05]">
             {[
               ["DOCS", `${brief.stats.usableDocs}/${brief.stats.totalDocs}`],
               ["ENTITIES", brief.stats.totalEntities],
               ["TIMELINE", brief.stats.totalTimeline],
               ["FINANCIAL", brief.stats.totalFinancial],
+              ...(brief.stats.totalRelationships != null ? [["EDGES", brief.stats.totalRelationships]] : []),
+              ...(brief.stats.totalMentions != null ? [["MENTIONS", brief.stats.totalMentions]] : []),
             ].map(([label, val]) => (
               <span key={label as string} className="font-mono text-[8px] text-neutral-700">
                 {label}: <span className="text-neutral-500">{val}</span>
               </span>
             ))}
+            {brief.targetMode && (
+              <span className="font-mono text-[8px] text-violet-700 ml-auto uppercase">{brief.targetMode.replace(/_/g, " ")}</span>
+            )}
           </div>
 
         </div>

@@ -30,7 +30,17 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
     return stats;
   }, [allMentions]);
 
-  const filtered = entities.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+  const maxMentions = useMemo(() => {
+    return Math.max(1, ...Object.values(entityStats).map(s => s.mentions));
+  }, [entityStats]);
+
+  const filtered = entities
+    .filter(e => e.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const aM = entityStats[a.name.toLowerCase()]?.mentions ?? 0;
+      const bM = entityStats[b.name.toLowerCase()]?.mentions ?? 0;
+      return bM - aM;
+    });
 
   const typeColors: Record<string, string> = {
     person: "text-cyan-500 border-cyan-500/30",
@@ -61,59 +71,85 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="flex bg-[#ffffff05] border-b border-[#ffffff0d] px-4 py-2 font-mono text-[10px] text-neutral-500 uppercase tracking-widest sticky top-0">
-          <div className="w-32">TYPE</div>
+        <div className="flex bg-[#ffffff05] border-b border-[#ffffff0d] px-4 py-2 font-mono text-[9px] text-neutral-600 uppercase tracking-widest sticky top-0">
+          <div className="w-6 text-center mr-3">#</div>
+          <div className="w-28">TYPE</div>
           <div className="flex-1">NAME</div>
-          <div className="w-16 text-right hidden md:block">MENTIONS</div>
-          <div className="w-12 text-right hidden md:block">DOCS</div>
-          <div className="w-28 text-right hidden lg:block">FIRST SEEN</div>
+          <div className="w-20 text-right hidden md:block">CONFIDENCE</div>
+          <div className="w-14 text-right hidden md:block">MNTNS</div>
+          <div className="w-10 text-right hidden md:block">DOCS</div>
           <div className="w-16 text-right">→</div>
         </div>
         
-        <div className="divide-y divide-[#ffffff05]">
+        <div className="divide-y divide-[#ffffff04]">
           {filtered.length === 0 ? (
-            <div className="p-8 text-center font-mono text-neutral-500 text-sm uppercase">NO RECORDS MATCH QUERY</div>
-          ) : filtered.map((entity) => {
+            <div className="p-8 text-center font-mono text-neutral-600 text-sm uppercase">NO RECORDS MATCH QUERY</div>
+          ) : filtered.map((entity, idx) => {
             const key = entity.name.toLowerCase();
             const stats = entityStats[key];
             const mentionCount = stats?.mentions ?? 0;
             const docCount = stats?.docs.size ?? 0;
-            const firstSeen = stats?.firstSeen ?? null;
+            const confidencePct = Math.round((mentionCount / maxMentions) * 100);
+            const isPrimary = idx === 0 && mentionCount > 0;
+            const isTop3 = idx < 3 && mentionCount > 0;
             return (
               <Link key={entity.id} href={`/entities/${entity.id}`}>
-                <div className="flex px-4 py-3 items-center hover:bg-[#ffffff05] cursor-pointer transition-colors group">
-                  <div className="w-32">
-                    <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border bg-black ${typeColors[entity.type] || typeColors.other}`}>
-                      {entity.type.replace('_', ' ')}
+                <div className={`flex px-4 py-2.5 items-center hover:bg-[#ffffff05] cursor-pointer transition-colors group ${isPrimary ? "bg-[#dc262604] border-l-2 border-l-red-900" : "border-l-2 border-l-transparent"}`}>
+                  <div className="w-6 text-center mr-3 font-mono text-[9px] tabular-nums">
+                    {mentionCount > 0 ? (
+                      <span className={isTop3 ? "text-red-900" : "text-neutral-800"}>
+                        {(idx + 1).toString().padStart(2, "0")}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-900">—</span>
+                    )}
+                  </div>
+                  <div className="w-28">
+                    <span className={`text-[8px] font-mono uppercase px-1 py-0.5 border bg-black ${typeColors[entity.type] || typeColors.other}`}>
+                      {entity.type.replace(/_/g, ' ')}
                     </span>
                   </div>
-                  <div className="flex-1 font-medium text-sm text-white group-hover:text-red-400 transition-colors uppercase min-w-0">
+                  <div className="flex-1 font-medium text-[11px] text-white group-hover:text-red-400 transition-colors uppercase min-w-0 pr-2">
                     <span className="truncate block">{entity.name}</span>
                     {entity.aliases && entity.aliases.length > 0 && (
-                      <span className="text-[9px] font-mono text-neutral-700 block">
+                      <span className="text-[8px] font-mono text-neutral-800 block">
                         AKA: {entity.aliases.slice(0, 2).join(", ")}
                       </span>
                     )}
                   </div>
-                  <div className="w-16 text-right hidden md:block font-mono text-[11px] tabular-nums">
+                  <div className="w-20 hidden md:flex flex-col items-end gap-0.5">
                     {mentionCount > 0 ? (
-                      <span className="text-cyan-700">{mentionCount.toString().padStart(2, "0")}</span>
+                      <>
+                        <span className={`font-mono text-[8px] tabular-nums ${confidencePct >= 70 ? "text-red-500" : confidencePct >= 40 ? "text-amber-600" : "text-neutral-600"}`}>
+                          {confidencePct}%
+                        </span>
+                        <div className="w-16 h-0.5 bg-[#ffffff08] rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${confidencePct >= 70 ? "bg-red-700" : confidencePct >= 40 ? "bg-amber-700" : "bg-neutral-700"}`}
+                            style={{ width: `${confidencePct}%` }}
+                          />
+                        </div>
+                      </>
                     ) : (
-                      <span className="text-neutral-800">—</span>
+                      <span className="text-neutral-900 font-mono text-[8px]">—</span>
                     )}
                   </div>
-                  <div className="w-12 text-right hidden md:block font-mono text-[11px] tabular-nums">
+                  <div className="w-14 text-right hidden md:block font-mono text-[10px] tabular-nums">
+                    {mentionCount > 0 ? (
+                      <span className="text-cyan-800">{mentionCount.toString().padStart(2, "0")}</span>
+                    ) : (
+                      <span className="text-neutral-900">—</span>
+                    )}
+                  </div>
+                  <div className="w-10 text-right hidden md:block font-mono text-[10px] tabular-nums">
                     {docCount > 0 ? (
-                      <span className="text-neutral-500">{docCount.toString().padStart(2, "0")}</span>
+                      <span className="text-neutral-600">{docCount.toString().padStart(2, "0")}</span>
                     ) : (
-                      <span className="text-neutral-800">—</span>
+                      <span className="text-neutral-900">—</span>
                     )}
                   </div>
-                  <div className="w-28 text-right hidden lg:block font-mono text-[9px] text-neutral-700">
-                    {firstSeen ? format(firstSeen, "yyyy-MM-dd") : "—"}
-                  </div>
-                  <div className="w-16 text-right text-neutral-600 group-hover:text-red-500 font-mono text-xs">
-                    ACCESS
+                  <div className="w-16 text-right text-neutral-700 group-hover:text-red-600 font-mono text-[9px] uppercase">
+                    ACCESS →
                   </div>
                 </div>
               </Link>

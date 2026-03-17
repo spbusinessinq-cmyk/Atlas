@@ -476,6 +476,101 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   100% { width: 100%; }
 }
 
+/* ── T007 Glass Command Center Overhaul ────────────────────────────────────── */
+
+/* Deeper nexus-panel — stronger glass floor */
+.nexus-panel {
+  background: rgba(4, 6, 10, 0.88);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset 0 0 0 1px rgba(255,255,255,0.015),
+    0 4px 24px rgba(0,0,0,0.45),
+    0 1px 4px rgba(0,0,0,0.7);
+}
+
+/* Stronger nexus-header-strip radial highlight */
+.nexus-header-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  background:
+    radial-gradient(ellipse 200% 80% at 0% 50%, rgba(220,38,38,0.04) 0%, transparent 60%),
+    rgba(255,255,255,0.018);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+/* Health tile (command center) */
+.atlas-health-tile {
+  background:
+    radial-gradient(ellipse 120% 160% at 20% 0%, rgba(255,255,255,0.025) 0%, transparent 60%),
+    rgba(6, 9, 14, 0.96);
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 2px 12px rgba(0,0,0,0.5);
+  padding: 0.75rem;
+}
+.atlas-health-tile:hover {
+  border-color: rgba(255,255,255,0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 4px 16px rgba(0,0,0,0.6);
+}
+
+/* Enhanced brief section borders */
+.atlas-brief-section {
+  background: rgba(5, 7, 11, 0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 1px 6px rgba(0,0,0,0.3);
+}
+
+/* Violet investigative angles glow */
+.atlas-glass-violet {
+  background: rgba(12, 4, 20, 0.80);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(139, 92, 246, 0.20);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 0 24px rgba(139,92,246,0.07);
+}
+
+/* Ambient radial panel lighting for key panels */
+.atlas-panel-glow-red {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 0 40px rgba(220,38,38,0.06),
+    0 2px 16px rgba(0,0,0,0.5);
+}
+.atlas-panel-glow-cyan {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 0 40px rgba(6,182,212,0.06),
+    0 2px 16px rgba(0,0,0,0.5);
+}
+
+/* Enhanced action button states */
+.atlas-btn-red:disabled,
+.atlas-btn-cyan:disabled,
+.atlas-btn-amber:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Target mode badges */
+.atlas-mode-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-width: 1px;
+  border-style: solid;
+  padding: 0.2rem 0.5rem;
+}
+
 /* ── ReactFlow overrides ───────────────────────────────────────────────────── */
 .react-flow__node:focus,
 .react-flow__node:focus-visible,

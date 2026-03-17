@@ -393,6 +393,7 @@ function formatCase(
   timelineCount?: number,
   relationshipCount?: number
 ) {
+  const cAny = c as any;
   return {
     id: c.id,
     title: c.title,
@@ -403,6 +404,10 @@ function formatCase(
     documentCount: documentCount ?? 0,
     timelineCount: timelineCount ?? 0,
     relationshipCount: relationshipCount ?? 0,
+    targetMode: cAny.targetMode ?? null,
+    targetLabel: cAny.targetLabel ?? null,
+    targetConfidence: cAny.targetConfidence != null ? Number(cAny.targetConfidence) : null,
+    autoGraphQuality: cAny.autoGraphQuality ?? null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -683,9 +688,67 @@ router.get("/cases/:caseId/brief", async (req, res) => {
   if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
   try {
     const brief = await loadCaseBrief(caseId);
-    if (!brief) return res.status(404).json({ error: "No compiled brief found" });
+    if (!brief) return res.json({ ok: false, brief: null });
     return res.json({ ok: true, brief });
   } catch (err) {
+    return res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Rebuild Graph — re-compute edges between approved entities ─────────────
+router.post("/cases/:caseId/rebuild-graph", async (req, res) => {
+  const caseId = parseInt(req.params.caseId, 10);
+  if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
+  try {
+    // Get all approved entities in case
+    const caseEntities = await db.select().from(entitiesTable).where(eq(entitiesTable.caseId, caseId));
+    if (caseEntities.length < 2) {
+      return res.json({ ok: true, edgesCreated: 0, message: "Need at least 2 entities to build graph" });
+    }
+    // Get entity mention data per entity
+    const mentionsByEntity = await db
+      .select({
+        entityName: entityMentionsTable.entityName,
+        documentId: entityMentionsTable.documentId,
+      })
+      .from(entityMentionsTable)
+      .where(eq(entityMentionsTable.caseId, caseId));
+
+    const entityDocMap = new Map<string, Set<number>>();
+    for (const m of mentionsByEntity) {
+      const key = m.entityName?.toLowerCase().trim() ?? "";
+      if (!key) continue;
+      if (!entityDocMap.has(key)) entityDocMap.set(key, new Set());
+      if (m.documentId) entityDocMap.get(key)!.add(m.documentId);
+    }
+
+    let edgesCreated = 0;
+    for (let i = 0; i < caseEntities.length; i++) {
+      for (let j = i + 1; j < caseEntities.length; j++) {
+        const eA = caseEntities[i];
+        const eB = caseEntities[j];
+        const docsA = entityDocMap.get(eA.name?.toLowerCase().trim() ?? "") ?? new Set();
+        const docsB = entityDocMap.get(eB.name?.toLowerCase().trim() ?? "") ?? new Set();
+        const sharedDocs = [...docsA].filter(d => docsB.has(d)).length;
+        if (sharedDocs === 0) continue;
+        const confidence = sharedDocs >= 3 ? 0.88 : sharedDocs >= 2 ? 0.80 : 0.70;
+        const relType = sharedDocs >= 2 ? "repeated_association" : "co_mention";
+        try {
+          await db.insert(relationshipsTable).values({
+            entityAId: eA.id,
+            entityBId: eB.id,
+            relationshipType: relType,
+            caseId,
+            confidence,
+          });
+          edgesCreated++;
+        } catch { /* Skip duplicates */ }
+      }
+    }
+    await logEvent("graph_updated", `Graph rebuilt — ${edgesCreated} new edges created`, { caseId });
+    return res.json({ ok: true, edgesCreated });
+  } catch (err) {
+    console.error("[ATLAS REBUILD GRAPH]", err);
     return res.status(500).json({ error: String(err) });
   }
 });

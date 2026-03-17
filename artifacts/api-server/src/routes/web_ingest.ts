@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { compileCaseBrief } from "../lib/case-compiler";
 import { db } from "@workspace/db";
 import {
   documentsTable,
@@ -21,11 +22,14 @@ import {
   normalizeEntityName,
   resolveToCanonical,
   classifySeedIntent,
+  classifyTarget,
   cleanBodyText,
   computeDocContaminationScore,
   shouldAdmitMention,
   INSTITUTION_PATTERN,
   type SeedIntent,
+  type TargetMode,
+  type TargetClassification,
   type EntityRole,
   type TopicRelevance,
   type DocumentZone,
@@ -899,41 +903,181 @@ router.post("/cases/seed", async (req, res) => {
   );
 });
 
-/** Build seed intent-aware query variations for RSS feed harvesting */
-function buildQueryVariations(target: string, intent: SeedIntent): string[] {
+/**
+ * Generate 8–12 investigative query variations based on target mode.
+ * Returns ordered list — first queries are highest-priority anchors.
+ */
+function generateInvestigativeQueries(target: string, classification: TargetClassification): string[] {
   const base = target.trim();
+  const { mode } = classification;
+
+  const dedup = (arr: string[]): string[] => [...new Set(arr)];
+
+  switch (mode) {
+    case "person_target":
+      return dedup([
+        `"${base}"`,
+        `"${base}" investigation`,
+        `"${base}" lawsuit`,
+        `"${base}" contract`,
+        `"${base}" funding`,
+        `"${base}" records`,
+        `"${base}" donations`,
+        `"${base}" payments`,
+        `"${base}" PAC`,
+        `"${base}" nonprofit`,
+        `"${base}" board`,
+        `"${base}" indictment`,
+        `"${base}" settlement`,
+        `"${base}" subpoena`,
+      ]);
+
+    case "organization_target":
+    case "government_agency_target":
+      return dedup([
+        `"${base}"`,
+        `"${base}" contract`,
+        `"${base}" budget`,
+        `"${base}" audit`,
+        `"${base}" lawsuit`,
+        `"${base}" oversight`,
+        `"${base}" procurement`,
+        `"${base}" funding`,
+        `"${base}" grants`,
+        `"${base}" scandal`,
+        `"${base}" federal investigation`,
+        `"${base}" whistleblower`,
+        `"${base}" report`,
+      ]);
+
+    case "funding_target":
+      return dedup([
+        `${base} funding`,
+        `${base} spending`,
+        `${base} contract`,
+        `${base} grant`,
+        `${base} budget`,
+        `${base} appropriation`,
+        `${base} audit`,
+        `${base} procurement`,
+        `${base} misuse`,
+        `${base} oversight`,
+        `${base} fraud`,
+        `${base} payments`,
+      ]);
+
+    case "scandal_target":
+      return dedup([
+        `${base} investigation`,
+        `${base} records`,
+        `${base} deposition`,
+        `${base} affidavit`,
+        `${base} indictment`,
+        `${base} complaint`,
+        `${base} audit`,
+        `${base} report`,
+        `${base} court filing`,
+        `${base} whistleblower`,
+        `${base} internal review`,
+        `${base} oversight`,
+      ]);
+
+    case "program_target":
+      return dedup([
+        `${base}`,
+        `${base} budget`,
+        `${base} contracts`,
+        `${base} audit`,
+        `${base} oversight`,
+        `${base} funding`,
+        `${base} procurement`,
+        `${base} accountability`,
+        `${base} report`,
+        `${base} grant`,
+        `${base} investigation`,
+      ]);
+
+    case "place_target":
+      return dedup([
+        `${base}`,
+        `${base} contracts`,
+        `${base} budget`,
+        `${base} corruption`,
+        `${base} audit`,
+        `${base} investigation`,
+        `${base} funding`,
+        `${base} officials`,
+        `${base} procurement`,
+        `${base} misconduct`,
+      ]);
+
+    case "event_target":
+      return dedup([
+        `${base}`,
+        `${base} investigation`,
+        `${base} report`,
+        `${base} records`,
+        `${base} accountability`,
+        `${base} documents`,
+        `${base} officials`,
+        `${base} oversight`,
+        `${base} timeline`,
+      ]);
+
+    default: {
+      // topic_investigation / general — build smart variations from seed intent
+      const intentQueries = buildLegacyQueryVariations(base, classification.seedIntent);
+      return dedup([
+        base,
+        `${base} investigation`,
+        `${base} contracts`,
+        `${base} funding`,
+        ...intentQueries,
+      ]).slice(0, 10);
+    }
+  }
+}
+
+/** Legacy fallback query builder (used for topic/general) */
+function buildLegacyQueryVariations(base: string, intent: SeedIntent): string[] {
   switch (intent) {
-    case "housing_homelessness":
-      return [base, `${base} shelter contracts`, `${base} housing funding`, `${base} program audit`, `${base} accountability`];
-    case "finance_funding":
-      return [base, `${base} contracts`, `${base} grant award`, `${base} budget allocation`, `${base} procurement`];
-    case "education_university":
-      return [base, `${base} contracts`, `${base} funding`, `${base} audit investigation`, `${base} grant`];
-    case "crime_corruption":
-      return [base, `${base} investigation`, `${base} indictment`, `${base} fraud audit`, `${base} corruption charges`];
-    case "legal_lawsuit":
-      return [base, `${base} lawsuit`, `${base} court filing`, `${base} settlement`, `${base} legal action`];
-    case "entertainment_film":
-      return [base, `${base} tax credit`, `${base} film incentive funding`, `${base} production subsidy`, `${base} studio deal`];
-    case "policy_government":
-      return [base, `${base} contracts`, `${base} oversight audit`, `${base} program funding`, `${base} accountability`];
-    case "sports":
-      return [base, `${base} contract`, `${base} investigation`, `${base} finance`, `${base} deal`];
-    default:
-      return [base, `${base} investigation`, `${base} contracts`, `${base} funding`, `${base} program`];
+    case "housing_homelessness": return [`${base} shelter contracts`, `${base} housing funding`, `${base} program audit`, `${base} accountability`];
+    case "finance_funding":      return [`${base} contracts`, `${base} grant award`, `${base} budget allocation`, `${base} procurement`];
+    case "education_university": return [`${base} contracts`, `${base} funding`, `${base} audit investigation`, `${base} grant`];
+    case "crime_corruption":     return [`${base} investigation`, `${base} indictment`, `${base} fraud audit`, `${base} corruption charges`];
+    case "legal_lawsuit":        return [`${base} lawsuit`, `${base} court filing`, `${base} settlement`, `${base} legal action`];
+    case "entertainment_film":   return [`${base} tax credit`, `${base} film incentive funding`, `${base} production subsidy`];
+    case "policy_government":    return [`${base} contracts`, `${base} oversight audit`, `${base} program funding`, `${base} accountability`];
+    default:                     return [`${base} investigation`, `${base} contracts`, `${base} funding`, `${base} program`];
   }
 }
 
 async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   await logEvent("auto_ingest_started", `Auto-ingestion started for target: "${target}"`, { caseId });
 
-  const seedIntent = classifySeedIntent(target);
+  // ── Master target classification (Pass 28) ────────────────────────────────
+  const targetClassification = classifyTarget(target);
+  const seedIntent = targetClassification.seedIntent;
+  const targetMode = targetClassification.mode;
   const queryTerms = target.trim().split(/\s+/).filter(w => w.length > 2);
 
-  await logEvent("seed_intent_classified", `Seed intent: ${seedIntent} for target: "${target}"`, { caseId });
+  // Store classification in DB
+  await db.update(casesTable)
+    .set({
+      targetMode,
+      targetLabel: target.trim(),
+      targetConfidence: targetClassification.confidence,
+    })
+    .where(eq(casesTable.id, caseId));
 
-  // Build intent-aware query variations to get high-quality aligned results
-  const queryVariations = buildQueryVariations(target, seedIntent);
+  await logEvent(
+    "seed_intent_classified",
+    `Target mode: ${targetMode} (${(targetClassification.confidence * 100).toFixed(0)}% conf) | Intent: ${seedIntent} | Target: "${target}"`,
+    { caseId, targetMode, seedIntent, confidence: targetClassification.confidence }
+  );
+
+  // ── Generate 8–12 investigative query variations (Pass 28) ───────────────
+  const queryVariations = generateInvestigativeQueries(target, targetClassification);
 
   const allResults: (WebSearchResult & { _query: string })[] = [];
 
@@ -954,7 +1098,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
-  // Deduplicate by URL and domain (max 2 per domain for diversity)
+  // Deduplicate by URL and domain (max 3 per domain for diversity with larger query set)
   const seenUrls = new Set<string>();
   const domainCount = new Map<string, number>();
   const uniqueResults: WebSearchResult[] = [];
@@ -962,18 +1106,18 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     if (seenUrls.has(r.url)) continue;
     const domain = tryHostname(r.url);
     const domainHits = domainCount.get(domain) || 0;
-    if (domainHits >= 2) continue; // Max 2 results per domain
+    if (domainHits >= 3) continue; // Max 3 results per domain
     seenUrls.add(r.url);
     domainCount.set(domain, domainHits + 1);
     uniqueResults.push(r);
   }
 
-  // Sort by relevance to primary target, pick top 8
+  // Sort by relevance to primary target, pick top 12 (increased from 8)
   uniqueResults.sort((a, b) => scoreResult(b, target) - scoreResult(a, target));
 
   // Filter out results with very negative scores (clearly off-topic / spam)
   const qualifiedResults = uniqueResults.filter((r) => scoreResult(r, target) >= -2);
-  const toIngest = qualifiedResults.slice(0, 8);
+  const toIngest = qualifiedResults.slice(0, 12);
 
   const ingestedDocIds: number[] = [];
   const okDocIds = new Set<number>();
@@ -2276,11 +2420,24 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     { caseId }
   );
 
+  // ── Store autoGraphQuality in DB (Pass 28 — T003) ─────────────────────────
+  await db.update(casesTable)
+    .set({ autoGraphQuality: autoBuildQuality })
+    .where(eq(casesTable.id, caseId));
+
   await logEvent(
     "seed_complete",
     `Seed pipeline complete — ${searchResultsTotal} results → ${docsIngested} ingested → ${validDocsIngested} usable → ${totalDetected} detected → ${entitiesApproved} promoted`,
     { caseId }
   );
+
+  // ── Auto-compile dossier after seed pipeline (Pass 28 — T004) ─────────────
+  try {
+    await compileCaseBrief(caseId);
+    await logEvent("case_compiled", `Dossier auto-compiled post-seed (quality: ${autoBuildQuality})`, { caseId });
+  } catch (compileErr) {
+    console.error("[ATLAS SEED] Auto-compile failed:", compileErr);
+  }
 }
 
 export default router;

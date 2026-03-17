@@ -1,6 +1,6 @@
 # Overview
 
-NEXUS is a pnpm workspace monorepo using TypeScript, serving as a hybrid investigative journalism, OSINT, and intelligence analysis platform. It is a core component of the Red State Rhetoric (RSR) media ecosystem. The platform enables advanced data modeling for investigations, automated entity extraction from documents, and web content ingestion, aiming to provide comprehensive tools for intelligence analysis and reporting.
+NEXUS is a pnpm workspace monorepo built with TypeScript, designed as a hybrid investigative journalism, OSINT, and intelligence analysis platform. It's a key part of the Red State Rhetoric (RSR) media ecosystem, offering advanced data modeling, automated entity extraction, and web content ingestion to support comprehensive intelligence analysis and reporting.
 
 # User Preferences
 
@@ -8,115 +8,78 @@ I want iterative development. I prefer that the agent asks before making major c
 
 # System Architecture
 
-The project is structured as a pnpm monorepo using Node.js 24 and TypeScript 5.9.
+The project is structured as a pnpm monorepo using Node.js and TypeScript.
 
 **Core Technologies:**
-- **API Framework:** Express 5
-- **Database:** PostgreSQL with Drizzle ORM
-- **Validation:** Zod (`zod/v4`)
-- **API Codegen:** Orval (from OpenAPI spec)
-- **Build System:** esbuild
-- **Frontend:** React, Vite, Tailwind CSS
-- **Graph Visualization:** @xyflow/react (React Flow) for relationship mapping
-- **NLP/NER:** compromise (JS) and pdf-parse for document entity extraction
+*   **API Framework:** Express 5
+*   **Database:** PostgreSQL with Drizzle ORM
+*   **Validation:** Zod
+*   **API Codegen:** Orval (from OpenAPI spec)
+*   **Build System:** esbuild
+*   **Frontend:** React, Vite, Tailwind CSS
+*   **Graph Visualization:** @xyflow/react (React Flow)
+*   **NLP/NER:** compromise (JS) and pdf-parse for document entity extraction
 
 **Monorepo Structure:**
-- `artifacts/`: Deployable applications (`api-server`, `nexus` frontend)
-- `lib/`: Shared libraries (`api-spec`, `api-client-react`, `api-zod`, `db`)
-- `scripts/`: Utility scripts
+*   `artifacts/`: Deployable applications (API server, NEXUS frontend)
+*   `lib/`: Shared libraries (API spec, client, Zod schemas, DB)
+*   `scripts/`: Utility scripts
 
 **Key Features & Specifications:**
 
 1.  **NEXUS Platform:**
     *   **Core Data Models:** Case, Entity, Document, Relationship, TimelineEntry, Event (ORION), Note, MoneyFlow, EntityMention, RelationshipEvidence.
-    *   **UI/UX:** Features a Case Dashboard, Case Detail views (Overview, Entity Registry, Document Vault, Link Analysis, Temporal Trace), searchable Entity Database, interactive Link Analysis Graph, Timeline View, ORION Event Intake, and Notes Panel.
+    *   **UI/UX:** Features a Case Dashboard, detailed Case Views (Overview, Entity Registry, Document Vault, Link Analysis, Temporal Trace), searchable Entity Database, interactive Link Analysis Graph, Timeline View, ORION Event Intake, and Notes Panel. The UI incorporates a "Premium Glass" aesthetic with specific CSS for panels, buttons, and navigation, including a boot-up sequence.
 
 2.  **ATLAS Subsystem (Automated Entity Extraction):**
-    *   `POST /documents/:id/analyze` endpoint processes PDFs (`pdf-parse`) and web articles (`compromise.js`) to extract people, organizations, and locations.
-    *   Extracted mentions are initially `pending` and can be `INGESTED` (creating an entity) or `REJECTED` by analysts via the UI.
-    *   Supports linking evidence documents to relationships and provides detailed entity profiles within the graph view.
-    *   `EXTRACTION_INCOMPLETE` flag for web articles where full text extraction fails, displaying a warning.
-    *   Improved entity extraction quality with multi-word title-case phrase detection and specific organizational patterns.
-    *   Detection visibility in DocumentInspector now includes `TOTAL`, `PENDING`, `APPROVED`, and `REJECTED` counts.
+    *   Processes PDFs and web articles to extract people, organizations, and locations, making extracted mentions available for analyst review (ingestion or rejection).
+    *   Improved extraction quality with multi-word title-case detection and organizational patterns.
+    *   Supports linking evidence to relationships and detailed entity profiles.
 
 3.  **Web Ingestion Engine:**
-    *   Utilizes Google News RSS for web searches, ingesting articles directly into the Document Vault.
-    *   `POST /web-search` for querying and `POST /web-ingest` for fetching and storing web content.
-    *   Automatically runs entity analysis on ingested web articles.
-    *   Document Vault distinguishes web sources with specific icons and a specialized article viewer (`previewType: "web-article"`).
-    *   Web search results are scored for relevance based on keywords, article content, domain types, location-awareness (LA-specific boosts), and junk-title detection.
-    *   **Critical fix (Pass 12):** Google News RSS items carry the real article URL in `<source url="...">` attribute. Parser now uses this instead of the Google News redirect token, making ~7/8 docs extractable per seed run.
-    *   **JSON-LD extraction (Pass 12):** `extractArticleText()` now runs JSON-LD structured-data extraction as Pass 0, before CSS selectors. Recovers full `articleBody` from major news sites even when JS-rendered (LA Times, CBS News, NBC, AP, ProPublica, etc.).
-    *   **Seed diagnostics (Pass 12):** `runSeedPipeline()` tracks per-doc extraction quality (ok/partial/failed/wrapper). Embeds machine-readable `[ATLAS-SEED:searched=N|total=N|ingested=N|ok=N|partial=N|failed=N|wrapper=N|detected=N|promoted=N|fallback=0/1]` block in case description. Human-readable summary explains what succeeded and failed.
-    *   **SeedDiagnosticsCard (Pass 12):** Overview panel parses and displays the seed report as a 6-stat grid card for auto-seeded cases. `cleanDescription()` strips the raw `[ATLAS-SEED:...]` block from human-readable displays.
-    *   T1 auto-approve: confidence ≥ 0.82, 2+ docs. T2 fallback: confidence ≥ 0.70, prefers ok-doc hits and org/agency/facility types, cap 3.
-    *   **ATLAS-DIAG extended fields (Pass 13):** `encodeDiagPrefix()` now accepts `rssUrl`, `srcUrl`, `entities`, and `analysisRan` extra fields. Backend stores these in each doc's `rawText` ATLAS-DIAG block. After entity extraction the pipeline patches the block in-place with `entities=N|analysis_ran=1`. Frontend `parseAtlasDiag()` and local `parseDocDiag()` parse all new fields.
-    *   **RSS URL preservation (Pass 13):** `parseRssItems()` stores original Google News redirect as `result.rssLink`. `encodeDiagPrefix()` stores it as `rss_url=...` and `src_url=...` for each doc. Frontend proves URL resolution (redirect vs. real URL) in the per-doc log.
-    *   **SeedDiagnosticsCard v2 (Pass 13):** Now shows a collapsible per-doc pipeline log table (title, body status, char count, extraction strategy, entity count, URL source mode). URL resolution proof section shows a sample RSS → real-URL mapping.
-    *   **Document Vault timestamp (Pass 13):** Document list and inspector now show full date + time (not date-only) for the ingest timestamp. Source domain shown from `sourceDomain` field when available.
-    *   **React Flow blue-box fix (Pass 13):** `.react-flow__node.selected` CSS now overrides the library's built-in blue box-shadow with `outline: none; box-shadow: none` so custom node selection styling takes full precedence.
+    *   Ingests articles from sources like Google News RSS into the Document Vault.
+    *   Automatically runs entity analysis on ingested content.
+    *   Web search results are scored for relevance and extraction includes JSON-LD structured data.
+    *   Includes seed diagnostics and a SeedDiagnosticsCard UI component to monitor extraction quality.
 
 4.  **Entity Intelligence Layer:**
-    *   **Auto-Dossier:** EntityIntelPanel displays comprehensive entity intelligence including mentions, documents, first/last seen dates, source documents, confirmed connections, and co-mentioned entities with scoring.
-    *   **Entity Registry Enrichment:** Shows mention counts, unique document counts, and first seen dates for each entity.
-    *   **Suggested Edge Scoring:** Co-mention suggestions are scored (LOW, MEDIUM, HIGH) based on shared documents, visualized with dashed cyan edges.
-    *   **Graph Stats Overlay:** Displays node, edge, and suggested link counts.
+    *   **Auto-Dossier:** Provides comprehensive entity intelligence in an EntityIntelPanel, including mentions, documents, co-mentioned entities with scoring, and first/last seen dates.
+    *   **Entity Registry Enrichment:** Shows mention counts, unique document counts, and first seen dates.
+    *   **Suggested Edge Scoring:** Visualizes co-mention suggestions with scores (LOW, MEDIUM, HIGH) based on shared documents.
+    *   **Graph Stats Overlay:** Displays counts for nodes, edges, and suggested links.
     *   **Next Action Guidance:** Provides UI prompts for reviewing co-mention associations.
-    *   **System Log:** Real-time event feed (`/logs` page) for document ingestion, web ingestion, analysis, and entity approval/rejection events.
+    *   **System Log:** Real-time event feed for platform activities.
 
-5.  **Financial Intelligence + Entity Engine + Console Depth (Pass 16):**
-    *   **Financial Extraction Engine Rewrite (Part 1):** New robust `MONEY_PATTERN` regex correctly detects `$2 billion`, `$1.3B`, `$400 million`, `$75M`, `$250,000`, `USD 2 billion` patterns. `normalizeAmount()` now handles B/M/K/T single-letter suffixes. Returns `amountDisplay` field (e.g. `$2B`, `$75M`) for clean UI rendering. `FINANCIAL_PROXIMITY_PATTERN` gate prevents false-positive signals — only sentences with financial keywords emit signals.
-    *   **FlowTrace Panel Upgrade (Part 7):** Now renders `amountDisplay` (not raw match) in green. Context sentence shown in monospace. Source label reads "SOURCE:". Signal type badge uses lowercase lookup.
-    *   **Entity Noise Filter Expansion (Parts 3):** `MEDIA_SOURCE_BLOCKLIST` expanded with PR wire services (PRNewswire, Business Wire, GlobeNewswire, Newswire), page artifact text (Breaking News, Editors Note, Advertisement, Sponsored Content), social platforms (TikTok, LinkedIn), and generic content fragments (Read More, Full Story, Top Stories).
-    *   **Document Signal Scoring (Part 6):** `computeDocSignalScore()` function rates each document HIGH/MEDIUM/LOW based on financial keyword hits, investigative keyword hits, context keyword density, document length, and entity count. Signal badge shown in Document Vault rows.
-    *   **Boot Screen (Part 10):** `BootScreen.tsx` added — full-screen black overlay with subtle red grid background, radar sweep animation, 5-line boot message sequence, and progress bar. Completes in ~2.35 seconds then fades out. Shows once per browser session (sessionStorage flag). `atlas-radar-sweep` and `atlas-boot-progress` CSS keyframes added to index.css.
-    *   **Dashboard System Status Panel (Parts 8, 9):** Three visual depth planes (`atlas-shell` → `atlas-control-panel` → `atlas-content-surface`) replace the thin telemetry strip. ATLAS CORE ONLINE header with pulsing green dot. Four metric cells: DOSSIERS / ENTITY REGISTRY / DOCUMENT VAULT / TRIAGE QUEUE — each with icon, label, large count, and contextual sub-label.
-    *   **Case Intelligence Summary (Part 12):** New CASE INTELLIGENCE panel added at top of OverviewPanel showing SOURCES INGESTED / ENTITY REGISTRY / FINANCIAL SIGNALS counts, plus PERSONS/ORGS breakdown, timeline events, usable sources count, and a PRIMARY ENTITIES chip row.
+5.  **Financial Intelligence & Case Control:**
+    *   **Financial Extraction Engine:** Robust regex for detecting and normalizing financial amounts (e.g., "$2 billion", "$75M"), with proximity patterns to reduce false positives.
+    *   **Document Signal Scoring:** Rates documents (HIGH/MEDIUM/LOW) based on financial keywords, investigative keywords, context density, length, and entity count.
+    *   **Entity Noise Filtering:** Expanded blocklists for media sources, page artifacts, social platforms, and generic content fragments. Includes sport/entertainment blocklists and context-based confidence adjustments.
+    *   **Graph & Case Controls:** Features operator actions for entities (remove, delete, reject mentions), edge controls (delete, hide suggested), and graph filters (hide isolated, hide low-degree nodes).
+    *   **Bulk Actions:** Provides bulk mention controls (reject low-confidence, single-word persons, all pending) and document purging.
+    *   **Case Compiler:** Automated system to score documents, rank entities, prioritize timeline events and financial signals, and generate a comprehensive `compiledBrief` (qualityNote, whatThisCaseIs, currentState, gaps, queries). This brief is displayed in an `AtlasCaseBrief` component with collapsible sections, quality badges, and key insights.
 
-6.  **Console Refinement & Intelligence Hardening (Pass 15):**
-    *   **CSS Global Tightening:** `nexus-header-strip` reduced to `py-1.5`, `nexus-label` reduced to `text-[9px]`. Added `.nexus-row` utility class for ultra-compact console rows.
-    *   **Dashboard Redesign:** 4-card metric grid replaced with a compact inline telemetry strip (DOSSIERS / ENTITIES / VAULT / PENDING). List-mode case cards rewritten as single-line dossier registry rows with status dot, CASE-ID, title, telemetry, chevron. Default view changed to list mode.
-    *   **Document Vault Compact Rows:** Document row height reduced (py-1.5), icon shrunk to 5×5, text to xs, action buttons tightened.
-    *   **Case Health Block:** DefaultInspector (right inspector) now has a CASE HEALTH grid showing DOCS, USABLE, BLOCKED, ENTITIES, and TRIAGE counts. Uses seed diag data when available.
-    *   **Right Inspector Narrowed:** Right case inspector reduced from w-72 to w-64.
-    *   **OverviewPanel Compacted:** Grid gap and padding reduced; entity/document list rows tighter.
-    *   **Entity Extractor Intelligence Hardening:** Added `SPORTS_ENTERTAINMENT_BLOCKLIST` blocking leagues, trophies, entertainment brands. Added `SPORTS_CONTEXT_PATTERN` and `INVESTIGATIVE_CONTEXT_PATTERN` regexes. Sports/entertainment context entities get 0.55× confidence penalty. Investigative context entities get +0.05–+0.10 confidence boost.
-    *   **Suggested Edge Scoring:** Type-compatibility bonus added — high-value investigative pairs (person+org, person+gov_agency, org+gov_agency, etc.) receive a +1 effective score boost toward HIGH rating.
+6.  **Pass 28-32 — ATLAS Master Investigator (current):**
+    *   **Target Mode Classifier:** `classifyTarget()` in `entity-extractor.ts` detects 10 target modes: `person_target`, `organization_target`, `government_agency`, `place_target`, `program_target`, `funding_target`, `event_target`, `scandal_target`, `topic_target`, `general`. Stored as `targetMode`, `targetLabel`, `targetConfidence` in `casesTable`.
+    *   **Query Autopilot:** `generateInvestigativeQueries()` generates 8-14 mode-aware investigative queries (persons: donations/PAC/lawsuit/contracts; orgs: audit/procurement/oversight; funding: grant/misuse/fraud; scandal: indictment/affidavit/deposition; etc.). Replaces the old `buildQueryVariations`.
+    *   **Auto-Graph Compiler:** After seed pipeline completes, auto-creates relationship edges between top entities via co-mention analysis and stores `autoGraphQuality` (STRONG/PROVISIONAL/RECOVERED/WEAK/FAILED) in DB. `compileCaseBrief` is auto-triggered at end of pipeline.
+    *   **Dossier 2.0:** `CaseBrief` now includes `keyRelationships` (entity pairs with confidence), `likelyAngles` (mode-aware investigative angles), `targetMode`, `targetLabel`, `autoGraphQuality`, `totalRelationships`. `buildLikelyAngles()` generates mode-specific angles.
+    *   **Command Center Overview:** `OverviewPanel` rewritten as full command center with 5-tile CASE HEALTH grid, TARGET MODE badge, GRAPH QUALITY badge, action buttons (RECOMPILE DOSSIER / REBUILD GRAPH / RUN RECOVERY), 2-col entity+evidence layout, KEY RELATIONSHIPS and LIKELY ANGLES sections.
+    *   **Document Vault Upgrades:** Document rows now show TIER badge (TIER-1/2/3 from ATLAS-DIAG `priority` field) and ALIGNMENT marker (CORE/RELEVANT/PERIPHERAL from ATLAS-DIAG `alignment` field) in addition to existing signal scores.
+    *   **Entity Registry Upgrades:** Entities sorted by mention count descending; new RANK column (#01, #02...); CONFIDENCE column shows percentage bar (relative to top entity); rows for top 3 are highlighted.
+    *   **Glass UI Overhaul (T007):** New CSS classes: `.nexus-panel` (deeper glass floor), `.nexus-header-strip` (radial red highlight), `.atlas-health-tile` (radial lighting), `.atlas-glass-violet`, `.atlas-panel-glow-*`, `.atlas-mode-badge`. API: `POST /api/cases/:caseId/rebuild-graph` (re-compute graph edges from co-mentions).
 
-6.  **Graph & Case Control Hardening (Pass 14):**
-    *   **Operator Actions (EntityIntelPanel):** REMOVE FROM GRAPH (client-side hide), DELETE FROM CASE (API cascade delete + reject mentions), DELETE GLOBALLY (all cases), REJECT ALL PENDING MENTIONS — all with inline confirmation UI.
-    *   **Edge Controls (LinkIntelPanel):** DELETE EDGE button with confirmation, HIDE ALL SUGGESTED EDGES toggle.
-    *   **Graph Filters:** HIDE ISOLATED (no confirmed edges) and HIDE LOW-DEG (≤1 confirmed edge) toggles on graph canvas; visible node count shown as N/Total.
-    *   **showSuggested lifted to case-detail.tsx:** State lifted from GraphCanvas to CaseDetail for LinkIntelPanel's HIDE ALL SUGGESTED to work.
-    *   **hiddenEntityIds Set in CaseDetail:** Client-side entity visibility, filtered visibleEntities passed to GraphCanvas.
-    *   **CASE CONTROLS Panel (DefaultInspector):** Bulk mention controls — REJECT LOW-CONFIDENCE, REJECT SINGLE-WORD PERSONS, REJECT ALL PENDING, PURGE FAILED DOCUMENTS — all with API calls and query invalidation.
-    *   **Dashboard delete button:** Moved from top-right (overlapping CASE-ID label) to bottom-right of case cards.
-
-6.  **API Routes:**
-    *   All API routes are under `/api` and cover CRUD operations for cases, entities, documents, relationships, timeline entries, events, notes, money flows, and entity mentions.
-    *   Includes specific routes for document upload, analysis, web search, web ingestion, and entity mention approval/rejection.
-    *   New endpoints: `DELETE /cases/:caseId/entities/:entityId` (cascade delete), `POST /cases/:caseId/entities/:entityId/reject-mentions`, `DELETE /cases/:caseId/documents/purge?type=`, `DELETE /cases/:caseId/mentions/pending`, `POST /cases/:caseId/mentions/bulk-reject`.
-
-7.  **Auto-Case Compiler + Premium Glass UI (Pass 26+27):**
-    *   **DB Schema:** `compiledBrief` (text) + `compiledAt` (timestamp) columns added to `casesTable` via `db:push`.
-    *   **case-compiler.ts:** Full scoring/ranking/brief engine — `scoreDocuments` (ATLAS-DIAG composite score = relevance + priority + alignment + size + timeline/financial bonuses), `rankEntities` (uses `entityMentionsTable` as primary source, cross-references `entitiesTable` for type enrichment, applies junk-name filter + heuristic type inference for person/org/location), `prioritizeTimeline` (EVENT_TYPE_RANK scoring, deduplication, future-date filtering), `prioritizeFinancialSignals`, `compileCaseBrief` (orchestrates all, generates qualityNote/whatThisCaseIs/currentState/gaps/queries).
-    *   **API Routes:** `POST /cases/:caseId/compile` → compiles brief + saves to DB + emits pipeline event. `GET /cases/:caseId/brief` → loads saved brief from DB.
-    *   **AtlasCaseBrief Component:** Added to OverviewPanel in `case-detail.tsx`. Fetches brief on mount, COMPILE/RECOMPILE button (red amber glow), collapsible sections (evidence, timeline, financial, entities), quality badge (STRONG/MODERATE/WEAK/EMPTY), actors + orgs grid, entity intelligence list with promotion reason, key evidence with score breakdown, gaps + suggested queries, stats footer.
-    *   **Entity Noise Fixes:** Junk-name filter blocks emoji, URLs, ALL-CAPS noise, >60-char names, >6-word names, common boilerplate words (news, intel, skip, content, etc.). Type inference uses ORG_WORDS regex, PERSON_TITLES regex, and 2-word title-case heuristic when entity type is "unknown" from entitiesTable. Future-dated timeline events are discarded.
-    *   **Premium Glass CSS (index.css):** Added `atlas-glass-amber` (amber-tinted glass surface), full `atlas-btn-{red,cyan,amber}` button system (no @apply, raw CSS for Tailwind v4 compat), `atlas-stat-box`, `atlas-section-header`, `atlas-brief-section` + `atlas-brief-section-header`, `atlas-divider`, `atlas-nav-active` (left red glow bar + inset shadow), `atlas-case-row` (glass hover depth for dashboard list rows).
-    *   **layout.tsx nav polish:** Active nav items now use `atlas-nav-active` class (glow border + inset shadow + icon drop-shadow).
-    *   **dashboard.tsx:** Case list rows now use `atlas-case-row` for glass depth hover state.
-
-6.  **TypeScript Configuration:** Each package extends `tsconfig.base.json` with `composite: true`. Root `tsconfig.json` lists all packages as project references.
+**API Routes:**
+*   A comprehensive set of RESTful API routes under `/api` covering CRUD operations for all core data models.
+*   Specific endpoints for document upload, analysis, web search/ingestion, and entity mention management.
 
 # External Dependencies
 
--   **Frontend Libraries:** `@xyflow/react` (React Flow), `react-markdown`, `framer-motion`, `date-fns`, `@hookform/resolvers`, `wouter`, `React Query`.
--   **Backend Libraries:** `express`, `pdf-parse`, `compromise` (JS NLP library), `node-html-parser`.
--   **Database:** PostgreSQL.
--   **ORM:** Drizzle ORM.
--   **Validation:** Zod.
--   **API Generation:** Orval.
--   **Build Tool:** esbuild.
--   **CSS Framework:** Tailwind CSS.
--   **External Services:** Google News RSS (`news.google.com/rss/search`) for web ingestion.
+*   **Frontend Libraries:** `@xyflow/react`, `react-markdown`, `framer-motion`, `date-fns`, `@hookform/resolvers`, `wouter`, `React Query`.
+*   **Backend Libraries:** `express`, `pdf-parse`, `compromise`, `node-html-parser`.
+*   **Database:** PostgreSQL.
+*   **ORM:** Drizzle ORM.
+*   **Validation:** Zod.
+*   **API Generation:** Orval.
+*   **Build Tool:** esbuild.
+*   **CSS Framework:** Tailwind CSS.
+*   **External Services:** Google News RSS.

@@ -1,0 +1,711 @@
+PASS 28–32 — ATLAS MASTER INVESTIGATOR AUTOBUILD + DOSSIER ENGINE + UI OVERHAUL
+
+Keep the current ATLAS app structure.
+Do NOT turn this into a marketing site.
+Do NOT remove auth gate, compiler, dossier route, seed pipeline, entity registry, document vault, temporal trace, flow trace, or graph.
+Do NOT add random side modules.
+Do NOT simplify or weaken existing pipeline logic.
+This pass is to make ATLAS feel like a premium operational investigation system.
+
+GOAL:
+When I type ANY investigation target, ATLAS should automatically:
+1. classify the target correctly
+2. search intelligently
+3. ingest relevant docs
+4. reject junk
+5. extract entities, timeline events, and money signals
+6. auto-rank the evidence
+7. auto-build a starter graph from confidence
+8. compile a real dossier
+9. present the case in a premium, modern, glassy operator UI
+
+==================================================
+PART 1 — MASTER TARGET MODE CLASSIFIER
+==================================================
+
+Add a higher-level target classification layer before query generation.
+
+Support:
+- person_target
+- organization_target
+- government_agency_target
+- place_target
+- program_target
+- funding_target
+- event_target
+- scandal_target
+- topic_investigation
+- general
+
+Rules:
+- 2–4 token human name patterns strongly bias person_target
+- company/agency/legal suffixes bias organization/government targets
+- “funding”, “grant”, “budget”, “contract”, “appropriation”, “spending” bias funding_target
+- “investigation”, “lawsuit”, “indictment”, “audit”, “corruption”, “fraud”, “probe” bias scandal_target
+- city/state/country/place patterns bias place_target
+- “program”, “initiative”, “authority”, “department”, “office”, “commission”, “board”, “council” bias program/agency modes
+
+Store on case:
+- target_mode
+- seed_intent
+- target_label
+- target_confidence
+
+These must appear in diagnostics and in the overview report.
+
+==================================================
+PART 2 — INTELLIGENT QUERY AUTOPILOT
+==================================================
+
+Replace generic seed expansion with real investigative query generation.
+
+For every case auto-generate 8–12 queries max, not just 5.
+Queries must be target-mode aware.
+
+--------------------------------------
+2A — PERSON TARGET QUERY MODE
+--------------------------------------
+Generate patterns like:
+- "<name>"
+- "<name>" investigation
+- "<name>" lawsuit
+- "<name>" contract
+- "<name>" funding
+- "<name>" records
+- "<name>" donations
+- "<name>" payments
+- "<name>" PAC
+- "<name>" nonprofit
+- "<name>" board
+- "<name>" associates
+- "<name>" indictment
+- "<name>" settlement
+- "<name>" subpoena
+- "<name>" affidavit
+
+--------------------------------------
+2B — ORGANIZATION / AGENCY TARGET MODE
+--------------------------------------
+Generate patterns like:
+- "<org>"
+- "<org>" contract
+- "<org>" budget
+- "<org>" audit
+- "<org>" lawsuit
+- "<org>" oversight
+- "<org>" procurement
+- "<org>" funding
+- "<org>" board
+- "<org>" grants
+- "<org>" vendors
+- "<org>" scandal
+- "<org>" federal investigation
+- "<org>" report
+- "<org>" whistleblower
+
+--------------------------------------
+2C — FUNDING / SPENDING TARGET MODE
+--------------------------------------
+Generate patterns like:
+- "<target>" funding
+- "<target>" spending
+- "<target>" contract
+- "<target>" grant
+- "<target>" budget
+- "<target>" appropriation
+- "<target>" audit
+- "<target>" procurement
+- "<target>" misuse
+- "<target>" oversight
+- "<target>" fraud
+- "<target>" corruption
+- "<target>" payments
+- "<target>" records
+- "<target>" report
+
+--------------------------------------
+2D — SCANDAL / INVESTIGATION TARGET MODE
+--------------------------------------
+Generate patterns like:
+- "<target>" investigation
+- "<target>" records
+- "<target>" deposition
+- "<target>" affidavit
+- "<target>" indictment
+- "<target>" complaint
+- "<target>" audit
+- "<target>" report
+- "<target>" court filing
+- "<target>" whistleblower
+- "<target>" internal review
+- "<target>" oversight
+
+Log each generated query with:
+- query_text
+- target_mode
+- intent_tag
+- results_found
+
+==================================================
+PART 3 — DOCUMENT RELEVANCE ENGINE 3.0
+==================================================
+
+Strengthen document scoring so ATLAS acts like an investigator, not a random article collector.
+
+Every doc must receive:
+- relevance_score 0–100
+- priority_tier = PRIORITY_A / PRIORITY_B / SUPPORTING / LOW_SIGNAL / NOISE
+- target_alignment = direct / indirect / partial / mismatched / unknown
+- contamination_score
+- extraction_quality
+- evidence_value
+
+Scoring factors:
+- exact target hit in title
+- exact target hit in dek/lead
+- repeated target hit in body
+- query alignment
+- presence of investigative keywords
+- presence of financial keywords
+- presence of legal/court/oversight language
+- article quality / usable body length
+- source quality / domain trust
+- contamination / nav chrome / merged-line artifacts
+- off-topic drift penalties
+- celebrity / sports / entertainment bleed penalties when not relevant
+
+Hard suppress:
+- docs strongly mismatched to target mode
+- docs with high contamination and weak lead relevance
+- lifestyle/top-10/explainer junk
+- aggregator junk
+- repeated duplicate angle with weaker source
+
+Add visibility in UI:
+- each doc row shows tier badge + score
+- detail panel shows alignment + contamination + extraction strategy + evidence value
+
+==================================================
+PART 4 — ENTITY ADMISSION FIREWALL 3.0
+==================================================
+
+Entity extraction still needs to get much tougher.
+
+Expand the firewall to reject:
+- stitched names
+- merged article fragments
+- share-rail residue
+- “next / more / live updates / image analysis / video / newsletter” fragments
+- ALL CAPS multi-word junk
+- long title fragments
+- quoted fragments
+- colon-bearing fragments
+- nav/sidebar/footer artifacts
+- celebrity/article bleed
+- generic nouns
+- one-word fake persons
+- location/person mashups
+- organization fragments without structure
+
+Add new reject reasons:
+- ARTIFACT_ENTITY
+- NAV_RESIDUE
+- CROSS_STORY
+- SHAPE_INVALID
+- LOW_ROLE
+- OFF_TOPIC
+- LOW_CONFIDENCE
+- CONTAMINATED_ZONE
+- TITLE_FRAGMENT
+- BOILERPLATE_FRAGMENT
+
+Every mention should carry:
+- role_guess
+- topic_relevance
+- zone
+- title_hit
+- dek_hit
+- lead_hit
+- multi_doc_support
+- admitted true/false
+- reject_reason
+
+==================================================
+PART 5 — ROLE + RELATIONSHIP INTELLIGENCE
+==================================================
+
+ATLAS must stop being pure co-mention and start acting like a relationship engine.
+
+Add deterministic role inference:
+- lawyer
+- donor
+- board_member
+- executive
+- founder
+- witness
+- victim
+- accuser
+- defendant
+- contractor
+- vendor
+- official
+- spokesperson
+- regulator
+- agency
+- nonprofit
+- PAC
+- committee
+- campaign
+- investor
+- funder
+
+Add deterministic edge inference from context windows:
+- works_with
+- tied_to
+- funded_by
+- donated_to
+- paid_by
+- employed_by
+- contracted_with
+- represented_by
+- investigated_by
+- sued_by
+- sued
+- board_of
+- member_of
+- part_of
+- runs
+- owns
+- linked_to
+- associated_with
+
+Rules:
+- stronger than plain co_mention when explicit language exists
+- only assign labeled edge if threshold met
+- otherwise keep co_mention
+- prefer title/dek/lead evidence
+- prefer multi-doc confirmation
+
+Graph edge tiers:
+- confirmed_labeled
+- repeated_association
+- title_co_mention
+- co_mention
+- weak_unshown
+
+Do NOT flood the graph with weak edges.
+Hide weak_unshown by default.
+
+==================================================
+PART 6 — MONEY + TIMELINE EXTRACTION UPGRADE
+==================================================
+
+Financial and timeline data must become first-class.
+
+--------------------------------------
+6A — MONEY EXTRACTION
+--------------------------------------
+Detect:
+- grants
+- budgets
+- funding
+- contracts
+- appropriations
+- settlements
+- penalties
+- awards
+- donations
+- PAC contributions
+- campaign finance
+- investments
+- invoices
+- reimbursements
+- legal fees
+- procurement amounts
+
+Normalize:
+- amount_raw
+- amount_value
+- currency
+- amount_display
+- signal_type
+- source_sentence
+- linked_entity
+- confidence
+
+Show in Flow Trace:
+- amount
+- type
+- entity
+- source document
+- confidence
+
+--------------------------------------
+6B — TIMELINE EXTRACTION
+--------------------------------------
+Detect:
+- lawsuits filed
+- indictments
+- audits
+- reports released
+- board votes
+- contracts awarded
+- settlements reached
+- investigations opened
+- agencies involved
+- hearings
+- announcements
+- policy actions
+- raids/searches/arrests where present
+
+Normalize:
+- event_date
+- event_type
+- summary
+- document_id
+- confidence
+- linked_entities
+
+Show in Temporal Trace with:
+- strict ordering
+- confidence
+- source doc
+- event type color
+
+==================================================
+PART 7 — AUTO-BUILD GRAPH COMPILER
+==================================================
+
+This is the big one:
+When a case seeds successfully, ATLAS must auto-build a starter case graph from confidence.
+
+The graph compiler must:
+- take promoted entities
+- take strong labeled relationships
+- take repeated associations
+- take title/dek/lead evidence
+- take document support count
+- take role-bearing strength
+
+Build a starter graph automatically with:
+- 3–8 promoted core entities max for first build
+- no junk nodes
+- no weak nodes promoted just to fill space
+- no malformed names
+- no generic one-word people
+- no article-title fragments
+
+Node priority:
+1. seed target / main target
+2. strongest related institutions
+3. strongest related associates
+4. strongest role-bearing organizations
+5. strongest confirmed locations only if central
+
+Add graph quality states:
+- STRONG BUILD
+- PROVISIONAL BUILD
+- RECOVERED BUILD
+- WEAK BUILD
+- FAILED BUILD
+
+Rules:
+- STRONG = multiple usable docs + multiple clean promoted entities + real links
+- PROVISIONAL = some core entities but limited confirmations
+- RECOVERED = second-pass rescue built the graph
+- WEAK = too much ambiguity or contamination
+- FAILED = no viable starter graph
+
+==================================================
+PART 8 — AUTO DOSSIER COMPILER 2.0
+==================================================
+
+The dossier should feel like a real investigator brief.
+
+Generate sections:
+1. CASE SUMMARY
+2. WHAT THIS CASE APPEARS TO BE
+3. PRIMARY ACTORS
+4. PRIMARY INSTITUTIONS
+5. KEY RELATIONSHIPS
+6. DOCUMENT EVIDENCE
+7. TIMELINE SIGNALS
+8. FINANCIAL SIGNALS
+9. LIKELY ANGLES
+10. KNOWN GAPS
+11. SUGGESTED NEXT QUERIES
+12. BUILD QUALITY EXPLANATION
+
+Make the brief honest:
+- if weak, say weak
+- if provisional, say provisional
+- if graph is solid, say strong
+- if mostly topic noise, say manual narrowing recommended
+
+Do NOT hallucinate facts.
+Everything must be based on extracted evidence.
+
+==================================================
+PART 9 — OVERVIEW PANEL AS COMMAND CENTER
+==================================================
+
+The overview screen should stop feeling flat and become the operator command center.
+
+Keep structure, but upgrade presentation.
+
+Sections:
+- CASE HEALTH / AUTO-BUILD REPORT
+- PRIMARY ENTITIES
+- PRIMARY RELATIONSHIPS
+- KEY EVIDENCE
+- TIMELINE SNAPSHOT
+- MONEY SNAPSHOT
+- DOSSIER SUMMARY
+- NEXT QUERIES
+- TRIAGE WARNINGS
+
+Add:
+- promoted count
+- held count
+- rejected count
+- contamination docs count
+- usable docs count
+- graph quality
+- timeline events count
+- financial signals count
+
+Make this feel premium, dense, modern, and glassy.
+
+==================================================
+PART 10 — DOCUMENT VAULT AS EVIDENCE TABLE
+==================================================
+
+Document Vault should look like evidence, not plain rows.
+
+Upgrade row design:
+- title
+- source
+- ingest time
+- relevance score
+- priority badge
+- extraction quality
+- alignment marker
+- evidence value
+- analyze button
+- view button
+
+Selected doc detail should show:
+- extraction strategy
+- contamination
+- target alignment
+- entity count
+- timeline count
+- financial count
+- source URL mode
+- doc score
+- priority tier
+- short explanation of why this doc matters
+
+==================================================
+PART 11 — ENTITY REGISTRY AS REAL REGISTRY
+==================================================
+
+Entity Registry must feel more premium and useful.
+
+Each row should show:
+- type
+- name
+- mention count
+- doc support
+- first seen
+- primary role if known
+- confidence / strength
+- access button
+
+Entity dossier should show:
+- linked docs
+- relationship list
+- timeline appearances
+- financial signal appearances
+- mention log
+- why the entity was admitted
+- why it is in the case
+
+==================================================
+PART 12 — SYSTEM LOG AS PIPELINE BLACK BOX
+==================================================
+
+Keep the new log page but make it more useful.
+
+Add event families:
+- auth
+- query
+- ingest
+- extract
+- firewall
+- promote
+- graph
+- compiler
+- dossier
+- backfill
+
+Each log row should show:
+- timestamp
+- event name
+- severity
+- short summary
+- expandable payload
+
+Need filters:
+- severity
+- event family
+- target case
+- keyword
+
+==================================================
+PART 13 — ACCESS GATE HARDENING
+==================================================
+
+Keep the current lock screen structure.
+Do NOT replace it.
+Just strengthen it.
+
+Add:
+- proper invalid login message
+- session timeout support
+- logout confirmation
+- optional “remember operator” for local alpha only
+- cleaner footer telemetry
+- secure-feeling transition into ATLAS after login
+
+Keep alpha credentials visible only in alpha/dev mode.
+
+==================================================
+PART 14 — GLASS COMMAND UI OVERHAUL
+==================================================
+
+This is the design section.
+ATLAS currently works better than it looks.
+Fix that.
+
+Visual direction:
+- premium operator workstation
+- glass + steel + black obsidian surfaces
+- subtle red/cyan intelligence glow
+- depth
+- premium contrast
+- sharper spacing
+- less flatness
+- more cinematic polish
+- more “Palantir meets high-end recon console”
+- keep ATLAS identity, no generic SaaS look
+
+Must improve:
+- left rail depth
+- top bar polish
+- stat tiles
+- panel headers
+- section separation
+- active nav state
+- buttons
+- row hover states
+- selected states
+- case list presentation
+- empty states
+- graph panel chrome
+- right rail visual hierarchy
+
+Do NOT bloat.
+Do NOT make it flashy.
+Make it precise, premium, controlled, and expensive-looking.
+
+Add:
+- stronger glass layers
+- better border hierarchy
+- subtle radial lighting
+- more panel depth
+- improved shadows/glows
+- cleaner active states
+- richer spacing rhythm
+- better empty-state composition
+- smoother transitions
+
+==================================================
+PART 15 — EMPTY STATE + FAILED BUILD HONESTY
+==================================================
+
+If a case has no viable graph:
+- say why
+- show what was missing
+- suggest next step
+- do not fake confidence
+
+Examples:
+- no usable docs
+- only weak support
+- no role-bearing entities
+- too much contamination
+- recovered docs still weak
+- no timeline / money evidence found
+
+==================================================
+PART 16 — COMPILER + AUTO-BUILD BUTTONS
+==================================================
+
+Add clearly separated actions:
+- RECOMPILE DOSSIER
+- REBUILD SIGNALS
+- REBUILD GRAPH
+- RUN RECOVERY PASS
+- REFRESH CASE INTELLIGENCE
+
+These should be controlled, not spammy.
+Show loading states and results.
+
+==================================================
+PART 17 — DO NOT BREAK
+==================================================
+
+Do NOT remove:
+- auth gate
+- current routes
+- current diagnostics model
+- current build quality logic
+- current logs
+- current document vault
+- current graph controls
+- current backfill endpoint
+- current dossier route
+
+This pass should be additive + strengthening.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+A successful pass means:
+
+1. I type a target into START NEW INVESTIGATION
+2. ATLAS classifies target mode correctly
+3. ATLAS generates strong query variations automatically
+4. ATLAS ingests relevant docs
+5. ATLAS rejects obvious junk/artifact mentions
+6. ATLAS extracts timeline + money + entities
+7. ATLAS auto-promotes only clean, confidence-backed core entities
+8. ATLAS auto-builds a starter graph when justified
+9. ATLAS compiles a real dossier automatically
+10. The UI feels premium enough that this no longer looks like the weakest RSR build
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Implement directly.
+At the end, report exactly:
+- files changed
+- APIs added/updated
+- schema changes
+- promotion rules changed
+- UI surfaces upgraded
+- what now happens automatically that did not happen before
+- any limitations still remaining
