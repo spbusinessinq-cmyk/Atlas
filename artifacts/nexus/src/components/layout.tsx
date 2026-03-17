@@ -117,16 +117,13 @@ export function Layout({ children }: LayoutProps) {
                   <div className={cn(
                     "w-full flex items-center px-2.5 py-2 transition-all cursor-pointer text-[10px] font-mono uppercase tracking-wider outline-none rounded-[2px]",
                     isActive
-                      ? [
-                          "bg-red-600/[0.06] text-white border-l-2 border-red-600",
-                          "shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-1px_0_rgba(0,0,0,0.2)]",
-                        ].join(" ")
-                      : "text-neutral-600 hover:text-neutral-300 hover:bg-[#ffffff04] border-l-2 border-transparent"
+                      ? "atlas-nav-active text-white"
+                      : "text-neutral-600 hover:text-neutral-300 hover:bg-[#ffffff05] border-l-2 border-transparent"
                   )}>
                     <item.icon className={cn(
-                      "w-3.5 h-3.5 flex-shrink-0",
+                      "w-3.5 h-3.5 flex-shrink-0 transition-all",
                       !isCollapsed && "mr-2.5",
-                      isActive ? "text-red-500" : "text-neutral-700"
+                      isActive ? "atlas-nav-icon text-red-500 drop-shadow-[0_0_4px_rgba(220,38,38,0.4)]" : "text-neutral-700 group-hover:text-neutral-400"
                     )} />
                     {!isCollapsed && <span>{item.label}</span>}
                   </div>

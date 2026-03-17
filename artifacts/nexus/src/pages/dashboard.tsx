@@ -356,7 +356,7 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
 
   if (viewMode === "list") {
     return (
-      <div className="group relative flex items-center border-b border-[#ffffff06] hover:bg-[#ffffff03] transition-colors overflow-hidden">
+      <div className="group relative flex items-center atlas-case-row overflow-hidden">
         <Link href={`/cases/${c.id}`} className="flex-1 min-w-0 pr-10">
           <div className="flex items-center gap-3 px-3 py-2 cursor-pointer">
             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />

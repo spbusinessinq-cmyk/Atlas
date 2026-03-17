@@ -97,6 +97,16 @@ The project is structured as a pnpm monorepo using Node.js 24 and TypeScript 5.9
     *   Includes specific routes for document upload, analysis, web search, web ingestion, and entity mention approval/rejection.
     *   New endpoints: `DELETE /cases/:caseId/entities/:entityId` (cascade delete), `POST /cases/:caseId/entities/:entityId/reject-mentions`, `DELETE /cases/:caseId/documents/purge?type=`, `DELETE /cases/:caseId/mentions/pending`, `POST /cases/:caseId/mentions/bulk-reject`.
 
+7.  **Auto-Case Compiler + Premium Glass UI (Pass 26+27):**
+    *   **DB Schema:** `compiledBrief` (text) + `compiledAt` (timestamp) columns added to `casesTable` via `db:push`.
+    *   **case-compiler.ts:** Full scoring/ranking/brief engine — `scoreDocuments` (ATLAS-DIAG composite score = relevance + priority + alignment + size + timeline/financial bonuses), `rankEntities` (uses `entityMentionsTable` as primary source, cross-references `entitiesTable` for type enrichment, applies junk-name filter + heuristic type inference for person/org/location), `prioritizeTimeline` (EVENT_TYPE_RANK scoring, deduplication, future-date filtering), `prioritizeFinancialSignals`, `compileCaseBrief` (orchestrates all, generates qualityNote/whatThisCaseIs/currentState/gaps/queries).
+    *   **API Routes:** `POST /cases/:caseId/compile` → compiles brief + saves to DB + emits pipeline event. `GET /cases/:caseId/brief` → loads saved brief from DB.
+    *   **AtlasCaseBrief Component:** Added to OverviewPanel in `case-detail.tsx`. Fetches brief on mount, COMPILE/RECOMPILE button (red amber glow), collapsible sections (evidence, timeline, financial, entities), quality badge (STRONG/MODERATE/WEAK/EMPTY), actors + orgs grid, entity intelligence list with promotion reason, key evidence with score breakdown, gaps + suggested queries, stats footer.
+    *   **Entity Noise Fixes:** Junk-name filter blocks emoji, URLs, ALL-CAPS noise, >60-char names, >6-word names, common boilerplate words (news, intel, skip, content, etc.). Type inference uses ORG_WORDS regex, PERSON_TITLES regex, and 2-word title-case heuristic when entity type is "unknown" from entitiesTable. Future-dated timeline events are discarded.
+    *   **Premium Glass CSS (index.css):** Added `atlas-glass-amber` (amber-tinted glass surface), full `atlas-btn-{red,cyan,amber}` button system (no @apply, raw CSS for Tailwind v4 compat), `atlas-stat-box`, `atlas-section-header`, `atlas-brief-section` + `atlas-brief-section-header`, `atlas-divider`, `atlas-nav-active` (left red glow bar + inset shadow), `atlas-case-row` (glass hover depth for dashboard list rows).
+    *   **layout.tsx nav polish:** Active nav items now use `atlas-nav-active` class (glow border + inset shadow + icon drop-shadow).
+    *   **dashboard.tsx:** Case list rows now use `atlas-case-row` for glass depth hover state.
+
 6.  **TypeScript Configuration:** Each package extends `tsconfig.base.json` with `composite: true`. Root `tsconfig.json` lists all packages as project references.
 
 # External Dependencies

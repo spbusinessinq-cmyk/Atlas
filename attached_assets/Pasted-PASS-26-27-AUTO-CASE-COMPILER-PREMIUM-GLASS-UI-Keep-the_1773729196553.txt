@@ -1,0 +1,253 @@
+PASS 26+27 — AUTO-CASE COMPILER + PREMIUM GLASS UI
+
+Keep the current ATLAS structure exactly as-is.
+Do NOT redesign the app.
+Do NOT add unrelated modules.
+Do NOT break routing, auth, or pipeline.
+
+This pass has TWO goals only:
+1. Build a real AUTO-CASE COMPILER (turn data into a usable case)
+2. Upgrade UI to a premium glass command system (without changing structure)
+
+==================================================
+PART A — AUTO-CASE COMPILER (CORE UPGRADE)
+==================================================
+
+ATLAS currently collects and extracts data.
+Now it must COMPILE a case automatically from the strongest evidence.
+
+Implement a deterministic “case compiler” layer that runs after auto-build and after backfill.
+
+--------------------------------------
+A1 — EVIDENCE SCORING SYSTEM
+--------------------------------------
+
+Score documents using:
+- relevance to seed intent
+- keyword overlap with seed + top entities
+- position of signal (title/dek > body > tail)
+- presence of multiple entities
+- presence of timeline markers
+- presence of financial signals
+
+Output:
+- rankedDocs (top 3–5)
+
+--------------------------------------
+A2 — ENTITY RANKING
+--------------------------------------
+
+Rank entities using:
+- mention frequency across docs
+- number of supporting documents
+- average/max confidence
+- role-bearing signals (organization, official, funding entity)
+- de-weight weak single-doc mentions
+
+Output:
+- primaryEntities (top 3–6)
+- secondaryEntities (optional)
+
+--------------------------------------
+A3 — TIMELINE PRIORITIZATION
+--------------------------------------
+
+From timeline_entries:
+- group by date
+- collapse duplicates
+- prioritize:
+  - earliest
+  - latest
+  - high-signal events (mentions entities or money)
+
+Output:
+- topTimelineEvents (max 5–8)
+
+--------------------------------------
+A4 — FINANCIAL SIGNAL PRIORITIZATION
+--------------------------------------
+
+From financial_signals:
+- normalize amounts
+- rank by:
+  - magnitude
+  - relevance to seed entities
+  - repeated mentions across docs
+
+Output:
+- topFinancialSignals (max 3–5)
+
+--------------------------------------
+A5 — CASE BRIEF GENERATION
+--------------------------------------
+
+Generate a structured case brief using ONLY ranked items.
+
+Sections:
+- WHAT THIS CASE IS
+- PRIMARY ACTORS
+- PRIMARY ORGANIZATIONS
+- KEY EVIDENCE (top docs with short explanation)
+- TIMELINE (bullet format)
+- MONEY FLOW (bullet format)
+- CURRENT STATE / WHY IT MATTERS
+- KNOWN GAPS (if weak)
+- SUGGESTED NEXT QUERIES
+
+STRICT RULES:
+- do NOT include low-confidence junk
+- do NOT include nav/artifact entities
+- do NOT hallucinate missing info
+- if weak → say weak
+- if no money → say no financial signals found
+- if no timeline → say no date-anchored events found
+
+--------------------------------------
+A6 — PROMOTION EXPLANATION
+--------------------------------------
+
+For each promoted entity:
+- show:
+  - doc count
+  - confidence
+  - reason (multi-doc support / role signal / repeated mention)
+
+--------------------------------------
+A7 — UI INTEGRATION
+--------------------------------------
+
+Add a new section in Overview:
+
+"ATLAS CASE BRIEF"
+
+Render:
+- structured sections
+- top docs clickable
+- entities clickable
+- timeline bullets
+- financial bullets
+
+Also:
+- add "RECOMPILE CASE" button
+- runs compiler again without re-ingest
+
+==================================================
+PART B — PREMIUM GLASS COMMAND UI
+==================================================
+
+Do NOT change layout structure.
+Only upgrade visual quality.
+
+Target:
+- modern intelligence console
+- glass surfaces
+- depth layers
+- premium feel
+
+--------------------------------------
+B1 — SURFACE SYSTEM
+--------------------------------------
+
+Use layered surfaces:
+- base (deep black/navy)
+- panel (slightly lifted)
+- glass overlay (blur + low opacity)
+- highlight edge (subtle glow)
+
+Introduce:
+- subtle backdrop blur for key panels
+- faint inner borders
+- soft top-edge highlights
+
+--------------------------------------
+B2 — LEFT RAIL
+--------------------------------------
+
+- improve active state depth
+- add subtle glow to selected item
+- better spacing
+- slightly brighter icons on hover
+
+--------------------------------------
+B3 — TOP BAR
+--------------------------------------
+
+- tighten spacing
+- improve status readability
+- subtle divider lines
+- make ONLINE / counts feel premium
+
+--------------------------------------
+B4 — DASHBOARD / CASE LIST
+--------------------------------------
+
+- refine row hover states
+- add slight elevation on hover
+- improve typography hierarchy
+- make ACTIVE/OPEN states clearer
+
+--------------------------------------
+B5 — CASE DETAIL PANELS
+--------------------------------------
+
+- overview cards: glass panel look
+- metadata panel: stronger structure
+- right rail: more “intelligence sidecar” feel
+
+--------------------------------------
+B6 — BUTTONS / BADGES
+--------------------------------------
+
+- unify styles
+- improve contrast
+- add subtle glow to primary actions
+- keep tactical (not soft SaaS)
+
+--------------------------------------
+B7 — EMPTY STATES
+--------------------------------------
+
+Replace weak empty states with:
+- clear directive text
+- subtle visual depth
+- no generic placeholders
+
+--------------------------------------
+B8 — COLOR DISCIPLINE
+--------------------------------------
+
+Strict palette:
+- black / deep navy base
+- cyan (info / system)
+- red (alerts / active)
+- amber (warning / dev / signals)
+
+No random colors.
+
+--------------------------------------
+B9 — DO NOT
+--------------------------------------
+
+- do NOT make it a marketing site
+- do NOT add large gradients everywhere
+- do NOT round everything like consumer apps
+- do NOT remove tactical feel
+
+==================================================
+PART C — FINAL RESPONSE FORMAT
+==================================================
+
+When done, respond with:
+
+1. how the case compiler works
+2. what files were added/modified
+3. how documents are ranked
+4. how entities are ranked
+5. how timeline + financial signals are selected
+6. how the case brief is generated
+7. where the new UI appears
+8. what visual improvements were applied
+9. what still remains weak
+
+No marketing summary.
+Give a direct engineering explanation.

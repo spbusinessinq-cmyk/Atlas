@@ -8,6 +8,8 @@ export const casesTable = pgTable("cases", {
   description: text("description"),
   status: text("status").notNull().default("open"),
   tags: text("tags").array().default([]),
+  compiledBrief: text("compiled_brief"),
+  compiledAt: timestamp("compiled_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -18,6 +18,7 @@ import {
   extractTimelineEvents,
   extractFinancialSignals,
 } from "../lib/entity-extractor";
+import { compileCaseBrief, saveCaseBrief, loadCaseBrief } from "../lib/case-compiler";
 
 const router: IRouter = Router();
 
@@ -654,6 +655,38 @@ router.post("/cases/:caseId/backfill-signals", async (req, res) => {
   } catch (err) {
     console.error("[ATLAS BACKFILL] Error:", err);
     return res.status(500).json({ error: "Backfill failed" });
+  }
+});
+
+// ── Case Compiler ─────────────────────────────────────────────────────────────
+
+router.post("/cases/:caseId/compile", async (req, res) => {
+  const caseId = parseInt(req.params.caseId, 10);
+  if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
+  try {
+    const brief = await compileCaseBrief(caseId);
+    await saveCaseBrief(caseId, brief);
+    await logEvent(
+      "case_compiled",
+      `Case brief compiled — quality=${brief.dataQuality}, entities=${brief.primaryEntities.length}, timeline=${brief.topTimeline.length}, financial=${brief.topFinancial.length}`,
+      { caseId }
+    );
+    return res.json({ ok: true, brief });
+  } catch (err) {
+    console.error("[ATLAS COMPILER]", err);
+    return res.status(500).json({ error: String(err) });
+  }
+});
+
+router.get("/cases/:caseId/brief", async (req, res) => {
+  const caseId = parseInt(req.params.caseId, 10);
+  if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
+  try {
+    const brief = await loadCaseBrief(caseId);
+    if (!brief) return res.status(404).json({ error: "No compiled brief found" });
+    return res.json({ ok: true, brief });
+  } catch (err) {
+    return res.status(500).json({ error: String(err) });
   }
 });
 

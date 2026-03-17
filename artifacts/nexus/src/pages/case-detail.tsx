@@ -1457,15 +1457,11 @@ function OverviewPanel({
         />
       )}
 
-      {/* ── Case brief — only for non-seeded or seeded with clean text ── */}
-      {descText && (
-        <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
-          <div className="nexus-header-strip">
-            <span className="nexus-label">CASE BRIEF</span>
-          </div>
-          <div className="p-3 text-sm text-neutral-400 leading-relaxed">{descText}</div>
-        </div>
-      )}
+      {/* ── ATLAS Case Brief (compiled intelligence layer) ── */}
+      <AtlasCaseBrief
+        caseId={caseId}
+        onViewDocument={(docId) => onViewDocument?.({ id: docId } as any)}
+      />
 
       <div className="nexus-panel rounded-none">
         <div className="nexus-header-strip">
@@ -1586,6 +1582,402 @@ function OverviewPanel({
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ATLAS Case Brief ─────────────────────────────────────────────────────────
+
+type BriefQuality = "STRONG" | "MODERATE" | "WEAK" | "EMPTY";
+
+interface CaseBriefData {
+  caseId: number;
+  caseTitle: string;
+  seedIntent: string | null;
+  compiledAt: string;
+  dataQuality: BriefQuality;
+  qualityNote: string;
+  whatThisCaseIs: string;
+  primaryActors: string[];
+  primaryOrganizations: string[];
+  keyEvidence: Array<{ id: number; title: string; source: string | null; score: number; scoreBreakdown: string; hasTimeline: boolean; hasFinancial: boolean }>;
+  topTimeline: Array<{ id: number; title: string; eventDate: string; eventType: string; priority: number }>;
+  topFinancial: Array<{ id: number; amountRaw: string; normalizedAmount: number | null; signalType: string; eventSummary: string | null; entityName: string | null }>;
+  primaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number; promotionReason: string }>;
+  secondaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number }>;
+  currentState: string;
+  knownGaps: string[];
+  suggestedNextQueries: string[];
+  stats: { totalDocs: number; usableDocs: number; totalEntities: number; totalTimeline: number; totalFinancial: number };
+}
+
+const QUALITY_CONFIG: Record<BriefQuality, { color: string; dot: string; label: string }> = {
+  STRONG:   { color: "text-green-400",  dot: "bg-green-500",  label: "STRONG" },
+  MODERATE: { color: "text-cyan-400",   dot: "bg-cyan-500",   label: "MODERATE" },
+  WEAK:     { color: "text-amber-400",  dot: "bg-amber-500",  label: "WEAK" },
+  EMPTY:    { color: "text-neutral-600",dot: "bg-neutral-700",label: "EMPTY" },
+};
+
+function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocument?: (id: number) => void }) {
+  const [brief, setBrief] = React.useState<CaseBriefData | null>(null);
+  const [loadState, setLoadState] = React.useState<"loading" | "idle" | "compiling" | "error">("loading");
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set(["evidence", "timeline"]));
+
+  const toggleSection = (key: string) => setExpanded(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoadState("loading");
+    fetch(`/api/cases/${caseId}/brief`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return;
+        if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+        else { setBrief(null); setLoadState("idle"); }
+      })
+      .catch(() => { if (!cancelled) setLoadState("idle"); });
+    return () => { cancelled = true; };
+  }, [caseId]);
+
+  const handleCompile = async () => {
+    setLoadState("compiling");
+    setErrorMsg(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/compile`, { method: "POST" });
+      const d = await r.json();
+      if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+      else { setErrorMsg(d.error ?? "Compilation failed"); setLoadState("error"); }
+    } catch (e) {
+      setErrorMsg(String(e)); setLoadState("error");
+    }
+  };
+
+  const qc = brief ? QUALITY_CONFIG[brief.dataQuality] : null;
+
+  return (
+    <div className="nexus-panel rounded-none lg:col-span-2 xl:col-span-3">
+      {/* Header */}
+      <div className="atlas-section-header">
+        <div className="flex items-center gap-2">
+          {qc && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", qc.dot)} />}
+          <span className="nexus-label">ATLAS CASE BRIEF</span>
+          {brief && (
+            <span className={cn("font-mono text-[8px] border px-1 py-0.5", qc?.color,
+              brief.dataQuality === "STRONG" ? "border-green-900/40 bg-green-950/10" :
+              brief.dataQuality === "MODERATE" ? "border-cyan-900/40 bg-cyan-950/10" :
+              brief.dataQuality === "WEAK" ? "border-amber-900/40 bg-amber-950/10" :
+              "border-neutral-800 bg-transparent"
+            )}>
+              {qc?.label}
+            </span>
+          )}
+          {brief?.compiledAt && (
+            <span className="font-mono text-[8px] text-neutral-700">
+              compiled {new Date(brief.compiledAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={handleCompile}
+          disabled={loadState === "compiling"}
+          className={cn(
+            "atlas-btn transition-all",
+            loadState === "compiling" ? "text-amber-500 border-amber-900/40 animate-pulse" : "atlas-btn-red"
+          )}
+        >
+          {loadState === "compiling" ? "COMPILING..." : brief ? "RECOMPILE CASE" : "COMPILE CASE"}
+        </button>
+      </div>
+
+      {/* Body */}
+      {loadState === "loading" && (
+        <div className="p-4 font-mono text-[9px] text-neutral-700 uppercase tracking-widest text-center">
+          LOADING BRIEF...
+        </div>
+      )}
+
+      {loadState !== "loading" && !brief && (
+        <div className="p-4 space-y-2">
+          <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest text-center">
+            No compiled brief — hit COMPILE CASE to generate intelligence summary
+          </div>
+          {errorMsg && (
+            <div className="font-mono text-[9px] text-red-500 text-center">{errorMsg}</div>
+          )}
+        </div>
+      )}
+
+      {brief && (
+        <div className="p-3 space-y-3">
+
+          {/* Quality note */}
+          <div className={cn("font-mono text-[9px] leading-relaxed", qc?.color)}>
+            {brief.qualityNote}
+          </div>
+
+          {/* WHAT THIS CASE IS */}
+          <div className="atlas-brief-section">
+            <div className="atlas-brief-section-header">
+              <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest">WHAT THIS CASE IS</span>
+            </div>
+            <div className="px-3 py-2 font-mono text-[10px] text-neutral-300 leading-relaxed">
+              {brief.whatThisCaseIs}
+            </div>
+          </div>
+
+          {/* ACTORS + ORGS */}
+          {(brief.primaryActors.length > 0 || brief.primaryOrganizations.length > 0) && (
+            <div className="grid grid-cols-2 gap-2">
+              {brief.primaryActors.length > 0 && (
+                <div className="atlas-brief-section">
+                  <div className="atlas-brief-section-header">
+                    <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest">PRIMARY ACTORS</span>
+                  </div>
+                  <div className="px-3 py-2 space-y-1">
+                    {brief.primaryActors.map((name, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <span className="w-1 h-1 bg-red-600 rounded-full flex-shrink-0" />
+                        <span className="font-mono text-[9px] text-white uppercase">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {brief.primaryOrganizations.length > 0 && (
+                <div className="atlas-brief-section">
+                  <div className="atlas-brief-section-header">
+                    <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest">PRIMARY ORGS</span>
+                  </div>
+                  <div className="px-3 py-2 space-y-1">
+                    {brief.primaryOrganizations.map((name, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <span className="w-1 h-1 bg-cyan-600 rounded-full flex-shrink-0" />
+                        <span className="font-mono text-[9px] text-cyan-300 uppercase">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ENTITY INTELLIGENCE (A6 — promotion explanation) */}
+          {brief.primaryEntities.length > 0 && (
+            <div className="atlas-brief-section">
+              <button
+                onClick={() => toggleSection("entities")}
+                className="atlas-brief-section-header w-full text-left"
+              >
+                <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest flex-1">
+                  ENTITY INTELLIGENCE ({brief.primaryEntities.length} primary)
+                </span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("entities") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("entities") && (
+                <div className="divide-y divide-[#ffffff04]">
+                  {brief.primaryEntities.map((e) => (
+                    <div key={e.id} className="px-3 py-1.5 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <span className={cn("font-mono text-[9px] font-semibold uppercase",
+                          e.type === "person" ? "text-white" : "text-cyan-300"
+                        )}>{e.name}</span>
+                        <span className="font-mono text-[8px] text-neutral-700 ml-2">{e.type.toUpperCase()}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="font-mono text-[8px] text-neutral-600">{e.mentionCount} mentions</span>
+                        <span className="font-mono text-[8px] text-neutral-700">·</span>
+                        <span className="font-mono text-[8px] text-neutral-600">{e.docSupport} docs</span>
+                        <span className="font-mono text-[8px] text-neutral-700">·</span>
+                        <span className="font-mono text-[8px] text-neutral-600">{(e.avgConfidence * 100).toFixed(0)}% conf</span>
+                      </div>
+                      <span className="font-mono text-[8px] text-neutral-700 italic truncate max-w-[120px]">{e.promotionReason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* KEY EVIDENCE */}
+          {brief.keyEvidence.length > 0 && (
+            <div className="atlas-brief-section">
+              <button
+                onClick={() => toggleSection("evidence")}
+                className="atlas-brief-section-header w-full text-left"
+              >
+                <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest flex-1">
+                  KEY EVIDENCE ({brief.keyEvidence.length} sources)
+                </span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("evidence") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("evidence") && (
+                <div className="divide-y divide-[#ffffff04]">
+                  {brief.keyEvidence.map((doc, i) => (
+                    <div
+                      key={doc.id}
+                      onClick={() => onViewDocument?.(doc.id)}
+                      className={cn("px-3 py-2 flex items-start gap-2.5", onViewDocument && "cursor-pointer hover:bg-[#ffffff03]")}
+                    >
+                      <span className="font-mono text-[8px] text-neutral-700 mt-0.5 flex-shrink-0">#{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-mono text-[9px] text-neutral-300 truncate">{doc.title}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {doc.source && <span className="font-mono text-[8px] text-neutral-700">{doc.source}</span>}
+                          <span className="font-mono text-[8px] text-neutral-700">{doc.scoreBreakdown}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {doc.hasTimeline && <span className="w-1 h-1 rounded-full bg-cyan-500" title="has timeline events" />}
+                        {doc.hasFinancial && <span className="w-1 h-1 rounded-full bg-green-500" title="has financial signals" />}
+                        <span className={cn("font-mono text-[9px] font-bold",
+                          doc.score >= 100 ? "text-green-400" : doc.score >= 70 ? "text-cyan-400" : doc.score >= 40 ? "text-amber-400" : "text-neutral-600"
+                        )}>{doc.score}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TIMELINE */}
+          <div className="atlas-brief-section">
+            <button
+              onClick={() => toggleSection("timeline")}
+              className="atlas-brief-section-header w-full text-left"
+            >
+              <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest flex-1">
+                TIMELINE{brief.topTimeline.length > 0 ? ` (${brief.topTimeline.length} events)` : ""}
+              </span>
+              <span className="font-mono text-[8px] text-neutral-700">{expanded.has("timeline") ? "▲" : "▼"}</span>
+            </button>
+            {expanded.has("timeline") && (
+              <div className="px-3 py-2">
+                {brief.topTimeline.length === 0 ? (
+                  <div className="font-mono text-[9px] text-neutral-700 italic">No date-anchored events found.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {brief.topTimeline.map((ev) => (
+                      <div key={ev.id} className="flex gap-2.5 items-start">
+                        <div className="w-1 h-1 bg-cyan-600 rounded-full mt-1.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-mono text-[8px] text-cyan-600/70">
+                            {new Date(ev.eventDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                            {" · "}<span className="text-neutral-700">{ev.eventType.replace(/_/g, " ")}</span>
+                          </div>
+                          <div className="font-mono text-[9px] text-neutral-300">
+                            {ev.title.replace(/^\[[A-Z_]+\]\s*/, "")}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* FINANCIAL SIGNALS */}
+          <div className="atlas-brief-section">
+            <button
+              onClick={() => toggleSection("financial")}
+              className="atlas-brief-section-header w-full text-left"
+            >
+              <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest flex-1">
+                MONEY FLOW{brief.topFinancial.length > 0 ? ` (${brief.topFinancial.length} signals)` : ""}
+              </span>
+              <span className="font-mono text-[8px] text-neutral-700">{expanded.has("financial") ? "▲" : "▼"}</span>
+            </button>
+            {expanded.has("financial") && (
+              <div className="px-3 py-2">
+                {brief.topFinancial.length === 0 ? (
+                  <div className="font-mono text-[9px] text-neutral-700 italic">No financial signals detected.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {brief.topFinancial.map((sig) => (
+                      <div key={sig.id} className="flex gap-2.5 items-start">
+                        <div className="w-1 h-1 bg-green-600 rounded-full mt-1.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[9px] font-bold text-green-400">{sig.amountRaw}</span>
+                            <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff08] px-1">{sig.signalType}</span>
+                            {sig.entityName && <span className="font-mono text-[8px] text-cyan-500">{sig.entityName}</span>}
+                          </div>
+                          {sig.eventSummary && (
+                            <div className="font-mono text-[8px] text-neutral-600 mt-0.5">{sig.eventSummary.slice(0, 140)}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* CURRENT STATE */}
+          <div className="atlas-brief-section">
+            <div className="atlas-brief-section-header">
+              <span className="font-mono text-[8px] text-neutral-500 uppercase tracking-widest">CURRENT STATE / WHY IT MATTERS</span>
+            </div>
+            <div className="px-3 py-2 font-mono text-[9px] text-neutral-400 leading-relaxed">{brief.currentState}</div>
+          </div>
+
+          {/* KNOWN GAPS + SUGGESTED QUERIES */}
+          <div className="grid grid-cols-2 gap-2">
+            {brief.knownGaps.length > 0 && (
+              <div className="atlas-brief-section">
+                <div className="atlas-brief-section-header">
+                  <span className="font-mono text-[8px] text-amber-600/70 uppercase tracking-widest">KNOWN GAPS</span>
+                </div>
+                <div className="px-3 py-2 space-y-1.5">
+                  {brief.knownGaps.map((gap, i) => (
+                    <div key={i} className="flex gap-1.5 items-start">
+                      <span className="font-mono text-[8px] text-amber-700 mt-0.5">⚠</span>
+                      <span className="font-mono text-[8px] text-neutral-500">{gap}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {brief.suggestedNextQueries.length > 0 && (
+              <div className="atlas-brief-section">
+                <div className="atlas-brief-section-header">
+                  <span className="font-mono text-[8px] text-cyan-700/80 uppercase tracking-widest">SUGGESTED QUERIES</span>
+                </div>
+                <div className="px-3 py-2 space-y-1.5">
+                  {brief.suggestedNextQueries.map((q, i) => (
+                    <div key={i} className="flex gap-1.5 items-start">
+                      <span className="font-mono text-[8px] text-cyan-800 mt-0.5">›</span>
+                      <span className="font-mono text-[8px] text-neutral-500 italic">{q}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Stats footer */}
+          <div className="flex items-center gap-3 pt-1 border-t border-[#ffffff05]">
+            {[
+              ["DOCS", `${brief.stats.usableDocs}/${brief.stats.totalDocs}`],
+              ["ENTITIES", brief.stats.totalEntities],
+              ["TIMELINE", brief.stats.totalTimeline],
+              ["FINANCIAL", brief.stats.totalFinancial],
+            ].map(([label, val]) => (
+              <span key={label as string} className="font-mono text-[8px] text-neutral-700">
+                {label}: <span className="text-neutral-500">{val}</span>
+              </span>
+            ))}
+          </div>
+
         </div>
       )}
     </div>
