@@ -1,0 +1,139 @@
+PASS 25 — AUTO-BUILD VERIFICATION + BACKFILL + PIPELINE HARDENING
+
+Keep the current ATLAS structure and auth gate exactly as-is.
+Do not redesign the app.
+Do not add unrelated features.
+This pass is only about proving and strengthening the automatic build pipeline.
+
+==================================================
+GOAL
+==================================================
+
+I need ATLAS to do this reliably:
+
+seed target
+→ fetch relevant sources
+→ ingest docs
+→ extract entities
+→ extract timeline events
+→ extract financial signals
+→ confidence gate / firewall
+→ promote strongest entities only
+→ build starter graph
+→ populate overview / temporal trace / flow trace honestly
+
+The last pass says timeline + financial extraction are now wired into the pipeline.
+Now I want that VERIFIED and hardened.
+
+==================================================
+PART A — VERIFY END-TO-END AUTO-BUILD
+==================================================
+
+Audit the entire post-seed pipeline for NEW cases only:
+
+1. seed creation
+2. query generation
+3. result fetch
+4. doc ingestion
+5. extraction
+6. timeline extraction
+7. financial extraction
+8. entity admission firewall
+9. promotion
+10. graph seeding
+11. overview / flow trace / temporal trace rendering
+
+For at least one freshly created case, confirm:
+- docs ingest successfully
+- timeline entries are created if the docs support them
+- financial signals are created if the docs support them
+- promoted entities are evidence-backed
+- graph starter is populated only when justified
+- empty tabs stay empty only when evidence is truly absent
+
+If any step is broken or weak, fix it now.
+
+==================================================
+PART B — BACKFILL / REBUILD OLD CASES
+==================================================
+
+Older cases were built before the timeline + financial fix.
+Add a practical rebuild path so existing cases are not permanently stale.
+
+Implement one of these cleanly:
+- REBUILD CASE pipeline button, or
+- BACKFILL EXTRACTED SIGNALS button, or
+- RE-RUN AUTO BUILD button
+
+Requirements:
+- reprocess existing documents in a case
+- extract timeline entries from already-ingested docs
+- extract financial signals from already-ingested docs
+- refresh build summary / case health / overview counts
+- do not duplicate existing entries on repeated rebuilds
+- log rebuild events to the system log
+
+This is important: I need old cases to catch up to the new pipeline without manually recreating them.
+
+==================================================
+PART C — HARDEN PROMOTION QUALITY
+==================================================
+
+I still need stronger auto-build judgment.
+
+Tighten these rules:
+- if a case is weak / noisy / off-topic, do not fake a graph
+- if promoted entities are generic junk, suppress them harder
+- prefer title / dek / lead / repeated multi-doc entities
+- penalize sidebar / nav / contamination harder
+- penalize vague location-only / junk institutional fragments harder
+- require better evidence before starter graph entities are promoted
+
+Examples of junk that should be suppressed more aggressively:
+- stitched names
+- nav residue
+- generic fragments
+- weak single-doc noise
+- malformed org labels
+- off-topic celebrity/music/article-title artifacts
+
+==================================================
+PART D — UI / REPORTING HONESTY
+==================================================
+
+Make the app clearly report what happened during auto-build.
+
+Add or improve:
+- build status line that explicitly says:
+  - docs searched
+  - docs ingested
+  - usable docs
+  - timeline entries extracted
+  - financial signals extracted
+  - promoted entities
+  - held candidates
+- if a case is weak, say why
+- if no timeline events were found, say whether docs were analyzed
+- if no financial signals were found, say whether docs were analyzed
+- if graph is empty, explain whether evidence was insufficient or build never ran
+
+No fake confidence. No vague summaries.
+
+==================================================
+PART E — VALIDATION
+==================================================
+
+Test on:
+1. one fresh case created after this pass
+2. one existing older case using the rebuild/backfill path
+
+In the final response, explicitly report:
+- whether new cases now auto-populate timeline + financial data
+- whether old cases can now be backfilled
+- what files were changed
+- what bugs were found
+- what was fixed
+- what still remains weak
+
+Do not give a marketing summary.
+Give a direct engineering summary with proof.

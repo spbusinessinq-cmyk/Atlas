@@ -642,6 +642,7 @@ function CaseDetailInner({
 
           {activeSection === "overview" && (
             <OverviewPanel
+              caseId={caseId}
               caseData={caseData}
               entities={entities}
               documents={documents}
@@ -902,8 +903,48 @@ function parseDocDiag(rawText: string | null | undefined): {
   };
 }
 
-function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: Document[] }) {
+function SeedDiagnosticsCard({
+  diag,
+  documents,
+  caseId,
+  timelineCount,
+  financialCount,
+  usableDocCount,
+  onRebuildComplete,
+}: {
+  diag: SeedDiag;
+  documents: Document[];
+  caseId?: number;
+  timelineCount?: number;
+  financialCount?: number;
+  usableDocCount?: number;
+  onRebuildComplete?: () => void;
+}) {
   const [showDocs, setShowDocs] = React.useState(false);
+  const [rebuildState, setRebuildState] = React.useState<"idle" | "running" | "done" | "error">("idle");
+  const [rebuildResult, setRebuildResult] = React.useState<string | null>(null);
+
+  const handleRebuild = async () => {
+    if (!caseId || rebuildState === "running") return;
+    setRebuildState("running");
+    setRebuildResult(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/backfill-signals`, { method: "POST" });
+      const d = await r.json();
+      if (r.ok) {
+        setRebuildState("done");
+        setRebuildResult(`+${d.timeline_added ?? 0} timeline · +${d.signals_added ?? 0} financial · ${d.docs_processed ?? 0} docs processed`);
+        onRebuildComplete?.();
+      } else {
+        setRebuildState("error");
+        setRebuildResult(d.error ?? "Backfill failed");
+      }
+    } catch (e) {
+      setRebuildState("error");
+      setRebuildResult(String(e));
+    }
+  };
+
   const usable = diag.ok + diag.partial;
   const blocked = diag.failed + diag.wrapper;
 
@@ -947,23 +988,56 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
             {intentLabel}
           </span>
         )}
-        <button
-          onClick={() => setShowDocs((v) => !v)}
-          className="ml-auto font-mono text-[9px] text-neutral-500 hover:text-white uppercase tracking-wider border border-[#ffffff10] px-2 py-0.5 transition-colors"
-        >
-          {showDocs ? "HIDE DOC LOG" : "SHOW DOC LOG"}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {caseId && (
+            <button
+              onClick={handleRebuild}
+              disabled={rebuildState === "running"}
+              title="Re-extract timeline events and financial signals from all ingested documents"
+              className={cn(
+                "font-mono text-[9px] uppercase tracking-wider border px-2 py-0.5 transition-colors",
+                rebuildState === "running" ? "text-amber-500 border-amber-900/40 animate-pulse" :
+                rebuildState === "done" ? "text-green-500 border-green-900/40" :
+                rebuildState === "error" ? "text-red-500 border-red-900/40" :
+                "text-neutral-500 hover:text-amber-300 border-[#ffffff10] hover:border-amber-900/40"
+              )}
+            >
+              {rebuildState === "running" ? "REBUILDING..." :
+               rebuildState === "done" ? "✓ REBUILT" :
+               rebuildState === "error" ? "✗ FAILED" :
+               "REBUILD SIGNALS"}
+            </button>
+          )}
+          <button
+            onClick={() => setShowDocs((v) => !v)}
+            className="font-mono text-[9px] text-neutral-500 hover:text-white uppercase tracking-wider border border-[#ffffff10] px-2 py-0.5 transition-colors"
+          >
+            {showDocs ? "HIDE DOC LOG" : "SHOW DOC LOG"}
+          </button>
+        </div>
       </div>
 
+      {/* Rebuild result message */}
+      {rebuildResult && (
+        <div className={cn(
+          "px-3 py-1.5 font-mono text-[9px] uppercase border-b",
+          rebuildState === "done" ? "text-green-400 bg-green-950/10 border-[#ffffff06]" : "text-red-400 bg-red-950/10 border-[#ffffff06]"
+        )}>
+          {rebuildResult}
+        </div>
+      )}
+
       {/* ── Summary stats grid ── */}
-      <div className="p-3 grid grid-cols-3 md:grid-cols-6 gap-2">
+      <div className="p-3 grid grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2">
         {[
           { label: "Results", val: diag.total, color: "text-white" },
           { label: "Ingested", val: diag.ingested, color: "text-blue-400" },
-          { label: "Full / Partial", val: `${diag.ok} / ${diag.partial}`, color: usable > 0 ? "text-green-400" : "text-neutral-600" },
-          { label: "Blocked", val: `${diag.wrapper}W · ${diag.failed}F`, color: blocked > 0 ? "text-red-400" : "text-neutral-600" },
+          { label: "Usable", val: usable, color: usable > 0 ? "text-green-400" : "text-neutral-600" },
+          { label: "Blocked", val: `${diag.wrapper}W·${diag.failed}F`, color: blocked > 0 ? "text-red-400" : "text-neutral-600" },
           { label: "Detected", val: diag.detected, color: diag.detected > 0 ? "text-amber-400" : "text-neutral-600" },
           { label: "Promoted", val: diag.promoted + (diag.fallback ? " ⚡" : ""), color: diag.promoted > 0 ? "text-green-300" : "text-neutral-600" },
+          { label: "Timeline", val: timelineCount ?? "—", color: (timelineCount ?? 0) > 0 ? "text-cyan-400" : "text-neutral-600" },
+          { label: "Financial", val: financialCount ?? "—", color: (financialCount ?? 0) > 0 ? "text-green-400" : "text-neutral-600" },
         ].map(({ label, val, color }) => (
           <div key={label} className="bg-[#0a0e14] border border-[#ffffff08] p-2">
             <div className="font-mono text-[8px] text-neutral-600 uppercase mb-0.5">{label}</div>
@@ -1135,6 +1209,7 @@ function SeedDiagnosticsCard({ diag, documents }: { diag: SeedDiag; documents: D
 // ─── Overview Panel ──────────────────────────────────────────────────────────
 
 function OverviewPanel({
+  caseId,
   caseData,
   entities,
   documents,
@@ -1143,6 +1218,7 @@ function OverviewPanel({
   financialSignals,
   onViewDocument,
 }: {
+  caseId: number;
   caseData: { title: string; description?: string | null; tags?: string[] | null };
   entities: Entity[];
   documents: Document[];
@@ -1151,6 +1227,7 @@ function OverviewPanel({
   financialSignals: any[];
   onViewDocument?: (doc: Document) => void;
 }) {
+  const queryClient = useQueryClient();
   const seedDiag = parseSeedDiag(caseData.description);
   const descText = cleanDescription(caseData.description);
   const isAutoSeeded = caseData.tags?.includes("auto-seeded");
@@ -1230,12 +1307,12 @@ function OverviewPanel({
             </div>
           </div>
           <div className="space-y-1">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">FINANCIAL SIGNALS</div>
-            <div className={`font-mono text-2xl font-bold tabular-nums ${highSignalCount > 0 ? "text-green-400" : "text-neutral-700"}`}>
-              {highSignalCount.toString().padStart(2, "0")}
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">TIMELINE EVENTS</div>
+            <div className={`font-mono text-2xl font-bold tabular-nums ${timeline.length > 0 ? "text-cyan-300" : "text-neutral-700"}`}>
+              {timeline.length.toString().padStart(2, "0")}
             </div>
             <div className="font-mono text-[8px] text-neutral-600 uppercase">
-              {timeline.length} TIMELINE EVENTS
+              {highSignalCount > 0 ? `${highSignalCount} FINANCIAL SIGNALS` : "NO FINANCIAL SIGNALS"}
             </div>
           </div>
         </div>
@@ -1314,8 +1391,71 @@ function OverviewPanel({
         )}
       </div>
 
+      {/* ── Extraction telemetry — honest empty-state reporting ── */}
+      {isAutoSeeded && seedDiag && usableDocs.length > 0 && (
+        <div className="nexus-panel rounded-none">
+          <div className="nexus-header-strip">
+            <span className="nexus-label">EXTRACTION TELEMETRY</span>
+          </div>
+          <div className="p-3 space-y-2">
+            {/* Timeline */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", timeline.length > 0 ? "bg-cyan-500" : "bg-neutral-700")} />
+                <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Temporal Trace</span>
+              </div>
+              {timeline.length > 0 ? (
+                <span className="font-mono text-[9px] text-cyan-400 uppercase">{timeline.length} events extracted</span>
+              ) : (
+                <span className="font-mono text-[9px] text-neutral-700 uppercase">{usableDocs.length} docs analyzed · no date-anchored events found</span>
+              )}
+            </div>
+            {/* Financial signals */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", financialSignals.length > 0 ? "bg-green-500" : "bg-neutral-700")} />
+                <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Flow Trace</span>
+              </div>
+              {financialSignals.length > 0 ? (
+                <span className="font-mono text-[9px] text-green-400 uppercase">{financialSignals.length} financial signals extracted</span>
+              ) : (
+                <span className="font-mono text-[9px] text-neutral-700 uppercase">{usableDocs.length} docs analyzed · no financial amounts found</span>
+              )}
+            </div>
+            {/* Graph */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", entities.length > 0 ? "bg-amber-500" : "bg-neutral-700")} />
+                <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Entity Graph</span>
+              </div>
+              {entities.length > 0 ? (
+                <span className="font-mono text-[9px] text-amber-400 uppercase">{entities.length} entities promoted</span>
+              ) : (
+                <span className="font-mono text-[9px] text-neutral-700 uppercase">
+                  {seedDiag.detected > 0
+                    ? `${seedDiag.detected} signals detected · none met promotion threshold`
+                    : "no entity signals — evidence insufficient"}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Seed Diagnostics Card — shown for auto-seeded cases ── */}
-      {isAutoSeeded && seedDiag && <SeedDiagnosticsCard diag={seedDiag} documents={documents} />}
+      {isAutoSeeded && seedDiag && (
+        <SeedDiagnosticsCard
+          diag={seedDiag}
+          documents={documents}
+          caseId={caseId}
+          timelineCount={timeline.length}
+          financialCount={financialSignals.length}
+          usableDocCount={usableDocs.length}
+          onRebuildComplete={() =>
+            queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] })
+          }
+        />
+      )}
 
       {/* ── Case brief — only for non-seeded or seeded with clean text ── */}
       {descText && (

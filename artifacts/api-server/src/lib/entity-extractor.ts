@@ -150,6 +150,24 @@ const SKIP_NAMES = new Set([
   // Generic title fragments
   "President", "Governor", "Senator", "Mayor", "Secretary", "Chairman",
   "The Studio", "The Pitt", "The Network", "The Board", "The Panel",
+  // Standalone generic institutional words (no specificity — junk fragments)
+  "Department", "Commission", "Agency", "Office", "Council", "Division",
+  "Branch", "Section", "Bureau", "Unit", "Committee", "Authority", "Body",
+  "Administration", "Cabinet", "Ministry", "Chamber", "Assembly", "District",
+  "Coalition", "Alliance", "Association", "Organization", "Institution",
+  "Foundation", "Institute", "Society", "Federation", "Union", "League",
+  "Conference", "Forum", "Network", "Initiative", "Partnership", "Task Force",
+  // Standalone vague location fragments
+  "Region", "Area", "Zone", "Sector", "Territory", "Province", "Parish",
+  // Generic political/bureaucratic fragments
+  "Legislature", "Legislation", "Regulation", "Policy", "Hearing", "Session",
+  "Amendment", "Statute", "Ordinance", "Resolution", "Measure", "Referendum",
+  // Generic person-role stubs
+  "Spokesperson", "Representative", "Analyst", "Expert", "Source",
+  "Investigator", "Auditor", "Whistleblower", "Witness", "Complainant",
+  // Article / media artifact stubs
+  "Edition", "Section", "Bureau", "Desk", "Wire", "Feed", "Outlet",
+  "Publication", "Platform", "Channel", "Broadcast", "Segment", "Podcast",
 ]);
 
 const MEDIA_SOURCE_BLOCKLIST = new Set([
@@ -255,15 +273,32 @@ const NAV_RESIDUE_RE = /\b(more\s+news|more\s+stories|top\s+stories|breaking\s+n
  */
 export function isMergedLineArtifact(name: string): boolean {
   const words = name.trim().split(/\s+/);
-  if (words.length < 3) return false;
+
+  // Connectors are OK: of, at, and, the, for, in, by, with, to, a
+  const connectors = new Set(["of", "at", "and", "the", "for", "in", "by", "with", "to", "a", "an"]);
+
+  if (words.length < 3) {
+    // 2-word: only catch obvious camelCase merge or nav-prefix
+    if (words.length >= 2) {
+      if (/[a-z][A-Z]/.test(name)) return true; // CamelCase merge
+      if (NAV_PREFIX_WORDS.has(words[0].toLowerCase())) return true;
+    }
+    return false;
+  }
 
   // All words must be title-case with no connectors
   const allTitleCase = words.every(w => /^[A-Z][a-zA-Z'-]+$/.test(w));
   if (!allTitleCase) return false;
 
-  // Connectors are OK: of, at, and, the, for, in, by, with, to, a
-  const connectors = new Set(["of", "at", "and", "the", "for", "in", "by", "with", "to", "a", "an"]);
   const nonConnectors = words.filter(w => !connectors.has(w.toLowerCase()));
+
+  // 3-word all-proper-noun with no connectors AND looks like two name pairs → stitched
+  if (nonConnectors.length === 3 && words.length === 3 &&
+      words.every(w => !connectors.has(w.toLowerCase()))) {
+    // Contains two distinct runs that each look like a name word (3+ chars each)
+    const nameLike = nonConnectors.filter(w => w.length >= 3 && /^[A-Z][a-z]+$/.test(w));
+    if (nameLike.length === 3) return true; // Three standalone proper nouns = stitched
+  }
 
   // If 4+ title-case proper-looking words with no connectors → likely stitched
   if (nonConnectors.length >= 4 && words.every(w => !connectors.has(w.toLowerCase()))) {
@@ -717,16 +752,16 @@ export function shouldAdmitMention(
   if (TITLE_FRAGMENT_PATTERNS.some((rx) => rx.test(entityName)))
     return { admit: false, rejectReason: "TITLE_FRAGMENT" };
 
-  // BOILERPLATE_CONTEXT — tail zone with very short context = junk
-  if ((zone === "tail" || zone === "sidebar") && context.trim().length < 40 && confidence < 0.60)
+  // BOILERPLATE_CONTEXT — tail/sidebar with short context = junk (raised thresholds)
+  if ((zone === "tail" || zone === "sidebar") && context.trim().length < 80 && confidence < 0.68)
     return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
 
   // TOPIC_MISMATCH — OFF_TOPIC entities are never admitted
   if (topicRelevance === "OFF_TOPIC")
     return { admit: false, rejectReason: "TOPIC_MISMATCH" };
 
-  // LOW_CONFIDENCE
-  if (confidence < 0.42)
+  // LOW_CONFIDENCE — raised threshold for general admission
+  if (confidence < 0.48)
     return { admit: false, rejectReason: "LOW_CONFIDENCE" };
 
   // For serious intents: entity only in tail with no role-bearing and LOW topic = reject
@@ -734,12 +769,24 @@ export function shouldAdmitMention(
     return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
 
   // For serious intents: LOW topic + UNKNOWN role + low confidence = reject
-  if (isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.68)
+  if (isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.72)
     return { admit: false, rejectReason: "LOW_CONFIDENCE" };
 
   // General: LOW topic relevance + UNKNOWN role + below threshold → suppress
-  if (!isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.62)
+  if (!isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.65)
     return { admit: false, rejectReason: "LOW_CONFIDENCE" };
+
+  // GENERIC_FRAGMENT — single-word entities that are non-specific institutional fragments
+  if (words.length === 1 && entityType !== "person") {
+    const GENERIC_STANDALONE = new Set([
+      "department", "commission", "agency", "office", "council", "division",
+      "branch", "bureau", "unit", "authority", "administration", "ministry",
+      "chamber", "assembly", "coalition", "institute", "foundation",
+      "organization", "association", "federation", "union", "committee",
+    ]);
+    if (GENERIC_STANDALONE.has(nameL))
+      return { admit: false, rejectReason: "BLOCKLIST" };
+  }
 
   return { admit: true };
 }
@@ -867,6 +914,19 @@ const TITLE_FRAGMENT_PATTERNS = [
   /^(?:the\s+)?(?:president|governor|senator|secretary|mayor|chairman|chairwoman|director|commissioner|minister|chancellor|chief|speaker|attorney\s+general|district\s+attorney)\s*$/i,
   /^(?:the\s+)?(?:studio|network|channel|outlet|platform|publication|newspaper|magazine)\s*$/i,
   /^(?:the\s+)?(?:city|state|county|country|nation|government|administration)\s*$/i,
+  // Entertainment / celebrity junk
+  /^(?:the\s+)?(?:album|single|tour|concert|film|movie|episode|season|series|special|premiere|debut|release|soundtrack)\s*$/i,
+  /^(?:award|grammy|oscar|emmy|tony|golden\s+globe|box\s+office|billboard)\s*$/i,
+  // Generic "the X" article title fragments
+  /^the\s+(?:city|state|county|court|board|department|office|agency|authority|commission|committee|council)\s*$/i,
+  // Article section headers that slip through
+  /^(?:read\s+also|see\s+also|related|advertisement|sponsored|in\s+other\s+news|earlier\s+today)\s*$/i,
+  // Bare location adjectives
+  /^(?:federal|state|local|national|regional|municipal|county|city|suburban|urban|rural|coastal|northern|southern|eastern|western)\s*$/i,
+  // Generic standalone bureaucratic stubs
+  /^(?:department|commission|agency|office|council|division|authority|administration|ministry)\s*$/i,
+  // Article-title-style fragments ending in colon / number
+  /^.+:\s*$|\d+\s*$|^\d+\s+.+$/,
 ];
 
 // Show / entertainment segment names that sneak through NLP
@@ -1236,10 +1296,15 @@ function normalizeAmount(raw: string): { amount: number | null; currency: string
   if (/£|GBP/i.test(raw)) { currency = "GBP"; currencySymbol = "£"; }
   else if (/€|EUR/i.test(raw)) { currency = "EUR"; currencySymbol = "€"; }
 
-  const numericPart = raw.replace(/USD|US\$|GBP|EUR|[$£€,\s]/gi, "").toLowerCase();
-  const scaleMatch = /\b(billion|million|thousand|trillion|bn|mn|tr|[bmkt])\b/i.exec(numericPart);
-  const numStr = numericPart.replace(/(?:billion|million|thousand|trillion|bn|mn|tr|[bmkt])/gi, "").trim();
-  const base = parseFloat(numStr);
+  // Extract scale word from original raw string (before stripping spaces) to preserve \b boundaries
+  const scaleMatch = /\b(billion|million|thousand|trillion|bn|mn|tr|[bmkt])\b/i.exec(raw);
+  // Strip currency symbols, commas, spaces, and scale words to isolate the numeric value
+  const numericPart = raw
+    .replace(/USD|US\$|GBP|EUR|[$£€,]/gi, "")
+    .replace(/\b(?:billion|million|thousand|trillion|bn|mn|tr|[bmkt])\b/gi, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  const base = parseFloat(numericPart);
   if (isNaN(base) || base <= 0) return { amount: null, currency, display: raw };
 
   let multiplier = 1;

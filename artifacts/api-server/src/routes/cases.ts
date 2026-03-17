@@ -14,6 +14,10 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, or, sql, ilike, inArray } from "drizzle-orm";
 import { logEvent } from "../lib/log-event";
+import {
+  extractTimelineEvents,
+  extractFinancialSignals,
+} from "../lib/entity-extractor";
 
 const router: IRouter = Router();
 
@@ -531,5 +535,126 @@ function formatFinancialSignal(s: typeof financialSignalsTable.$inferSelect) {
     createdAt: s.createdAt.toISOString(),
   };
 }
+
+// ── Backfill Signals ─────────────────────────────────────────────────────────
+
+function stripAtlasDiag(rawText: string): string {
+  return rawText
+    .replace(/^\[ATLAS-DIAG:[^\]]+\]\n?/, "")
+    .replace(/^\[EXTRACTION_INCOMPLETE\]\n?/, "")
+    .replace(/^\[EXTRACTION_FAILED\]\n?/, "")
+    .replace(/^\[WRAPPER_BLOCKED\]\n?/, "")
+    .trim();
+}
+
+router.post("/cases/:caseId/backfill-signals", async (req, res) => {
+  const caseId = parseInt(req.params.caseId, 10);
+  if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
+
+  try {
+    const docs = await db
+      .select()
+      .from(documentsTable)
+      .where(eq(documentsTable.caseId, caseId));
+
+    let docsProcessed = 0;
+    let timelineAdded = 0;
+    let signalsAdded = 0;
+    let docsSkipped = 0;
+
+    for (const doc of docs) {
+      const rawText = doc.rawText || "";
+
+      // Skip failed / wrapper documents
+      const isBlocked =
+        rawText.includes("[WRAPPER_BLOCKED]") ||
+        rawText.includes("[FETCH_FAILED]") ||
+        (rawText.includes("[ATLAS-DIAG:") &&
+          (rawText.includes("status=failed") || rawText.includes("status=wrapper")));
+      if (isBlocked || rawText.trim().length < 100) {
+        docsSkipped++;
+        continue;
+      }
+
+      const textForAnalysis = stripAtlasDiag(rawText);
+      if (textForAnalysis.length < 100) { docsSkipped++; continue; }
+
+      docsProcessed++;
+
+      // ── Timeline events ────────────────────────────────────────────────
+      const existingTimeline = await db
+        .select({ title: timelineEntriesTable.title, eventDate: timelineEntriesTable.eventDate })
+        .from(timelineEntriesTable)
+        .where(eq(timelineEntriesTable.linkedDocumentId, doc.id));
+
+      const existingTimelineKeys = new Set(
+        existingTimeline.map((e) => `${e.eventDate}:${e.title?.slice(0, 60) ?? ""}`)
+      );
+
+      const timelineEvents = extractTimelineEvents(textForAnalysis);
+      for (const ev of timelineEvents) {
+        const key = `${ev.eventDate}:${`[${ev.eventType}] ${ev.summary.slice(0, 120)}`.slice(0, 60)}`;
+        if (existingTimelineKeys.has(key)) continue;
+        try {
+          await db.insert(timelineEntriesTable).values({
+            title: `[${ev.eventType}] ${ev.summary.slice(0, 120)}`,
+            description: ev.summary,
+            eventDate: ev.eventDate,
+            linkedDocumentId: doc.id,
+            caseId,
+          });
+          timelineAdded++;
+        } catch { /* skip */ }
+      }
+
+      // ── Financial signals ──────────────────────────────────────────────
+      const existingSignals = await db
+        .select({ amountRaw: financialSignalsTable.amountRaw, signalType: financialSignalsTable.signalType })
+        .from(financialSignalsTable)
+        .where(eq(financialSignalsTable.documentId, doc.id));
+
+      const existingSignalKeys = new Set(
+        existingSignals.map((s) => `${s.amountRaw}:${s.signalType}`)
+      );
+
+      const signals = extractFinancialSignals(textForAnalysis);
+      for (const sig of signals) {
+        const key = `${sig.amountRaw}:${sig.signalType}`;
+        if (existingSignalKeys.has(key)) continue;
+        try {
+          await db.insert(financialSignalsTable).values({
+            amountRaw: sig.amountRaw,
+            normalizedAmount: sig.normalizedAmount ?? null,
+            currency: sig.currency ?? "USD",
+            signalType: sig.signalType,
+            eventSummary: sig.eventSummary ?? null,
+            entityName: sig.entityName ?? null,
+            documentId: doc.id,
+            documentTitle: doc.title,
+            caseId,
+          });
+          signalsAdded++;
+        } catch { /* skip */ }
+      }
+    }
+
+    await logEvent(
+      "backfill_complete",
+      `Signal backfill complete — ${docsProcessed} docs reprocessed, ${timelineAdded} timeline events added, ${signalsAdded} financial signals added (${docsSkipped} docs skipped)`,
+      { caseId }
+    );
+
+    return res.json({
+      ok: true,
+      docs_processed: docsProcessed,
+      docs_skipped: docsSkipped,
+      timeline_added: timelineAdded,
+      signals_added: signalsAdded,
+    });
+  } catch (err) {
+    console.error("[ATLAS BACKFILL] Error:", err);
+    return res.status(500).json({ error: "Backfill failed" });
+  }
+});
 
 export default router;
