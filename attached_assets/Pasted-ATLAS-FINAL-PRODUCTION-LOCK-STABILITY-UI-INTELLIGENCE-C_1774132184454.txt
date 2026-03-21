@@ -1,0 +1,391 @@
+ATLAS FINAL PRODUCTION LOCK — STABILITY + UI + INTELLIGENCE + CONTROLS
+
+MISSION
+This pass FINALIZES:
+- system stability (no blank preview ever again)
+- BLACKDOG correctness
+- ingestion quality
+- financial intelligence
+- entity accuracy
+- dossier generation
+- UI interaction (buttons, graph, bell, recompile)
+
+No partial fixes.
+No placeholders.
+Everything must WORK.
+
+━━━━━━━━━━━━━━━━━━
+GLOBAL RULE
+━━━━━━━━━━━━━━━━━━
+
+If ANY render fails:
+→ SHOW FALLBACK PANEL
+→ NEVER blank screen
+
+━━━━━━━━━━━━━━━━━━
+T001 — PREVIEW / CANVAS STABILITY (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Root issue: stale iframe + silent render crashes
+
+Fix:
+
+1. FORCE IFRAME RESET
+- On load:
+  iframe.src = "about:blank"
+  wait 50ms
+  iframe.src = appURL
+
+2. DISABLE CACHE
+- Add:
+  Cache-Control: no-store
+  Pragma: no-cache
+
+3. PREVIEW KEY ROTATION
+- <App key={buildId}>
+- buildId = Date.now() on restart
+
+4. GLOBAL ERROR BOUNDARY
+
+Create:
+AtlasErrorBoundary
+
+Must:
+- wrap Provider
+- wrap Router
+- wrap each route
+
+Fallback UI:
+"ATLAS SYSTEM FAULT"
+[RELOAD APP]
+[RETURN TO CONTROL]
+
+Result:
+→ preview NEVER blank again
+
+━━━━━━━━━━━━━━━━━━
+T002 — BLACKDOG (FIX + CLEAN)
+━━━━━━━━━━━━━━━━━━
+
+REMOVE:
+❌ sidebar BLACKDOG
+❌ duplicate chips
+
+KEEP ONLY:
+→ HEADER RIGHT
+
+[● BLACKDOG SECURE]
+
+States:
+- green = connected
+- amber = degraded
+- red = unreachable
+- gray = not configured
+
+Logic:
+- ping VITE_BLACKDOG_URL every 20s
+
+━━━━━━━━━━━━━━━━━━
+T003 — INGEST FILTER (HARD LOCK)
+━━━━━━━━━━━━━━━━━━
+
+BLOCK:
+- sports
+- entertainment
+- celebrity
+- lifestyle
+- SEO junk
+
+ALLOW ONLY:
+- government
+- contracts
+- budgets
+- audits
+- finance
+- legal
+- infrastructure
+
+Add classifier BEFORE ingest.
+
+━━━━━━━━━━━━━━━━━━
+T004 — FINANCIAL EXTRACTION ENGINE
+━━━━━━━━━━━━━━━━━━
+
+Extract ALL:
+- $ amounts
+- contracts
+- budgets
+- grants
+- allocations
+- transfers
+- discrepancies
+- audit flags
+
+Normalize:
+$5M → 5000000
+
+Attach:
+- entity
+- program
+- source
+- date
+
+━━━━━━━━━━━━━━━━━━
+T005 — FLOW TRACE FIX
+━━━━━━━━━━━━━━━━━━
+
+STRICT MODE:
+numericOnly = TRUE
+
+REMOVE:
+❌ text signals
+❌ vague entries
+
+ONLY:
+✔ validated numbers
+
+Display:
+source → destination → amount
+
+Add:
+- sort by amount
+- filter by entity
+- filter by confidence
+
+━━━━━━━━━━━━━━━━━━
+T006 — ENTITY ENGINE FIX
+━━━━━━━━━━━━━━━━━━
+
+PRIORITY:
+- agencies
+- departments
+- contractors
+- officials
+- programs
+
+REQUIRE:
+- 2 signals OR
+- financial linkage
+
+Relationships must include:
+- type
+- evidence count
+- confidence
+
+━━━━━━━━━━━━━━━━━━
+T007 — DOSSIER ENGINE (REWRITE)
+━━━━━━━━━━━━━━━━━━
+
+FORMAT:
+
+1. Executive Summary
+2. Case Context
+3. Key Findings
+4. Financial Analysis
+5. Entity Network
+6. Risk & Exposure
+7. Actions
+
+RULES:
+- no fluff
+- no repetition
+- tight language
+- intelligence tone
+
+━━━━━━━━━━━━━━━━━━
+T008 — PDF DESIGN
+━━━━━━━━━━━━━━━━━━
+
+STYLE:
+- black headers
+- red accents
+- structured tables
+- clean spacing
+
+HEADER:
+RSR INTELLIGENCE NETWORK
+
+FOOTER:
+CONTROLLED DISTRIBUTION
+
+━━━━━━━━━━━━━━━━━━
+T009 — GRAPH FINANCIAL VISUALS
+━━━━━━━━━━━━━━━━━━
+
+Add:
+- thicker edges = more money
+- highlight top nodes
+
+Click node shows:
+- total money
+- document count
+- relationships
+
+━━━━━━━━━━━━━━━━━━
+T010 — GRAPH MICRO-BUTTON FIX (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+ISSUE:
+Buttons stopped working
+
+FIX:
+
+1. ENSURE HANDLERS EXIST
+
+onFocusNode(nodeId)
+onRemoveNode(nodeId)
+onDeleteNode(nodeId)
+
+2. BIND CORRECTLY
+
+<NodeToolbar>
+  <button onClick={() => onFocusNode(id)}>FOCUS</button>
+  <button onClick={() => onRemoveNode(id)}>REMOVE</button>
+  <button onClick={() => onDeleteNode(id)}>DELETE</button>
+</NodeToolbar>
+
+3. FIX POINTER EVENTS
+
+.node-toolbar {
+  pointer-events: all;
+  z-index: 9999;
+}
+
+4. STOP PROP BLOCKING
+
+onClick={(e) => {
+  e.stopPropagation()
+  handler()
+}}
+
+RESULT:
+→ micro buttons WORK again
+
+━━━━━━━━━━━━━━━━━━
+T011 — DOSSIER RECOMPILE FIX (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+ISSUE:
+Button does nothing
+
+FIX:
+
+1. CREATE HANDLER
+
+const recompileDossier = async (caseId) => {
+  setLoading(true)
+
+  const res = await fetch(`/api/dossier/recompile/${caseId}`, {
+    method: "POST"
+  })
+
+  const data = await res.json()
+
+  setDossier(data)
+  setLoading(false)
+}
+
+2. CONNECT BUTTON
+
+<button onClick={() => recompileDossier(caseId)}>
+  RECOMPILE DOSSIER
+</button>
+
+3. ADD FEEDBACK
+
+- loading spinner
+- success toast
+
+RESULT:
+→ button actually rebuilds dossier
+
+━━━━━━━━━━━━━━━━━━
+T012 — NOTIFICATION BELL FIX (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+ISSUE:
+Bell does not open
+
+FIX:
+
+1. STATE
+
+const [open, setOpen] = useState(false)
+
+2. BUTTON
+
+<button onClick={() => setOpen(!open)}>
+  🔔
+</button>
+
+3. DROPDOWN
+
+{open && (
+  <div className="notif-panel">
+    {notifications.map(n => <Item />)}
+  </div>
+)}
+
+4. FIX Z-INDEX
+
+.notif-panel {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  z-index: 9999;
+}
+
+5. CLOSE ON OUTSIDE CLICK
+
+useEffect(() => {
+  const handler = (e) => {
+    if (!ref.current.contains(e.target)) setOpen(false)
+  }
+  document.addEventListener("mousedown", handler)
+}, [])
+
+RESULT:
+→ bell opens + closes properly
+
+━━━━━━━━━━━━━━━━━━
+T013 — SAFE RENDER FALLBACK
+━━━━━━━━━━━━━━━━━━
+
+If graph fails:
+
+TRY:
+→ render graph
+
+CATCH:
+→ show fallback panel
+
+NEVER blank.
+
+━━━━━━━━━━━━━━━━━━
+T014 — FINAL VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Run:
+
+1. load app → UI visible
+2. preview loads → NOT blank
+3. BLACKDOG visible in header only
+4. ingest test → no sports
+5. financial extraction → correct
+6. graph loads
+7. node buttons work
+8. bell opens
+9. recompile dossier works
+10. PDF exports clean
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return ONLY:
+- fixes applied
+- working confirmations
+- any remaining issues
+
+NO vague language.
+ONLY confirmed behavior.

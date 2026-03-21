@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Briefcase,
@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
 import { useAuth } from "@/context/auth-context";
-import { BlackdogStatus, BlackdogHeaderChip } from "@/components/BlackdogStatus";
+import { BlackdogHeaderChip } from "@/components/BlackdogStatus";
 
 function AtlasRadar() {
   return (
@@ -55,7 +55,20 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
   const { logout, operator } = useAuth();
+
+  useEffect(() => {
+    if (!bellOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setBellOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [bellOpen]);
 
   const { data: cases } = useListCases();
   const { data: documents } = useListDocuments();
@@ -144,11 +157,6 @@ export function Layout({ children }: LayoutProps) {
           </nav>
         </div>
 
-        {/* BLACKDOG status */}
-        <div className="border-t border-[#ffffff06]">
-          <BlackdogStatus collapsed={isCollapsed} />
-        </div>
-
         {/* Operator footer + logout */}
         <div className={cn(
           "border-t border-[#ffffff0d] bg-gradient-to-b from-transparent to-[#ffffff02]",
@@ -233,9 +241,104 @@ export function Layout({ children }: LayoutProps) {
             <span className="w-px h-3 bg-[#ffffff08]" />
             <BlackdogHeaderChip />
             <span className="w-px h-3 bg-[#ffffff08]" />
-            <button className="text-neutral-700 hover:text-white transition-colors">
-              <Bell className="w-3 h-3" />
-            </button>
+            <div ref={bellRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setBellOpen(o => !o)}
+                style={{ position: "relative", display: "flex", alignItems: "center" }}
+                className="text-neutral-700 hover:text-white transition-colors focus:outline-none"
+                title="Notifications"
+              >
+                <Bell className="w-3 h-3" />
+                {flagCount > 0 && (
+                  <span style={{
+                    position: "absolute", top: -3, right: -3,
+                    width: 6, height: 6, borderRadius: "50%",
+                    background: "#ef4444",
+                    boxShadow: "0 0 5px rgba(239,68,68,0.8)",
+                  }} />
+                )}
+              </button>
+              {bellOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 8px)", right: 0,
+                  width: 260, zIndex: 9999,
+                  background: "rgba(3,5,10,0.98)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderTop: "1px solid rgba(220,38,38,0.4)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.8)",
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>
+                  <div style={{
+                    padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                      SYSTEM ALERTS
+                    </span>
+                    <span style={{ fontSize: 8, color: "rgba(220,38,38,0.7)", letterSpacing: "0.1em" }}>
+                      {flagCount > 0 ? `${flagCount} PENDING` : "CLEAR"}
+                    </span>
+                  </div>
+                  <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                    {flagCount > 0 ? (
+                      <div style={{
+                        padding: "10px 12px",
+                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        display: "flex", gap: 8, alignItems: "flex-start",
+                      }}>
+                        <span style={{ color: "#f59e0b", fontSize: 8, marginTop: 1 }}>▲</span>
+                        <div>
+                          <div style={{ fontSize: 9, color: "rgba(245,158,11,0.9)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                            TRIAGE REQUIRED
+                          </div>
+                          <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", marginTop: 2, letterSpacing: "0.06em" }}>
+                            {flagCount} entity mention{flagCount !== 1 ? "s" : ""} pending review
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        padding: "16px 12px", textAlign: "center",
+                        fontSize: 8, color: "rgba(255,255,255,0.2)",
+                        letterSpacing: "0.12em", textTransform: "uppercase",
+                      }}>
+                        NO PENDING ALERTS
+                      </div>
+                    )}
+                    <div style={{
+                      padding: "8px 12px",
+                      borderTop: "1px solid rgba(255,255,255,0.04)",
+                      display: "flex", gap: 8, alignItems: "flex-start",
+                    }}>
+                      <span style={{ color: "rgba(6,182,212,0.7)", fontSize: 8, marginTop: 1 }}>●</span>
+                      <div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                          ATLAS ONLINE
+                        </div>
+                        <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", marginTop: 2, letterSpacing: "0.06em" }}>
+                          All subsystems nominal
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{
+                    padding: "6px 12px", borderTop: "1px solid rgba(255,255,255,0.06)",
+                    display: "flex", justifyContent: "flex-end",
+                  }}>
+                    <button
+                      onClick={() => setBellOpen(false)}
+                      style={{
+                        fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em",
+                        textTransform: "uppercase", background: "none", border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      DISMISS
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
