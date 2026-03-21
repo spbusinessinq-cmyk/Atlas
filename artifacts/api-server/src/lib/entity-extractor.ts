@@ -1853,6 +1853,10 @@ export function extractNonNumericSignals(text: string, anchorTokens: string[] = 
     if (FINANCIAL_AD_COPY_PATTERN.test(sentence)) continue;
     if (FINANCIAL_SPORTS_PATTERN.test(sentence)) continue;
 
+    // T003: Require an explicit award or directed-flow verb — kills generic "budget" / "fund" false signals
+    // e.g. "The program has a significant budget" is filtered; "The grant was awarded to XYZ" passes
+    if (!EXPLICIT_AWARD_GATE.test(sentence) && !DIRECTED_FLOW_GATE.test(sentence)) continue;
+
     // Must have entity/program context to be useful
     const entityMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/.exec(sentence);
     const hasProgram = SOFT_PROGRAM_REF.test(sentence);
@@ -2253,6 +2257,27 @@ export function computeDocRelevanceScore(
   if (topicAlignment === "mismatched" && titleQueryHits === 0 && bodyQueryHits < 2) {
     score = Math.min(score, 15);
     penalties.push("hard-mismatch-suppressed");
+  }
+  // Hard block for clearly off-topic sports / entertainment docs regardless of keyword hits
+  // A sports doc that happens to contain a query keyword (e.g. "funding") should still be blocked
+  // if it has zero investigative content anchors.
+  if (
+    isSportsDoc &&
+    topicAlignment === "mismatched" &&
+    titleInvHits === 0 &&
+    !penalties.some(p => p === "hard-mismatch-suppressed")
+  ) {
+    score = Math.min(score, 14);
+    penalties.push("sports-hard-block");
+  }
+  if (
+    isEntertainmentDoc &&
+    topicAlignment === "mismatched" &&
+    titleInvHits === 0 &&
+    !penalties.some(p => p === "hard-mismatch-suppressed")
+  ) {
+    score = Math.min(score, 14);
+    penalties.push("entertainment-hard-block");
   }
 
   // ── Clamp and bucket ─────────────────────────────────────────────────────

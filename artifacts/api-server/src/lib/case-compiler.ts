@@ -485,7 +485,17 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
   }
 
   scoredFinancial.sort((a, b) => b._score - a._score);
-  const topFinancial = scoredFinancial.slice(0, 5).map(({ _score, ...rest }) => rest);
+  // T004: Separate numeric from NON_NUMERIC signals — only numeric signals go into the primary flow trace
+  const numericFinancial = scoredFinancial.filter(f =>
+    !(f.signalType || "").startsWith("NON_NUMERIC") && f.amountDisplay !== "NON-NUMERIC"
+  );
+  const earlySignalFinancial = scoredFinancial.filter(f =>
+    (f.signalType || "").startsWith("NON_NUMERIC") || f.amountDisplay === "NON-NUMERIC"
+  );
+  // Primary flow trace: numeric signals only (max 5). Fall back to including early signals if no numeric found.
+  const topFinancial = numericFinancial.length > 0
+    ? numericFinancial.slice(0, 5).map(({ _score, ...rest }) => rest)
+    : earlySignalFinancial.slice(0, 3).map(({ _score, ...rest }) => rest);
 
   // ── Data quality assessment ──────────────────────────────────────────────────
 

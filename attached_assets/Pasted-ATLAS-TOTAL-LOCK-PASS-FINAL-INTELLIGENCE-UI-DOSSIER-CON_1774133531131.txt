@@ -1,0 +1,738 @@
+ATLAS TOTAL LOCK PASS — FINAL INTELLIGENCE / UI / DOSSIER / CONTROL UNIFICATION
+
+MISSION
+This is the full corrective pass for ATLAS.
+Everything discussed so far must be handled in one production pass.
+
+Do not summarize first.
+Implement → test → verify live → then return a ship report with only confirmed working items.
+
+ATLAS must stop behaving like a loose scraper and become a controlled intelligence system.
+
+==================================================
+CORE OBJECTIVES
+==================================================
+
+1. Fix intelligence quality:
+- bad funding extraction
+- weak entity relevance
+- polluted timelines
+- junk sports / entertainment / lifestyle ingestion
+- false money flows
+- weak executive summary writing
+
+2. Fix operator control:
+- graph micro-buttons
+- dossier recompile
+- notification bell
+- triage routing
+- manual graph control
+- evidence ingest reliability
+- prompt / command-driven case building
+
+3. Fix system coherence:
+- BLACKDOG must be visible and real
+- duplicate BLACKDOG indicators removed
+- dossier export must look official
+- PDF writing must read like high-level intelligence, not generated mush
+
+==================================================
+T001 — BLACKDOG SYSTEM STATUS (HEADER AUTHORITY)
+==================================================
+
+BLACKDOG must exist as ONE authoritative indicator only.
+
+KEEP:
+- one top-right header chip only:
+  [● BLACKDOG SECURE]
+
+REMOVE:
+- duplicate sidebar BLACKDOG status
+- duplicate footer / stray indicators
+- anything conflicting
+
+Behavior:
+- green = CONNECTED
+- amber = DEGRADED
+- red = UNREACHABLE
+- gray = NOT CONFIGURED
+
+Implementation:
+- use VITE_BLACKDOG_URL
+- ping every 20 seconds
+- shared hook, no duplicate logic
+- tooltip text:
+  CONNECTED
+  DEGRADED
+  UNREACHABLE
+  NOT CONFIGURED
+
+If configured and reachable, the chip must visibly light.
+If not configured, say so clearly.
+
+Also verify the chip is present on:
+- dashboard
+- case detail
+- graph
+- dossier
+- triage
+
+==================================================
+T002 — HARD JUNK INGEST FIREWALL
+==================================================
+
+Before any extraction runs, classify document relevance.
+
+BLOCK or heavily suppress:
+- sports
+- entertainment
+- TV / episodes / watch pages
+- celebrity gossip
+- lifestyle
+- generic historical profiles
+- product / review / SEO junk
+- broad human-interest content without institutional finance relevance
+
+BOOST only:
+- audits
+- inspector general reports
+- budgets
+- appropriations
+- contracts
+- grants
+- city / county / state / federal records
+- finance / oversight / legal / procurement / agency material
+- institutional reporting tied to money or governance
+
+Add hard deny patterns for obvious junk examples like:
+- March Madness
+- episode / watch
+- all-woman squadron profile pages
+- biographies without funding or oversight relevance
+- generic NPR-style culture pages unless money/governance present
+
+Rejected junk must never reach:
+- entity registry
+- temporal trace
+- flow trace
+- executive summary
+- PDF dossier
+
+==================================================
+T003 — FUNDING EXTRACTION REBUILD (MAXIMUM PRIORITY)
+==================================================
+
+Current funding logic is too weak and too easy to poison.
+
+A VALID financial signal must require ALL of the following:
+
+A. NUMERIC MONEY
+- explicit dollar sign or normalized money phrase
+- support: $, USD, million, billion, thousand, m, b
+- normalize values to raw number
+
+B. FINANCIAL ACTION VERB
+Must include one of:
+appropriated
+allocated
+awarded
+granted
+disbursed
+budgeted
+funded
+spent
+paid
+reimbursed
+transferred
+contracted
+expended
+encumbered
+
+C. INVESTIGATIVE CONTEXT
+Must be tied to:
+- program
+- agency
+- department
+- contractor
+- fund
+- budget line
+- audit finding
+- procurement flow
+
+D. STRUCTURED ATTACHMENT
+Try to resolve:
+- source entity
+- destination entity
+- program / fund name
+- date / fiscal period if available
+- source document
+
+If numeric amount appears without finance context → reject.
+If finance verb appears without amount → hold as non-primary signal, not flow trace.
+If sports / media / junk context appears → reject.
+
+Expand detections for:
+- cost overruns
+- questioned costs
+- audit flags
+- missing funds
+- fragmented payments
+- repeat awards
+- reallocation
+- no-bid / sole-source
+- budget shortfall
+- reserve transfer
+- appropriation line items
+- grant pass-throughs
+
+Return structured fields:
+- amountRaw
+- amountDisplay
+- signalType
+- sourceEntity
+- targetEntity
+- controlledBy
+- receivedBy
+- programName
+- dateText
+- evidenceCount
+- confidence
+- inferred boolean
+
+==================================================
+T004 — FLOW TRACE PURITY FIX
+==================================================
+
+Flow trace must show ONLY real financial intelligence.
+
+REMOVE from flow trace:
+- non-numeric entries
+- vague money references
+- contextual phrases with no real amount
+- generic “program funding” text blobs
+- sports/media garbage
+
+Flow trace cards must show:
+- signal type
+- amountDisplay
+- source → destination
+- program/fund
+- confidence
+- supporting doc count
+- source title
+
+Add controls:
+- numericOnly ON by default
+- sort by amount
+- sort by confidence
+- filter by entity
+- filter by signal type
+
+Deduplicate near-identical flows across multiple docs using:
+entity + signalType + roundedAmount + programName
+
+If no validated flows remain, show a clean empty state, not junk.
+
+==================================================
+T005 — ENTITY REGISTRY HARD PURGE + RELEVANCE REBUILD
+==================================================
+
+The entity registry is polluted.
+
+Delete / reject entities that are:
+- event labels
+- TV/show fragments
+- “WITH [name]”
+- demographics
+- broad categories with no institutional relevance
+- pure topic words
+- broken URL remnants
+- phrase fragments
+- sports / media / entertainment names
+- generic social/cultural concepts unless directly tied to finance/governance
+
+Strongly prioritize:
+- agencies
+- departments
+- inspector general
+- comptroller
+- auditor
+- mayor / governor / city council / county board
+- contractors
+- nonprofits receiving funds
+- programs
+- budget funds
+- oversight bodies
+- procurement offices
+- institutions tied to money or authority
+
+Entity admission must require one of:
+- 2+ document mentions in relevant docs
+- direct finance linkage
+- official-title recognition
+- direct relationship evidence
+
+Upgrade title patterns for:
+Inspector General
+Auditor
+Comptroller
+Contracting Officer
+Procurement Director
+Chief Financial Officer
+Deputy Director
+Administrator
+Program Manager
+Budget Director
+Agency Secretary
+Commissioner
+
+Entity side panel must show:
+- type
+- confidence
+- mentions
+- docs
+- linked flows total
+- linked entities
+- evidence preview
+
+==================================================
+T006 — TEMPORAL TRACE PURITY FIX
+==================================================
+
+Temporal trace is full of garbage and historical fluff.
+
+Only allow timeline events if they have:
+- real date anchor
+AND
+- investigative relevance
+
+Investigative relevance means:
+- funding event
+- audit event
+- policy action
+- contract award
+- enforcement / oversight action
+- agency restructuring
+- budget proposal / approval
+- procurement milestone
+- lawsuit / legal filing tied to case
+- hearing / board action tied to case
+
+Reject:
+- TV listings
+- historical trivia
+- biographies
+- entertainment timeline junk
+- non-case cultural references
+- generic episode timestamps
+- random historical dates unrelated to case target
+
+Soft events may exist, but must be clearly labeled SOFT and only if still case-relevant.
+
+==================================================
+T007 — INVESTIGATIVE INTELLIGENCE ENGINE
+==================================================
+
+Build real intelligence sections from cleaned inputs only.
+
+Add / improve these compiled sections:
+- KEY FINDINGS
+- FINANCIAL RED FLAGS
+- POWER NODES
+- OVERSIGHT FAILURES
+- RECOMMENDED ACTIONS
+- WHY THIS MATTERS
+- INTELLIGENCE GAPS
+- CONFIDENCE NOTE
+
+Rules:
+- every item must be specific
+- every item must tie to real evidence
+- every item must name the linked entities when possible
+- every item must explain why it matters
+- every item must include evidence count
+
+KEY FINDINGS:
+- strongest supported conclusions only
+
+FINANCIAL RED FLAGS:
+- questioned costs
+- unexplained gaps
+- fragmented flows
+- repeated awards
+- overrun patterns
+- funding mismatches
+- missing destination clarity
+
+POWER NODES:
+- entities controlling the most money
+- entities with the most links
+- entities appearing across funds/docs
+
+OVERSIGHT FAILURES:
+- where accountability breaks
+- missing audits
+- unclear approval chains
+- procurement opacity
+- absent recipient clarity
+
+RECOMMENDED ACTIONS:
+- direct next analyst steps
+- exact query lines
+- exact record types to seek
+- exact documents to request
+
+WHY THIS MATTERS:
+- one tight paragraph
+- strategic consequence
+- no fluff
+- no filler
+
+==================================================
+T008 — EXECUTIVE SUMMARY REWRITE (CRITICAL)
+==================================================
+
+Current executive summary is confusing and bad.
+
+Rebuild completely.
+
+It must NOT dump labels like:
+WHAT:
+PRIMARY ACTORS:
+PRIMARY INSTITUTIONS:
+DOCUMENT SIGNALS:
+LIKELY ANGLE:
+in one ugly block.
+
+Instead write it like a real internal intelligence brief:
+
+FORMAT:
+1. one-line case classification / posture
+2. one concise summary paragraph
+3. one “Primary Investigative Angle” callout
+4. one compact stats strip
+5. optional “Immediate Operator Priority” line if needed
+
+Style:
+- clean
+- direct
+- high-confidence
+- no rambling
+- no spam phrases
+- no stitched fragments
+- no template sludge
+
+Example structure:
+Executive Summary
+This case centers on X and currently shows Y level of evidence.
+Available material indicates [clean summary].
+The strongest current angle is [angle].
+Immediate priority is [next action].
+
+Use complete sentences only.
+No semicolon sludge.
+No giant uppercase blob text.
+No concatenated fields.
+
+==================================================
+T009 — DOSSIER WRITING ENGINE UPGRADE
+==================================================
+
+Rewrite all dossier prose to read like a professional intelligence document.
+
+Tone:
+- internal briefing
+- serious
+- precise
+- structured
+- not blog-like
+- not marketing
+- not overdramatic
+
+Sections:
+1. Executive Summary
+2. Case Context
+3. Key Findings
+4. Financial Analysis
+5. Entity Network Summary
+6. Risk and Exposure
+7. Oversight and Control Failures
+8. Recommended Actions
+9. Intelligence Gaps
+10. Confidence Note
+
+Rules:
+- no repetition
+- no “this suggests” spam
+- no stitched labels
+- no vague filler
+- short paragraph blocks
+- clear hierarchy
+- strong topic sentences
+
+==================================================
+T010 — PDF DESIGN OVERHAUL
+==================================================
+
+PDF must match the operator packet feel.
+
+Use as design reference:
+- black bars
+- red accents
+- sharp spacing
+- official typography
+- controlled document feel
+
+Add:
+- cover page
+- classification band
+- section bars
+- clean tables
+- stat strip
+- page footers
+- controlled distribution footer
+- better whitespace
+- stronger section separation
+
+Header:
+RSR INTELLIGENCE NETWORK
+
+Footer:
+CONTROLLED DISTRIBUTION
+
+Make it look like:
+- internal command document
+- official briefing packet
+- not browser print output
+- not plain text dump
+
+Also improve typography and line breaks in the executive summary page specifically.
+
+==================================================
+T011 — DOSSIER RECOMPILE FIX
+==================================================
+
+Recompile dossier must actually work.
+
+Verify:
+- button fires
+- backend route resolves
+- state refreshes
+- UI updates with new compiled content
+- no stale dossier cache remains
+
+If necessary:
+- invalidate dossier cache on recompile
+- refetch after success
+- toast success/error visibly
+
+Need confirmation that:
+- Generate & Export works
+- Export PDF works
+- Recompile works
+- updated summary appears after recompile
+
+==================================================
+T012 — EVIDENCE INGEST RELIABILITY
+==================================================
+
+Evidence ingest modal must fully work.
+
+Support tabs:
+- FILE
+- URL
+- TEXT
+- NOTE
+
+Verify each tab actually submits usable data.
+No fake success.
+
+After ingest:
+- document appears in vault
+- document can be analyzed
+- document can affect entity extraction
+- document can affect flow trace
+- document can affect dossier after recompile
+
+==================================================
+T013 — PROMPT / COMMAND-DRIVEN CASE CONTROL
+==================================================
+
+Keep the launcher smart.
+
+Tabs:
+- TARGET
+- SOURCE URLS
+- RAW NOTES
+
+Also support operator command mode such as:
+- update entities in case 010001 with ___
+- add document to case 02341
+- rebuild graph #000040
+- recompile dossier 000035
+
+Route through:
+parseCommand() → handleCommand()
+
+Ensure commands are:
+- validated
+- scoped
+- visible in feedback
+- not silently failing
+
+==================================================
+T014 — GRAPH GOD MODE + CONTROL RESTORATION
+==================================================
+
+Graph micro-buttons must work again.
+
+Hover/selected node must show working controls above node:
+- FOCUS
+- ISOLATE
+- DOSSIER
+- REMOVE
+- DELETE
+- ADD LINK if supported
+
+Fix clickability:
+- proper z-index
+- no pointer blocking
+- stopPropagation correct
+- stable hover/selected state
+
+Also add stronger graph operator controls:
+- add entity to graph
+- add document to graph
+- add relationship manually
+- choose target case graph when adding item externally
+- delete relationship
+- delete node from case
+- delete node globally with confirm
+
+Click node panel should show:
+- total money linked
+- docs count
+- mentions count
+- top connected entities
+- top flows
+- relationship list
+
+==================================================
+T015 — TRIAGE QUEUE ROUTING FIX
+==================================================
+
+Blue case links in triage must never dead-end to 404.
+
+Behavior:
+- if case exists, open actual case
+- if case missing, open triage item detail panel
+- never strand operator on blank or plain error screen
+
+Also ensure triage queue page is fully accessible from nav and working.
+
+==================================================
+T016 — NOTIFICATION BELL FIX
+==================================================
+
+Bell must work.
+
+Required:
+- click opens panel
+- pending count badge
+- alerts visible
+- dismiss works
+- click-outside closes
+- no dead icon behavior
+
+==================================================
+T017 — SOURCE QUALITY + RELEVANCE WEIGHTING
+==================================================
+
+Improve source scoring.
+
+Boost:
+- gov
+- legal
+- audits
+- established major reporting on oversight / finance / policy
+- local institutional reporting when tied to budgets or contracts
+
+Down-rank:
+- entertainment
+- generic media culture
+- sports
+- celebrity
+- PR wire
+- SEO farms
+- lifestyle blogs
+
+Dossier should visibly reflect source credibility in a clean way.
+
+==================================================
+T018 — CASE WIPE / LAUNCH SANITIZATION
+==================================================
+
+Make sure ATLAS can launch clean.
+
+Need:
+- system wipe with typed confirmation
+- no hardcoded seeded cases/docs/entities
+- no launch with leftover junk data
+- clear wipe feedback
+- confirm post-wipe empty state
+
+==================================================
+T019 — PREVIEW / STABILITY / ERROR BOUNDARY CHECK
+==================================================
+
+Protect against blank preview/app death.
+
+Keep or improve:
+- route-level error boundaries
+- provider-level error boundaries
+- fallback panel instead of blank screen
+- bad API path protection
+- stale iframe / cached preview resilience
+
+No silent black-screen failures.
+
+==================================================
+T020 — FINAL VALIDATION (REQUIRED)
+==================================================
+
+Run a real end-to-end validation on an actual funding case.
+
+Specifically test with a funding / audit style case and verify:
+
+1. junk sports / entertainment content is blocked
+2. entity registry is clean and relevant
+3. timeline has only investigative events
+4. flow trace contains only numeric real finance signals
+5. executive summary reads clearly and professionally
+6. dossier recompiles correctly
+7. export PDF works and looks like an official system document
+8. BLACKDOG header chip is visible and truthful
+9. graph micro-buttons work
+10. notification bell works
+11. triage links do not 404
+12. manual evidence ingest works
+13. command-mode case actions work
+
+==================================================
+FINAL OUTPUT FORMAT
+==================================================
+
+After implementation, return only:
+
+1. Confirmed fixes
+2. Confirmed intelligence upgrades
+3. Confirmed BLACKDOG status behavior
+4. Confirmed executive summary rewrite
+5. Confirmed PDF redesign
+6. Confirmed recompile / bell / graph / triage fixes
+7. Any remaining issue that is real and still unresolved
+
+No vague language.
+No “should.”
+No “likely.”
+Only confirmed working changes

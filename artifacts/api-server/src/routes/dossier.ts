@@ -90,54 +90,7 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   const topPersons = topEntities.filter(e => e.type === "person").slice(0, 3);
   const topOrgs    = topEntities.filter(e => e.type === "organization" || e.type === "government_agency").slice(0, 3);
 
-  const buildCaseSummary = (): string => {
-    if (briefText && briefText.length > 80) return briefText;
-    const parts: string[] = [];
-
-    // Lead: intent-aware case framing
-    const intentLabel: Record<string, string> = {
-      housing_homelessness: "a public accountability investigation into homelessness spending and shelter program oversight",
-      crime_corruption: "a misconduct and corruption investigation",
-      finance_funding: "a financial oversight investigation into public funding flows",
-      legal_lawsuit: "a litigation intelligence file",
-      policy_government: "a government program oversight investigation",
-      education_university: "an education sector accountability investigation",
-      entertainment_film: "a film industry finance and subsidy investigation",
-      general: "an open intelligence investigation",
-    };
-    const frame = intentLabel[seedIntent] || "an open intelligence investigation";
-    parts.push(`This file covers ${frame} targeting ${caseData.title}.`);
-
-    if (topPersons.length > 0 && topOrgs.length > 0) {
-      parts.push(`Primary persons of interest: ${topPersons.map(e => e.name).join(", ")}. Key institutions: ${topOrgs.map(e => e.name).join(", ")}.`);
-    } else if (topPersons.length > 0) {
-      parts.push(`Primary persons of interest: ${topPersons.map(e => e.name).join(", ")}.`);
-    } else if (topOrgs.length > 0) {
-      parts.push(`Key institutional actors: ${topOrgs.map(e => e.name).join(", ")}.`);
-    }
-
-    if (financialSignals.length > 0) {
-      const topSignal = financialSignals[0];
-      const amt = topSignal.amountDisplay ?? topSignal.amountRaw ?? null;
-      if (amt && topSignal.entityName) {
-        parts.push(`Lead financial signal: ${amt} associated with ${topSignal.entityName}. ${financialSignals.length} total financial indicator${financialSignals.length !== 1 ? "s" : ""} detected.`);
-      } else {
-        parts.push(`${financialSignals.length} financial signal${financialSignals.length !== 1 ? "s" : ""} detected across source materials.`);
-      }
-    }
-
-    if (documents.length > 0) {
-      const docSources = [...new Set(documents.map(d => d.source).filter(Boolean))].slice(0, 2);
-      const sourceStr = docSources.length > 0 ? ` from ${docSources.join(", ")}` : "";
-      parts.push(`Evidence base: ${documents.length} source document${documents.length !== 1 ? "s" : ""}${sourceStr}, ${timeline.length} timeline event${timeline.length !== 1 ? "s" : ""}, ${entities.length} confirmed entity/entities.`);
-    }
-
-    if (entities.length === 0) {
-      parts.push("No entities confirmed — complete document ingestion and entity triage to develop the intelligence picture.");
-    }
-    return parts.join(" ");
-  };
-  const caseSummary = buildCaseSummary();
+  // caseSummary is built after financialSignals is computed — see below
 
   // SECTION 2 — Key Entities
   const keyEntities = entities.map((e) => ({
@@ -222,6 +175,81 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   // Also keep mention-context financial signals for angles computation
   const MONEY_RE = /\b(funding|grant|budget|contract|appropriation|allocation|spending|award|procurement|payment|donation|settlement|payout|contribution)\b/i;
   const mentionFinancials = approvedOnly.filter(m => MONEY_RE.test(m.context ?? ""));
+
+  // SECTION 1 — Case Summary (built here after financialSignals is available)
+  const buildCaseSummary = (): string => {
+    // Only use briefText if it's already prose (not the ATLAS seed format)
+    const isSeedFormat = briefText.startsWith("WHAT:") || briefText.startsWith("ATLAS:") || briefText.startsWith("[ATLAS") || briefText.startsWith("Seed investigation");
+    if (briefText && briefText.length > 80 && !isSeedFormat) return briefText;
+
+    const intentLabel: Record<string, string> = {
+      housing_homelessness: "a public accountability investigation into homelessness spending and shelter program oversight",
+      crime_corruption: "a misconduct and corruption investigation targeting potential fraud, financial abuse, or ethical violations",
+      finance_funding: "a financial oversight investigation tracking public funding flows and appropriation integrity",
+      legal_lawsuit: "a litigation intelligence file examining court filings, legal exposure, and named parties",
+      policy_government: "a government program oversight investigation focused on policy implementation and accountability",
+      education_university: "an education sector accountability investigation tracking institutional spending and governance",
+      entertainment_film: "a film industry finance investigation examining tax credits, production subsidies, and studio deals",
+      general: "an open intelligence investigation",
+    };
+    const frame = intentLabel[seedIntent] || "an open intelligence investigation";
+
+    // Actor clause
+    let actorClause = "";
+    if (topPersons.length > 0 && topOrgs.length > 0) {
+      actorClause = `The investigation identifies ${topPersons.map(e => e.name).join(" and ")} as principal persons of interest, with ${topOrgs.map(e => e.name).join(" and ")} as key institutional actors.`;
+    } else if (topPersons.length > 0) {
+      actorClause = `The investigation identifies ${topPersons.map(e => e.name).join(" and ")} as principal persons of interest.`;
+    } else if (topOrgs.length > 0) {
+      actorClause = `The investigation centers on ${topOrgs.map(e => e.name).join(" and ")} as primary institutional actors.`;
+    }
+
+    // Financial clause — numeric signals only
+    const numericSigs = financialSignals.filter(f => !(f.signalType?.startsWith("NON_NUMERIC")) && f.amountDisplay !== "NON-NUMERIC");
+    let financialClause = "";
+    if (numericSigs.length > 0) {
+      const topSignal = numericSigs[0];
+      const amt = topSignal.amountDisplay ?? topSignal.amountRaw ?? null;
+      if (amt && topSignal.entityName) {
+        financialClause = `Financial intelligence indicates ${amt} linked to ${topSignal.entityName}`;
+        if (numericSigs.length > 1) financialClause += `, with ${numericSigs.length} total monetary signals extracted`;
+        financialClause += ".";
+      } else {
+        financialClause = `${numericSigs.length} quantified financial signal${numericSigs.length !== 1 ? "s" : ""} extracted from source materials.`;
+      }
+    } else if (financialSignals.length > 0) {
+      financialClause = `${financialSignals.length} non-quantified financial reference${financialSignals.length !== 1 ? "s" : ""} detected — awaiting numeric confirmation.`;
+    }
+
+    // Evidence clause
+    let evidenceClause = "";
+    if (documents.length > 0) {
+      const docSources = [...new Set(documents.map(d => d.source).filter(Boolean))].slice(0, 2);
+      const sourceStr = docSources.length > 0 ? `, drawn from ${docSources.join(" and ")}` : "";
+      evidenceClause = `The dossier rests on ${documents.length} ingested document${documents.length !== 1 ? "s" : ""}${sourceStr}`;
+      if (timeline.length > 0) evidenceClause += `, anchored by a ${timeline.length}-event chronological record`;
+      evidenceClause += ".";
+    }
+
+    // Intelligence grade
+    let gradeClause = "";
+    if (entities.length === 0) {
+      gradeClause = "Intelligence grade: UNVERIFIED — no confirmed entities. Complete ingestion and entity triage to build the network picture.";
+    } else if (entities.length >= 5 && documents.length >= 5) {
+      gradeClause = `Intelligence grade: DEVELOPING — ${entities.length} confirmed entities mapped across ${documents.length} document${documents.length !== 1 ? "s" : ""}.`;
+    } else {
+      gradeClause = "Intelligence grade: PRELIMINARY — additional ingest required to corroborate current signals.";
+    }
+
+    return [
+      `This file constitutes ${frame} targeting ${caseData.title}.`,
+      actorClause,
+      financialClause,
+      evidenceClause,
+      gradeClause,
+    ].filter(Boolean).join(" ");
+  };
+  const caseSummary = buildCaseSummary();
 
   // SECTION 7 — Investigative Angles (entity-specific, not generic templates)
   const buildInvestigativeAngles = (): Array<{ angle: string }> => {
@@ -489,6 +517,18 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     briefRecommendedActions = brief.recommendedActions ?? [];
   } catch { /* use empty arrays */ }
 
+  // T004: Only expose numeric financial signals in the dossier output
+  // A signal is numeric only if it has a real normalized amount > 0 AND is not flagged as NON_NUMERIC
+  const numericFinancialSignals = financialSignals.filter(
+    f => !(f.signalType?.startsWith("NON_NUMERIC"))
+      && f.amountDisplay !== "NON-NUMERIC"
+      && (f.normalizedAmount ?? 0) > 0
+  );
+  // Fall back to showing early signals only if NO numeric signals exist at all
+  const outputFinancialSignals = numericFinancialSignals.length > 0
+    ? numericFinancialSignals
+    : financialSignals.filter(f => (f.signalType?.startsWith("NON_NUMERIC") || f.amountDisplay === "NON-NUMERIC") && f.eventSummary).slice(0, 3);
+
   return res.json({
     caseId,
     caseTitle: caseData.title,
@@ -501,7 +541,7 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
       entityRelationships,
       documentEvidence,
       timelineSignals,
-      financialSignals,
+      financialSignals: outputFinancialSignals,
       investigativeAngles,
       nextQueries,
       knownGaps,
