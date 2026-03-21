@@ -129,10 +129,36 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     return new Date(b.date as string).getTime() - new Date(a.date as string).getTime();
   });
 
-  // SECTION 5 — Timeline Signals
+  // SECTION 5 — Timeline Signals (filtered to accountability-relevant events only)
+  // Only include events tied to contracts, audits, appropriations, enforcement, hearings, or program milestones.
+  // TV episode summaries, documentary recaps, soft historical references, and generic events are excluded.
+  const ACCOUNTABILITY_EVENT_TYPES = new Set([
+    "CONTRACT_AWARDED", "CONTRACT", "AUDIT", "AUDIT_FLAG", "AUDIT_FINDING",
+    "APPROPRIATION", "HEARING", "ENFORCEMENT", "ENFORCEMENT_ACTION",
+    "PROGRAM_MILESTONE", "PROGRAM_CHANGE", "VIOLATION", "INDICTMENT",
+    "SETTLEMENT", "REGULATORY_ACTION", "BUDGET_ACTION", "GRANT_AWARD",
+    "FRAUD_FLAG", "WHISTLEBLOWER", "INVESTIGATION", "CONVICTION",
+    "FILING", "FRAUD_MISUSE", "INSPECTION", "SUSPENSION", "DEBARMENT",
+    "REFERRAL", "COMPLAINT", "SUBPOENA", "ARREST", "CHARGE",
+    "AGENCY_CHANGE", "LEADERSHIP_CHANGE", "OVERSIGHT_ACTION",
+    "GOVERNMENT_ACTION", "POLITICAL_ACTION", "BUDGET", "DISBURSEMENT",
+  ]);
+
   const timelineSignals = timeline
-    .filter((t) => t.date != null)
+    .filter((t) => {
+      if (!t.date) return false;
+      // If event type is known, only allow accountability types
+      if (t.eventType && t.eventType.trim()) {
+        return ACCOUNTABILITY_EVENT_TYPES.has(t.eventType.trim().toUpperCase());
+      }
+      // No event type — apply keyword filter on title/description
+      const text = `${t.title ?? ""} ${t.description ?? ""}`.toLowerCase();
+      const ACCOUNTABILITY_KEYWORDS = /\b(contract|audit|grant|fund|appropriat|legislat|budget|hearing|enforcement|program|indict|settl|compliance|investigation|fraud|oversight|inspection|debarment|conviction|indictment|award|procurement|disburs|allocat|regulator)\b/;
+      const JUNK_KEYWORDS = /\b(episode|season|recap|trailer|premiere|documentary|film|movie|concert|game|match|tournament|playoff|bracket|watch|stream|preview)\b/i;
+      return ACCOUNTABILITY_KEYWORDS.test(text) && !JUNK_KEYWORDS.test(text);
+    })
     .sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
+    .slice(0, 12)  // Hard cap at 12 events for dossier clarity
     .map((t) => ({
       date: t.date,
       title: t.title,

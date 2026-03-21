@@ -8,7 +8,12 @@ const PING_TIMEOUT_MS = 6_000;
 
 function getEndpointUrl(): string | null {
   const envUrl = (import.meta as any).env?.VITE_BLACKDOG_URL;
-  if (envUrl && envUrl.trim() && envUrl !== "undefined") return envUrl.trim();
+  if (envUrl && envUrl.trim() && envUrl !== "undefined") {
+    const resolved = envUrl.trim();
+    console.log("ATLAS BLACKDOG URL:", resolved);
+    return resolved;
+  }
+  console.log("ATLAS BLACKDOG URL: not configured");
   return null;
 }
 

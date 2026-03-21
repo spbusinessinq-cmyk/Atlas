@@ -183,6 +183,17 @@ const SKIP_NAMES = new Set([
   "Summary", "Overview", "Highlights", "Key Points", "Takeaways",
   // Document artifact single words
   "Footnote", "Endnote", "Appendix", "Exhibit", "Attachment", "Annex",
+  // Standalone education/topic acronyms that bleed in without context
+  "STEM", "STEAM", "SEL", "DEI", "ESG", "FOIA", "SNAP", "TANF", "CHIP",
+  // Sports event names and competition terms
+  "Madness", "Playoffs", "Bracket", "Championship", "Finals", "Semifinals",
+  "Halftime", "Overtime", "Quarterfinal", "Semifinal", "Wildcard",
+  // Entertainment filler
+  "Episode", "Season", "Series", "Recap", "Preview", "Trailer", "Finale",
+  "Premiere", "Pilot", "Docuseries", "Documentary", "Miniseries",
+  // Generic anchor phrases often extracted as entities
+  "Funding", "Grant", "Budget", "Spending", "Contract", "Award",
+  "Initiative", "Strategy", "Project", "Plan", "Proposal",
 ]);
 
 const MEDIA_SOURCE_BLOCKLIST = new Set([
@@ -519,12 +530,25 @@ export function validateEntityShape(name: string, entityType: string): "ARTIFACT
   if (/^\d{4}$/.test(trimmed)) return "ARTIFACT_ENTITY";                   // bare year
   if (trimmed.length > 60) return "ARTIFACT_ENTITY";                       // excessive length → sentence fragment
 
+  // First-word gate — if the entity starts with a skip word (preposition, article, month, nav word)
+  // this catches "With Amy Juravich", "March Madness", "From The", etc.
+  if (SKIP_NAMES.has(words[0])) return "ARTIFACT_ENTITY";
+
   // Person-specific: must have at least 2 words
   if (entityType === "person") {
     if (words.length < 2) return "ARTIFACT_ENTITY";                        // single-word person (no last name)
     // Each word must start with a capital letter (basic name structure)
     const validName = words.every(w => /^[A-Z]/.test(w) || /^(de|van|von|le|la|al|el|ben|binti|bin)$/i.test(w));
     if (!validName) return "ARTIFACT_ENTITY";
+    // First word must not be a known preposition/conjunction (catches "With Amy Juravich")
+    const PERSON_FIRST_WORD_REJECT = new Set([
+      "With", "From", "By", "For", "Of", "In", "On", "At", "To", "And", "Or",
+      "But", "The", "A", "An", "About", "After", "Before", "Under", "Over",
+      "During", "Since", "Until", "Without", "Against", "Between", "Through",
+      "Along", "Around", "Behind", "Beyond", "Despite", "Except", "Into",
+      "Among", "Across", "Within", "Upon", "Toward", "Towards",
+    ]);
+    if (PERSON_FIRST_WORD_REJECT.has(words[0])) return "ARTIFACT_ENTITY";
   }
 
   return null;

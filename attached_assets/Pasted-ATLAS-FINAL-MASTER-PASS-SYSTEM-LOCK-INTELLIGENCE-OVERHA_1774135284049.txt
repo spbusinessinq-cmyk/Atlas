@@ -1,0 +1,475 @@
+ATLAS FINAL MASTER PASS — SYSTEM LOCK + INTELLIGENCE OVERHAUL + BLACKDOG FIX
+
+MISSION
+This is the final stabilization, intelligence upgrade, and production-lock pass.
+
+Fix all remaining issues in one run:
+- BLACKDOG says NOT CONFIGURED
+- junk ingestion and weak relevance
+- bad entities and nonsense classifications
+- weak funding extraction
+- dirty flow trace
+- confusing executive summary
+- bad timeline / temporal bleed
+- dossier recompile reliability
+- editable dossier support
+
+Do not summarize first.
+Implement → restart → verify → return proof.
+
+━━━━━━━━━━━━━━━━━━
+T001 — BLACKDOG CONFIG FIX (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Current state:
+Header shows BLACKDOG — NOT CONFIGURED.
+
+That means the frontend is not receiving the env var at runtime.
+
+Fix exactly:
+
+1. In the frontend env file, define:
+VITE_BLACKDOG_URL=http://YOUR-BLACKDOG-URL
+
+2. In the ATLAS frontend code:
+const BLACKDOG_URL = import.meta.env.VITE_BLACKDOG_URL;
+
+3. Add explicit runtime debug logging:
+console.log("ATLAS BLACKDOG URL:", BLACKDOG_URL);
+
+4. Build a single shared health ping:
+GET `${BLACKDOG_URL}/health`
+Fallback: `${BLACKDOG_URL}/ping`
+
+5. Status rules:
+- green = connected
+- amber = reachable but slow/erroring intermittently
+- red = unreachable
+- gray = no env configured
+
+6. Header only:
+Keep ONE chip in the top-right header:
+[● BLACKDOG SECURE]
+
+7. Remove duplicate/legacy placement so there is no second BLACKDOG indicator anywhere else.
+
+8. IMPORTANT:
+Restart Vite/frontend after env change so runtime env loads.
+
+VERIFY:
+- chip no longer says NOT CONFIGURED
+- chip reflects actual reachability
+- tooltip shows CONNECTED / DEGRADED / UNREACHABLE / NOT CONFIGURED
+- console confirms resolved URL
+
+━━━━━━━━━━━━━━━━━━
+T002 — HARD JUNK INGEST FILTER
+━━━━━━━━━━━━━━━━━━
+
+ATLAS must stop ingesting sports, entertainment, documentary fluff, and unrelated media.
+
+Before document/entity/timeline extraction, add a strict gate.
+
+Only allow strong processing if the document contains one or more investigation anchors:
+- funding
+- budget
+- contract
+- grant
+- appropriation
+- audit
+- procurement
+- agency
+- department
+- legal
+- oversight
+- compliance
+- inspector general
+- public records
+- program spending
+- authority / board / commission
+
+Hard reject or aggressively down-rank:
+- sports
+- March Madness
+- entertainment
+- celebrity content
+- TV episode summaries
+- documentary recaps
+- history filler
+- lifestyle fluff
+- SEO junk
+- “watch”, “episode”, “season”, “recap”, “preview”, “game”, “tournament”, “concert”
+
+If rejected:
+- no entities
+- no timeline events
+- no financial signals
+- no graph links
+
+VERIFY with Ohio Homeless Funding that sports and episode junk no longer enters the pipeline.
+
+━━━━━━━━━━━━━━━━━━
+T003 — ENTITY EXTRACTION SANITY OVERHAUL
+━━━━━━━━━━━━━━━━━━
+
+Current output is unacceptable:
+Examples like “March Madness”, “With Amy Juravich”, “STEM” classified as entities are garbage.
+
+Fix entity admission rules:
+
+PERSON only if:
+- probable first + last name
+- OR known official-title pattern attached
+- OR repeated role-bearing mention tied to case intent
+
+ORGANIZATION only if:
+- agency / office / department / authority / university / nonprofit / media org / contractor pattern
+- OR repeated institutional mention with context
+
+PROGRAM / FUND only if:
+- appears with funding/program language
+- not a generic topic word
+
+BLOCKLIST / reject examples:
+- March Madness
+- episode text
+- watch
+- season / recap / trailer
+- generic categories
+- standalone “STEM”
+- “With Amy Juravich”
+- raw URL fragments
+- verb fragments
+- junk noun chunks
+- bare years
+- decorative text
+
+Require for promotion:
+- at least 2 meaningful mentions
+OR
+- one strong financial linkage
+OR
+- one official/government-title linkage
+
+Boost priority for:
+- agencies
+- departments
+- contractors
+- officials
+- boards
+- commissions
+- program names
+- funds
+
+VERIFY:
+Entity Registry contains only real, case-relevant people/institutions/programs.
+
+━━━━━━━━━━━━━━━━━━
+T004 — FINANCIAL EXTRACTION HARD MODE
+━━━━━━━━━━━━━━━━━━
+
+This is still weak. Upgrade aggressively.
+
+Extract only real numeric money signals.
+
+Detect:
+- $
+- USD
+- million / billion / thousand
+- appropriations
+- grants
+- contract awards
+- disbursements
+- expenditures
+- program allocations
+- transfers
+- overruns
+- audit-flagged discrepancies
+- missing funds
+- questioned costs
+
+Require BOTH:
+1. numeric amount
+2. money-action context verb nearby
+
+Strong action verbs:
+- awarded
+- appropriated
+- allocated
+- granted
+- contracted
+- disbursed
+- paid
+- spent
+- transferred
+- procured
+- reimbursed
+- invoiced
+- budgeted
+
+Reject weak generic text like:
+- “the program has significant funding”
+- “budget priorities discussed”
+- “financial support was important”
+
+Normalize:
+- $750K → 750000
+- $1.2 million → 1200000
+- $2.4B → 2400000000
+
+Attach to each extracted signal:
+- amountRaw
+- normalizedAmount
+- entity
+- program/fund if available
+- source document
+- supporting sentence
+- date if present
+- confidence score
+
+VERIFY with a funding audit doc that all real dollar amounts are captured and normalized.
+
+━━━━━━━━━━━━━━━━━━
+T005 — FLOW TRACE PURITY LOCK
+━━━━━━━━━━━━━━━━━━
+
+Flow Trace must only show actual numeric financial intelligence.
+
+Remove from flow trace:
+- non-numeric signals
+- vague funding mentions
+- text-only summaries pretending to be flows
+- junk entity mappings
+
+Allow only:
+- validated numeric amount > 0
+- case-relevant entity or fund association
+- supporting document reference
+
+Display for each flow:
+- source or linked entity
+- destination if known
+- amount formatted
+- confidence
+- source document count
+
+Add controls:
+- sort by amount desc
+- sort by confidence
+- filter by entity
+- filter by signal type
+
+If there are zero valid numeric flows:
+show a clean empty state:
+“No validated financial flows detected in current evidence.”
+
+VERIFY Ohio / homelessness case no longer shows fake numeric-looking garbage.
+
+━━━━━━━━━━━━━━━━━━
+T006 — EXECUTIVE SUMMARY FULL REWRITE (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Replace the confusing, chained, junky summary style.
+
+New executive summary format must be structured, readable, and intelligence-grade.
+
+Generate exactly this logic:
+
+Sentence 1 — framing
+“This file examines public funding, program oversight, or contract activity tied to [CASE TITLE].”
+
+Sentence 2 — entities
+“Primary institutions include [top agencies/orgs], with [top persons] appearing as relevant actors where supported.”
+
+Sentence 3 — financials
+“Confirmed monetary activity currently includes [largest real amount] linked to [entity/program].”
+Only include if real numeric flows exist.
+
+Sentence 4 — evidence
+“The current file is built from [X] supporting documents, [Y] verified entities, and [Z] relevant timeline events.”
+
+Sentence 5 — status
+“Current intelligence grade: [UNVERIFIED / PRELIMINARY / DEVELOPING / CONFIRMED].”
+
+Rules:
+- no “WHAT:”
+- no spammy clause stacking
+- no junk entity names
+- no repetition
+- no vague filler
+- no unrelated source language bleed
+
+Also preserve analyst-written manual override if one exists.
+
+VERIFY final executive summary reads like internal intelligence prose.
+
+━━━━━━━━━━━━━━━━━━
+T007 — TIMELINE / TEMPORAL TRACE FILTER
+━━━━━━━━━━━━━━━━━━
+
+The dossier timeline must not be a dumb dump of Temporal Trace.
+
+Create a filtered dossier timeline layer.
+
+Only include:
+- contract awards
+- appropriations
+- audits
+- hearings
+- enforcement moves
+- agency changes
+- formal program milestones
+- major public accountability events
+
+Reject:
+- TV episode summaries
+- documentary/history fluff
+- unrelated historical references
+- generic soft events with no case link
+
+Limit final dossier timeline to best 8–12 events.
+Sort chronologically.
+Each entry must have:
+- date
+- event line
+- why it matters in 1 short line if available
+
+VERIFY exported report timeline is relevant to the case, not random temporal noise.
+
+━━━━━━━━━━━━━━━━━━
+T008 — DOSSIER RECOMPILE RELIABILITY
+━━━━━━━━━━━━━━━━━━
+
+Recompile must actually work and visibly refresh output.
+
+Verify frontend action:
+POST /api/dossier/recompile/:id
+
+Requirements:
+- click starts loading state
+- request fires
+- server rebuilds dossier
+- UI refreshes with new content
+- success toast appears
+- failure toast appears if broken
+
+Add console proof:
+console.log("Dossier recompile triggered for case", caseId)
+
+If no dossier exists, button should create/rebuild rather than silently fail.
+
+VERIFY by changing summary generator and confirming recompile updates UI/export.
+
+━━━━━━━━━━━━━━━━━━
+T009 — EDITABLE DOSSIER MODE
+━━━━━━━━━━━━━━━━━━
+
+Add operator override mode.
+
+Button:
+[EDIT DOSSIER]
+
+Editable sections:
+- executive summary
+- key findings
+- timeline entries
+- recommended actions
+
+Store overrides separately in dossierOverrides.
+On render/export:
+merge system output + overrides
+
+Add:
+[RESET TO SYSTEM VERSION]
+
+VERIFY operator can manually refine language before export.
+
+━━━━━━━━━━━━━━━━━━
+T010 — PDF DESIGN + WRITING LOCK
+━━━━━━━━━━━━━━━━━━
+
+Keep the current operator-packet direction but tighten the intelligence writing and structure.
+
+Design requirements:
+- black section bars
+- red accent rules
+- clean spacing
+- sharp typography
+- controlled footer/header
+- professional page rhythm
+- not a raw text dump
+
+Writing requirements:
+- concise intelligence prose
+- clear sections
+- readable executive summary
+- readable findings
+- readable financials
+- no confusing wall-of-text behavior
+
+Add editable source format support if practical:
+- export opens print-safe HTML
+- operator can edit dossier text in UI first
+- then export final PDF
+
+VERIFY exported PDF reads clearly and looks like an internal intelligence file.
+
+━━━━━━━━━━━━━━━━━━
+T011 — FINAL VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Run a full live test on a real case such as Ohio Homeless Funding or a homelessness audit case.
+
+Must verify all of the below:
+
+BLACKDOG
+- header chip visible
+- no NOT CONFIGURED if env is set
+- status accurate
+
+JUNK FILTER
+- sports/TV content blocked
+- no March Madness / episode junk
+
+ENTITIES
+- only real people/agencies/programs remain
+- nonsense entities removed
+
+FINANCIALS
+- real dollar amounts extracted
+- normalized correctly
+- tied to source docs/entities
+
+FLOW TRACE
+- only numeric validated flows shown
+- no fake text-only entries
+
+EXEC SUMMARY
+- rewritten format visible
+- readable and clean
+
+TIMELINE
+- relevant case events only
+
+DOSSIER
+- recompile works
+- export reflects latest content
+- edit mode works if implemented
+
+Return proof with concrete examples, not vague statements.
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return only:
+- BLACKDOG status proof
+- cleaned entity examples
+- validated financial extraction examples
+- sample final executive summary
+- sample timeline entries
+- confirmation dossier recompile works
+- any remaining issues, if real
+
+No vague language.
+Only confirmed working features.

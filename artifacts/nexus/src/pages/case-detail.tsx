@@ -3109,12 +3109,31 @@ function DefaultInspector({
   const [qualityOpen, setQualityOpen] = React.useState(false);
   const [diagOpen, setDiagOpen] = React.useState(false);
   const [dossierSectionOpen, setDossierSectionOpen] = React.useState(false);
+  const [dossierEditMode, setDossierEditMode] = React.useState(false);
+  const [dossierOverrides, setDossierOverrides] = React.useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(`atlas_dossier_overrides_${caseId}`) ?? "{}"); } catch { return {}; }
+  });
+  const saveDossierOverride = (key: string, value: string) => {
+    const next = { ...dossierOverrides, [key]: value };
+    setDossierOverrides(next);
+    try { localStorage.setItem(`atlas_dossier_overrides_${caseId}`, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const resetDossierOverrides = () => {
+    setDossierOverrides({});
+    setDossierEditMode(false);
+    try { localStorage.removeItem(`atlas_dossier_overrides_${caseId}`); } catch { /* ignore */ }
+  };
   const [autoTriageResult, setAutoTriageResult] = React.useState<{ promoted: number; rejected: number; held: number } | null>(null);
   const [autoTriageWorking, setAutoTriageWorking] = React.useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
   const triggerExport = (d: Record<string, any>) => {
+    // Merge operator overrides into dossier sections before export
+    const baseSections = d.sections ?? {};
+    const mergedSections = { ...baseSections };
+    if (dossierOverrides.caseSummary) mergedSections.caseSummary = dossierOverrides.caseSummary;
+    console.log("Dossier recompile triggered for case", caseId, "— overrides applied:", Object.keys(dossierOverrides));
     openPrintDossier({
       caseId: Number(caseId),
       caseTitle: caseData.title,
@@ -3122,7 +3141,7 @@ function DefaultInspector({
       autoBuildQuality: parseSeedDiag(caseData.description)?.autoBuildQuality ?? null,
       entities: entities.map(e => ({ name: e.name, type: e.type, docCount: (e as any).docCount ?? 0 })),
       documents,
-      dossierSections: d.sections ?? {},
+      dossierSections: mergedSections,
     });
     setExportToast(true);
     setTimeout(() => setExportToast(false), 3500);
@@ -3503,6 +3522,21 @@ function DefaultInspector({
               </div>
               <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.12)" }}>{dossierSectionOpen ? "▲" : "▼"}</span>
             </button>
+            {dossier && (
+              <button
+                onClick={() => setDossierEditMode(m => !m)}
+                style={{
+                  borderLeft: "1px solid rgba(255,255,255,0.06)",
+                  background: dossierEditMode ? "rgba(251,191,36,0.08)" : "rgba(0,0,0,0.1)",
+                  color: dossierEditMode ? "rgba(251,191,36,0.85)" : "rgba(255,255,255,0.2)",
+                }}
+                className="px-2.5 py-2 font-mono text-[8px] uppercase tracking-widest flex items-center gap-1 flex-shrink-0 transition-all hover:opacity-80"
+                title="Edit dossier sections before export"
+              >
+                <span style={{ fontSize: "9px" }}>{dossierEditMode ? "✓" : "✎"}</span>
+                <span className="hidden sm:inline">{dossierEditMode ? "EDITING" : "EDIT"}</span>
+              </button>
+            )}
             <button
               onClick={handleGenerateAndExport}
               disabled={dossierLoading}
@@ -3571,13 +3605,68 @@ function DefaultInspector({
                   </div>
                   {dossierExpanded && (() => {
                     const s = dossier.sections ?? {};
+                    const effectiveSummary = dossierOverrides.caseSummary ?? s.caseSummary;
+                    const hasOverrides = Object.keys(dossierOverrides).length > 0;
                     return (
                       <div className="space-y-3 text-[9px] font-mono">
+
+                        {/* EDIT MODE TOOLBAR */}
+                        {dossierEditMode && (
+                          <div
+                            className="flex items-center justify-between px-2 py-1.5"
+                            style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.15)" }}
+                          >
+                            <span className="text-[7px] font-mono uppercase tracking-widest" style={{ color: "rgba(251,191,36,0.7)" }}>
+                              ✎ OPERATOR EDIT MODE — changes saved locally
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {hasOverrides && (
+                                <button
+                                  onClick={resetDossierOverrides}
+                                  className="font-mono text-[7px] uppercase tracking-wider transition-colors"
+                                  style={{ color: "rgba(239,68,68,0.6)" }}
+                                >
+                                  ↺ RESET TO SYSTEM VERSION
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setDossierEditMode(false)}
+                                className="font-mono text-[7px] uppercase tracking-wider transition-colors"
+                                style={{ color: "rgba(251,191,36,0.5)" }}
+                              >
+                                DONE
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* SUMMARY */}
-                        {s.caseSummary && (
+                        {(s.caseSummary || dossierEditMode) && (
                           <div className="space-y-0.5">
-                            <div className="text-[7px] text-violet-700 uppercase tracking-[0.2em]">SUMMARY</div>
-                            <p className="text-neutral-500 leading-relaxed text-[8.5px]">{s.caseSummary}</p>
+                            <div className="flex items-center justify-between">
+                              <div className="text-[7px] text-violet-700 uppercase tracking-[0.2em]">SUMMARY</div>
+                              {dossierOverrides.caseSummary && !dossierEditMode && (
+                                <span className="text-[6px] font-mono" style={{ color: "rgba(251,191,36,0.5)" }}>EDITED</span>
+                              )}
+                            </div>
+                            {dossierEditMode ? (
+                              <textarea
+                                value={dossierOverrides.caseSummary ?? s.caseSummary ?? ""}
+                                onChange={e => saveDossierOverride("caseSummary", e.target.value)}
+                                rows={4}
+                                className="w-full font-mono text-[8.5px] text-neutral-300 leading-relaxed resize-y"
+                                style={{
+                                  background: "rgba(251,191,36,0.03)",
+                                  border: "1px solid rgba(251,191,36,0.2)",
+                                  padding: "6px 8px",
+                                  outline: "none",
+                                  color: "rgba(212,212,212,0.9)",
+                                }}
+                                placeholder="Enter executive summary..."
+                              />
+                            ) : (
+                              <p className="text-neutral-500 leading-relaxed text-[8.5px]">{effectiveSummary}</p>
+                            )}
                           </div>
                         )}
 
