@@ -1,0 +1,321 @@
+ATLAS OMEGA UNIFIED PASS — FULL SYSTEM HARDENING + INTELLIGENCE UPGRADE + OPERATOR WORKFLOW + LAUNCH LOCK
+
+MISSION
+This is the FINAL integrated pass for ATLAS.
+
+No partial fixes.
+No planning-only responses.
+No placeholders.
+
+You will:
+- Fix broken triage navigation
+- Build prompt-driven case creation
+- Upgrade money flow intelligence to real investigative level
+- Integrate BLACKDOG live security status
+- Rebuild PDF into a professional intelligence brief
+- Add full system wipe capability
+- Remove all preloaded data for launch safety
+- Harden routing so operators NEVER hit dead ends
+
+Implement → restart → verify → report.
+
+━━━━━━━━━━━━━━━━━━
+T001 — TRIAGE DEAD LINK FIX (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+BUG:
+Clicking a blue case in TRIAGE sends user to a 404 screen.
+
+FIX:
+- On click, verify caseId exists
+- If valid → open case page
+- If invalid → open TRIAGE ITEM DETAIL (NOT 404)
+
+BUILD FALLBACK:
+- Route to /triage/[itemId] or open side drawer
+- Show:
+  “Linked case not found. Review item directly.”
+
+NEVER allow dead navigation.
+
+━━━━━━━━━━━━━━━━━━
+T002 — TRIAGE ITEM DETAIL VIEW
+━━━━━━━━━━━━━━━━━━
+Create a full analyst view:
+
+SHOW:
+- entity name
+- normalized name
+- type
+- confidence %
+- source snippet (highlighted)
+- source title + domain
+- credibility badge
+- why held / rejected
+- cross-doc count
+- linked case (if exists)
+
+ACTIONS:
+- approve
+- reject
+- hold
+- open source
+- open case
+- delete (admin)
+
+This must feel like a real analyst console.
+
+━━━━━━━━━━━━━━━━━━
+T003 — PROMPT-DRIVEN CASE CREATION (MAJOR FEATURE)
+━━━━━━━━━━━━━━━━━━
+Upgrade “Start New Investigation”.
+
+ADD:
+Multi-input system:
+
+1. TEXT PROMPT
+- freeform:
+  “Investigate LA homeless funding corruption”
+
+2. SOURCE LINKS
+- paste URLs
+- auto-ingest + extract
+
+3. RAW NOTES / EVIDENCE
+- paste text blocks
+
+4. OPTIONAL FILE INPUT (if possible)
+
+PIPELINE:
+- parse intent
+- extract entities
+- detect relationships
+- generate case
+- auto-run ingestion
+- auto-run triage
+- auto-build graph
+- auto-build dossier
+
+OUTPUT:
+Case appears FULLY BUILT, not empty.
+
+━━━━━━━━━━━━━━━━━━
+T004 — MONEY FLOW INTELLIGENCE (CRITICAL UPGRADE)
+━━━━━━━━━━━━━━━━━━
+Current system is too weak.
+
+REBUILD FINANCIAL INTELLIGENCE:
+
+Each financial signal must include:
+- amount (normalized + formatted)
+- signal type (grant, contract, appropriation, etc.)
+- source entity
+- destination entity
+- program name
+- controlling body
+- confidence score
+- inferred vs confirmed flag
+- timeline placement
+
+ADD FLOW TRACE ENGINE:
+- connect flows into chains:
+  Source → Intermediary → Recipient
+
+ADD SCORING:
+- +8 confirmed numeric flows
+- +6 full trace known
+- +4 partial
+- negative for weak signals
+
+ADD UI:
+- show flow chains visually
+- show totals per entity
+- show largest flows
+- show anomalies
+
+REMOVE:
+- duplicate signals
+- vague entries with no amount/context
+
+THIS MUST FEEL LIKE FOLLOW-THE-MONEY INTEL.
+
+━━━━━━━━━━━━━━━━━━
+T005 — BLACKDOG SECURITY INTEGRATION
+━━━━━━━━━━━━━━━━━━
+Add live BLACKDOG connection status.
+
+USE provided BLACKDOG URL.
+
+BUILD:
+- health check / ping
+- refresh interval
+
+DISPLAY:
+“PROTECTED BY BLACKDOG”
+
+STATUS:
+- GREEN = CONNECTED
+- AMBER = DEGRADED
+- RED = OFFLINE
+
+SHOW:
+- last checked timestamp
+
+RULE:
+NO FAKE STATUS.
+Reflect real connectivity.
+
+━━━━━━━━━━━━━━━━━━
+T006 — PDF DOSSIER COMPLETE REDESIGN
+━━━━━━━━━━━━━━━━━━
+Current PDF is weak.
+
+REBUILD INTO:
+Professional intelligence briefing.
+
+STRUCTURE:
+1. Cover page
+2. Executive Summary
+3. Situation Assessment
+4. Case Overview
+5. Primary Actors
+6. Power Structure
+7. Key Findings
+8. Financial Flows
+9. Timeline
+10. Evidence Table
+11. Intelligence Gaps
+12. Why This Matters
+13. Recommended Actions
+
+DESIGN:
+- clean white background
+- strong typography
+- page headers/footers
+- page numbers
+- no large blank gaps
+- tight spacing
+- clear section dividers
+- callout boxes
+
+CONTENT:
+- stronger summaries
+- real analytical tone
+- no fluff
+- no empty sections
+
+━━━━━━━━━━━━━━━━━━
+T007 — GRAPH / LINK ANALYSIS UI UPGRADE
+━━━━━━━━━━━━━━━━━━
+Improve graph:
+
+- cleaner modern look (less “retro”)
+- smoother edges
+- better spacing
+
+ADD:
+- delete node button
+- delete edge button
+- hover actions
+- focus mode
+
+STYLE:
+HIGH = solid
+MED = dashed
+LOW = faint
+
+━━━━━━━━━━━━━━━━━━
+T008 — ENTITY REGISTRY FIXES
+━━━━━━━━━━━━━━━━━━
+Inside case:
+- allow delete entity
+- allow edit entity
+- ensure data accuracy
+
+NO locked unusable entities.
+
+━━━━━━━━━━━━━━━━━━
+T009 — FULL SYSTEM WIPE (LAUNCH REQUIREMENT)
+━━━━━━━━━━━━━━━━━━
+Add admin control:
+
+“WIPE ALL DATA”
+
+Must clear:
+- cases
+- entities
+- documents
+- triage queue
+- graph data
+
+CONFIRMATION REQUIRED:
+Type WIPE ATLAS
+
+THIS IS REQUIRED BEFORE LAUNCH.
+
+━━━━━━━━━━━━━━━━━━
+T010 — REMOVE PRELOADED DATA FOR LAUNCH
+━━━━━━━━━━━━━━━━━━
+Ensure:
+- system does NOT ship with existing cases
+- database starts empty
+
+━━━━━━━━━━━━━━━━━━
+T011 — LOGIN GATE / ACCESS CONTROL
+━━━━━━━━━━━━━━━━━━
+Add simple lock:
+
+LOGIN SCREEN:
+- password: 4451 (temporary)
+
+OPTION:
+- account creation toggle
+
+DISPLAY:
+“Protected by BLACKDOG”
+
+━━━━━━━━━━━━━━━━━━
+T012 — ROUTING HARDENING
+━━━━━━━━━━━━━━━━━━
+Audit ALL routes:
+
+- /cases/:id
+- /triage
+- /triage/:itemId
+
+RULES:
+- no dead 404s
+- fallback views must exist
+- always give operator a path forward
+
+━━━━━━━━━━━━━━━━━━
+T013 — FULL SYSTEM TEST
+━━━━━━━━━━━━━━━━━━
+Test:
+
+1. Create case via prompt
+2. Add links → ingest works
+3. Triage queue → no 404
+4. Item detail works
+5. Approve/reject works
+6. Graph builds correctly
+7. Money flows populate
+8. Export PDF works
+9. PDF quality is strong
+10. BLACKDOG status shows correctly
+11. System wipe works
+12. Clean restart shows empty system
+
+━━━━━━━━━━━━━━━━━━
+T014 — FINAL SHIP REPORT
+━━━━━━━━━━━━━━━━━━
+Return:
+
+- what was fixed
+- what was added
+- test results
+- any blockers
+
+NO vague responses.
+NO skipped items.
+
+SHIP EVERYTHING.
