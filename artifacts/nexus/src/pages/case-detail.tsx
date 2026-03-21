@@ -2844,11 +2844,11 @@ function DefaultInspector({
   const [dossier, setDossier] = React.useState<null | Record<string, any>>(null);
   const [dossierLoading, setDossierLoading] = React.useState(false);
   const [dossierExpanded, setDossierExpanded] = React.useState(false);
-  const [statusOpen, setStatusOpen] = React.useState(true);
-  const [triageOpen, setTriageOpen] = React.useState(true);
+  const [statusOpen, setStatusOpen] = React.useState(false);
+  const [triageOpen, setTriageOpen] = React.useState(false);
   const [qualityOpen, setQualityOpen] = React.useState(false);
   const [diagOpen, setDiagOpen] = React.useState(false);
-  const [dossierSectionOpen, setDossierSectionOpen] = React.useState(true);
+  const [dossierSectionOpen, setDossierSectionOpen] = React.useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
@@ -2888,183 +2888,121 @@ function DefaultInspector({
 
       <div className="flex-1 overflow-auto">
 
-        {/* ══ SECTION 1: CASE STATUS ══ */}
-        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <button
-            onClick={() => setStatusOpen(o => !o)}
-            className={cn("atlas-collapse-btn", statusOpen && "open")}
-          >
-            <span>CASE STATUS</span>
-            <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{statusOpen ? "▲" : "▼"}</span>
-          </button>
-          {statusOpen && (
-            <div className="px-3 pb-3 space-y-2.5 pt-1">
-
-        {/* ── AUTO-BUILD REPORT ── */}
+        {/* ══ ZONE 1: STATUS OVERVIEW (compact, always visible) ══ */}
         {(() => {
           const usableDocs = sd ? (sd.ok + sd.partial) : documents.length;
           const blockedDocs = sd ? (sd.failed + sd.wrapper) : 0;
           const abq = sd?.autoBuildQuality ?? null;
-
-          const abqMeta: Record<string, { color: string; bar: string; label: string; desc: string }> = {
-            STRONG:      { color: "text-green-400",  bar: "bg-green-500",  label: "STRONG",      desc: "Graph verified — high-confidence entity network assembled." },
-            PROVISIONAL: { color: "text-sky-400",    bar: "bg-sky-500",    label: "PROVISIONAL", desc: "Two entities promoted. Additional sourcing recommended." },
-            MODERATE:    { color: "text-cyan-400",   bar: "bg-cyan-500",   label: "MODERATE",    desc: "Moderate graph confidence. Review held candidates." },
-            RECOVERED:   { color: "text-teal-400",   bar: "bg-teal-500",   label: "RECOVERED",   desc: `Recovered via expanded search (${sd?.recoveryDocs ?? 0} extra docs).` },
-            WEAK:        { color: "text-amber-500",  bar: "bg-amber-600",  label: "WEAK",        desc: "Low entity confidence. Manual review recommended." },
-            FAILED:      { color: "text-red-600",    bar: "bg-red-700",    label: "FAILED",      desc: "No usable entity graph — all sources blocked or JS-rendered." },
+          const abqMeta: Record<string, { color: string; bar: string; label: string }> = {
+            STRONG:      { color: "text-green-400",  bar: "bg-green-500",  label: "STRONG" },
+            PROVISIONAL: { color: "text-sky-400",    bar: "bg-sky-500",    label: "PROVISIONAL" },
+            MODERATE:    { color: "text-cyan-400",   bar: "bg-cyan-500",   label: "MODERATE" },
+            RECOVERED:   { color: "text-teal-400",   bar: "bg-teal-500",   label: "RECOVERED" },
+            WEAK:        { color: "text-amber-500",  bar: "bg-amber-600",  label: "WEAK" },
+            FAILED:      { color: "text-red-600",    bar: "bg-red-700",    label: "FAILED" },
           };
           const meta = abq ? (abqMeta[abq] ?? abqMeta.WEAK) : null;
-
-          // Pipeline funnel: searched → ingested → usable → promoted
           const funnelSteps = sd ? [
-            { label: "SEARCHED",  val: sd.total,       color: "text-neutral-400" },
-            { label: "INGESTED",  val: sd.ingested,    color: "text-cyan-600" },
-            { label: "USABLE",    val: usableDocs,      color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
-            { label: "PROMOTED",  val: sd.finalPromoted, color: sd.finalPromoted > 0 ? "text-green-400" : "text-red-700" },
+            { label: "INGESTED",  val: sd.ingested,      color: "text-cyan-600" },
+            { label: "USABLE",    val: usableDocs,        color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
+            { label: "ENTITIES",  val: sd.finalPromoted,  color: sd.finalPromoted > 0 ? "text-green-400" : "text-red-700" },
+            { label: "PENDING",   val: pendingMentions,   color: pendingMentions > 0 ? "text-amber-500" : "text-neutral-700" },
           ] : [
-            { label: "DOCS",     val: documents.length, color: documents.length > 0 ? "text-white" : "text-neutral-700" },
-            { label: "USABLE",   val: usableDocs,       color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
-            { label: "ENTITIES", val: entities.length,  color: entities.length > 0 ? "text-cyan-500" : "text-neutral-700" },
-            { label: "TRIAGE",   val: pendingMentions,  color: pendingMentions > 0 ? "text-orange-400" : "text-neutral-700" },
+            { label: "DOCS",     val: documents.length,  color: documents.length > 0 ? "text-white" : "text-neutral-700" },
+            { label: "USABLE",   val: usableDocs,        color: usableDocs > 0 ? "text-green-500" : "text-neutral-700" },
+            { label: "ENTITIES", val: entities.length,   color: entities.length > 0 ? "text-cyan-500" : "text-neutral-700" },
+            { label: "PENDING",  val: pendingMentions,   color: pendingMentions > 0 ? "text-amber-500" : "text-neutral-700" },
           ];
-
-          // Top rejection reasons
-          const rejectEntries = sd ? Object.entries(sd.rejectReasons)
-            .filter(([, v]) => v > 0)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 3) : [];
-
+          const rejectEntries = sd ? Object.entries(sd.rejectReasons).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a).slice(0, 3) : [];
           return (
-            <div className="atlas-panel">
-              {/* Header bar */}
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#ffffff08] bg-[#ffffff02]">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[8px] text-neutral-700 uppercase tracking-[0.18em]">AUTO-BUILD REPORT</span>
-                  {sd?.seedIntent && sd.seedIntent !== "general" && (
-                    <span className="font-mono text-[7px] text-violet-500 border border-violet-900/30 px-1 uppercase">
-                      {SEED_INTENT_LABELS[sd.seedIntent] || sd.seedIntent}
+            <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              {/* Compact always-visible summary strip */}
+              <div className="px-3 pt-2.5 pb-2.5" style={{ background: "rgba(0,0,0,0.3)" }}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2">
+                    {meta && <div className={`w-0.5 h-3.5 rounded-full ${meta.bar} opacity-60 flex-shrink-0`} />}
+                    <span className={`font-mono text-[9px] font-bold uppercase tracking-widest ${meta ? meta.color : "text-neutral-700"}`}>
+                      {meta ? meta.label : "AWAITING BUILD"}
                     </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {((sd?.highContam ?? 0) > 0) && (
-                    <span className="font-mono text-[7px] text-orange-500 border border-orange-900/30 px-1 uppercase" title={`${sd!.highContam} high-contamination doc(s) restricted`}>
-                      {sd!.highContam}× CONTAM
-                    </span>
-                  )}
-                  {sd?.recoveryTriggered && (
-                    <span className="font-mono text-[7px] text-teal-500 border border-teal-900/30 px-1 uppercase">RECOVERED</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Build quality badge — full width accent strip */}
-              {meta && (
-                <div className={`px-3 py-2.5 flex items-center gap-3 border-b border-[#ffffff07]`}>
-                  <div className={`w-1 self-stretch rounded-full ${meta.bar} opacity-70`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`font-mono text-xs font-bold uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
-                      <span className="font-mono text-[8px] text-neutral-700">BUILD</span>
-                    </div>
-                    <div className="font-mono text-[8px] text-neutral-600">{meta.desc}</div>
                   </div>
-                  {sd && (
-                    <div className="flex-shrink-0 text-right">
-                      <div className="font-mono text-[8px] text-neutral-700 uppercase">ENTITIES</div>
-                      <div className={`font-mono text-xl font-bold tabular-nums leading-none ${sd.finalPromoted > 0 ? "text-green-400" : "text-neutral-700"}`}>
-                        {sd.finalPromoted.toString().padStart(2, "0")}
+                  <div className="flex items-center gap-1.5">
+                    {(sd?.highContam ?? 0) > 0 && (
+                      <span className="font-mono text-[7px] text-orange-600 border border-orange-900/30 px-1 uppercase">{sd!.highContam}× CONTAM</span>
+                    )}
+                    {sd?.recoveryTriggered && (
+                      <span className="font-mono text-[7px] text-teal-600 border border-teal-900/30 px-1 uppercase">RECOV</span>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 divide-x divide-[#ffffff06]">
+                  {funnelSteps.map(step => (
+                    <div key={step.label} className="pl-2 first:pl-0">
+                      <div className={`font-mono text-base font-bold tabular-nums leading-none ${step.color}`}>
+                        {(step.val ?? 0).toString().padStart(2, "0")}
                       </div>
+                      <div className="font-mono text-[6px] text-neutral-800 uppercase tracking-wider mt-0.5">{step.label}</div>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Pipeline funnel */}
-              <div className="grid divide-x divide-[#ffffff06]" style={{ gridTemplateColumns: `repeat(${funnelSteps.length}, minmax(0, 1fr))` }}>
-                {funnelSteps.map((step, i) => (
-                  <div key={step.label} className="px-2.5 py-2 border-b border-[#ffffff06]">
-                    <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-wider mb-0.5">{step.label}</div>
-                    <div className={`font-mono text-base font-bold tabular-nums leading-tight ${step.color}`}>
-                      {typeof step.val === "number" ? step.val.toString().padStart(2, "0") : step.val}
-                    </div>
-                    {i < funnelSteps.length - 1 && (
-                      <div className="font-mono text-[6px] text-neutral-800 mt-0.5">↓</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Flags row */}
-              <div className="flex items-center gap-0 divide-x divide-[#ffffff06] border-b border-[#ffffff07]">
-                {/* Tier breakdown */}
-                {sd && (sd.promotedConfirmed > 0 || sd.promotedStrong > 0) && (
-                  <div className="px-3 py-1.5 flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">TIER</span>
-                    {sd.promotedConfirmed > 0 && (
-                      <span className="font-mono text-[8px] text-green-600 uppercase">{sd.promotedConfirmed} T1-CONF</span>
-                    )}
-                    {sd.promotedStrong > 0 && (
-                      <span className="font-mono text-[8px] text-cyan-700 uppercase">{sd.promotedStrong} T1b-STR</span>
-                    )}
-                  </div>
-                )}
-                {/* Held + triage */}
-                {(pendingMentions > 0 || (sd?.heldCandidates ?? 0) > 0) && (
-                  <div className="px-3 py-1.5 flex items-center gap-2">
-                    <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">HELD</span>
-                    {(sd?.heldCandidates ?? 0) > 0 && (
-                      <span className="font-mono text-[8px] text-amber-600 uppercase">{sd!.heldCandidates} CAND</span>
-                    )}
-                    {pendingMentions > 0 && (
-                      <span className="font-mono text-[8px] text-orange-500 uppercase animate-pulse">{pendingMentions} TRIAGE</span>
-                    )}
-                  </div>
-                )}
-                {/* Blocked */}
-                {blockedDocs > 0 && (
-                  <div className="px-3 py-1.5 flex items-center gap-2">
-                    <span className="font-mono text-[7px] text-neutral-800 uppercase">BLOCKED</span>
-                    <span className="font-mono text-[8px] text-red-700 uppercase">{blockedDocs} SRC</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Rejection reasons */}
-              {rejectEntries.length > 0 && (
-                <div className="px-3 py-1.5 flex items-center gap-3 flex-wrap border-b border-[#ffffff06] bg-[#0a0000]/40">
-                  <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">REJECT REASONS</span>
-                  {rejectEntries.map(([reason, count]) => (
-                    <span key={reason} className="font-mono text-[8px] uppercase">
-                      <span className="text-red-800">{count}×</span>
-                      <span className="text-neutral-700 ml-1">{reason.replace(/_/g, "-")}</span>
-                    </span>
                   ))}
-                  {sd && sd.rejectedFw > 0 && (
-                    <span className="font-mono text-[7px] text-neutral-800 ml-auto">{sd.rejectedFw} TOTAL FW-BLOCKED</span>
+                </div>
+                {sd && sd.finalPromoted === 0 && sd.detected > 0 && (
+                  <div className="mt-2 font-mono text-[7px] text-amber-700 uppercase tracking-wide">
+                    ↑ {sd.detected} signals detected — none passed gates
+                  </div>
+                )}
+                {blockedDocs > 0 && (
+                  <div className="mt-1 font-mono text-[7px] text-red-800 uppercase tracking-wide">
+                    {blockedDocs} source{blockedDocs > 1 ? "s" : ""} blocked
+                  </div>
+                )}
+              </div>
+              {/* Collapsible full system report */}
+              <button onClick={() => setStatusOpen(o => !o)} className={cn("atlas-collapse-btn", statusOpen && "open")}>
+                <span>SYSTEM REPORT</span>
+                <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{statusOpen ? "▲" : "▼"}</span>
+              </button>
+              {statusOpen && (
+                <div className="px-3 pb-3 space-y-2 pt-1 atlas-fade-in">
+                  {sd && (sd.promotedConfirmed > 0 || sd.promotedStrong > 0 || (sd.heldCandidates ?? 0) > 0) && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">TIER</span>
+                      {sd.promotedConfirmed > 0 && <span className="font-mono text-[8px] text-green-600 uppercase">{sd.promotedConfirmed} T1-CONF</span>}
+                      {sd.promotedStrong > 0 && <span className="font-mono text-[8px] text-cyan-700 uppercase">{sd.promotedStrong} T1b-STR</span>}
+                      {(sd.heldCandidates ?? 0) > 0 && <span className="font-mono text-[8px] text-amber-600 uppercase">{sd.heldCandidates} HELD</span>}
+                    </div>
                   )}
-                </div>
-              )}
-
-              {/* No-promotion warning */}
-              {sd && sd.finalPromoted === 0 && sd.detected > 0 && (
-                <div className="px-3 py-2 font-mono text-[8px] text-amber-600 uppercase tracking-wide bg-amber-950/10 border-b border-amber-900/20">
-                  {sd.detected} SIGNALS DETECTED — NONE PASSED PROMOTION GATES. REVIEW TRIAGE QUEUE.
-                </div>
-              )}
-              {sd && sd.finalPromoted === 0 && sd.detected === 0 && usableDocs === 0 && (
-                <div className="px-3 py-2 font-mono text-[8px] text-red-700 uppercase tracking-wide bg-red-950/10 border-b border-red-900/20">
-                  ALL SOURCES BLOCKED OR JAVASCRIPT-RENDERED. ADD SOURCES MANUALLY.
+                  {rejectEntries.length > 0 && (
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-wider">BLOCKED</span>
+                      {rejectEntries.map(([reason, count]) => (
+                        <span key={reason} className="font-mono text-[7px] uppercase">
+                          <span className="text-red-800">{count}×</span>
+                          <span className="text-neutral-800 ml-1">{reason.replace(/_/g, "-")}</span>
+                        </span>
+                      ))}
+                      {sd && sd.rejectedFw > 0 && (
+                        <span className="font-mono text-[7px] text-neutral-800 ml-auto">{sd.rejectedFw} FW</span>
+                      )}
+                    </div>
+                  )}
+                  {sd?.seedIntent && sd.seedIntent !== "general" && (
+                    <div className="font-mono text-[7px] text-violet-700 uppercase">
+                      INTENT: {SEED_INTENT_LABELS[sd.seedIntent] || sd.seedIntent}
+                    </div>
+                  )}
+                  {sd && sd.finalPromoted === 0 && sd.detected === 0 && (sd.ok + sd.partial) === 0 && (
+                    <div className="font-mono text-[8px] text-red-700 uppercase tracking-wide bg-red-950/10 border border-red-900/20 px-2 py-1.5">
+                      ALL SOURCES BLOCKED — ADD SOURCES MANUALLY
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           );
         })()}
 
+        {/* ══ ZONE 2: INTEL BRIEF (always visible, prominent) ══ */}
         {caseData.description && cleanDescription(caseData.description) && (() => {
           const raw = cleanDescription(caseData.description);
-          // Parse structured Brief 2.0 sections
           const SECTIONS_RE = /\b(WHAT|PRIMARY ACTORS|PRIMARY INSTITUTIONS|DOCUMENT SIGNALS|LIKELY ANGLE):/g;
           const parts: Array<{ label: string; text: string }> = [];
           let match: RegExpExecArray | null;
@@ -3079,7 +3017,6 @@ function DefaultInspector({
               const text = raw.slice(end, nextStart).trim().replace(/\.$/, "");
               parts.push({ label, text });
             }
-            // Split trailing quality note from last section
             if (parts.length > 0) {
               const lastPart = parts[parts.length - 1];
               const splitIdx = lastPart.text.indexOf(". ");
@@ -3090,89 +3027,109 @@ function DefaultInspector({
               }
             }
             return (
-              <div className="space-y-1">
-                <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff06] pb-1">CASE BRIEF</div>
-                <div className="space-y-0.5">
+              <div
+                style={{
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  borderLeft: "2px solid rgba(220,38,38,0.2)",
+                  background: "linear-gradient(to right, rgba(220,38,38,0.04), transparent 80%)",
+                }}
+                className="px-3 py-3 space-y-2"
+              >
+                <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-[0.2em] mb-1">INTEL BRIEF</div>
+                <div className="space-y-1.5">
                   {parts.map(({ label, text }) => (
-                    <div key={label} className="flex gap-1.5">
+                    <div key={label} className="flex gap-2">
                       <span className={cn(
-                        "font-mono text-[8px] uppercase tracking-wider flex-shrink-0 mt-0.5",
+                        "font-mono text-[7px] uppercase tracking-wider flex-shrink-0 mt-0.5 w-16",
                         label === "WHAT" ? "text-neutral-600" :
-                        label === "PRIMARY ACTORS" ? "text-cyan-600" :
-                        label === "PRIMARY INSTITUTIONS" ? "text-violet-600" :
-                        label === "DOCUMENT SIGNALS" ? "text-blue-600" :
-                        label === "LIKELY ANGLE" ? "text-amber-600" :
+                        label === "PRIMARY ACTORS" ? "text-cyan-700" :
+                        label === "PRIMARY INSTITUTIONS" ? "text-violet-700" :
+                        label === "DOCUMENT SIGNALS" ? "text-blue-700" :
+                        label === "LIKELY ANGLE" ? "text-amber-700" :
                         "text-neutral-700"
                       )}>{label}:</span>
-                      <span className="font-mono text-[9px] text-neutral-400 leading-relaxed">{text}</span>
+                      <span className="font-mono text-[9px] text-neutral-300 leading-relaxed">{text}</span>
                     </div>
                   ))}
                 </div>
+                {caseData.tags && caseData.tags.filter((t) => t !== "auto-seeded").length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {caseData.tags.filter((t) => t !== "auto-seeded").map((tag) => (
+                      <span key={tag} className="px-1.5 py-0.5 border border-[#ffffff0d] font-mono text-[7px] text-neutral-800 uppercase">{tag}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           }
-          // Fallback: plain text
           return (
-            <div className="space-y-1">
-              <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">BRIEF</div>
-              <p className="text-xs text-neutral-400 leading-relaxed">{raw}</p>
+            <div
+              style={{
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                borderLeft: "2px solid rgba(220,38,38,0.2)",
+                background: "linear-gradient(to right, rgba(220,38,38,0.04), transparent 80%)",
+              }}
+              className="px-3 py-3"
+            >
+              <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-[0.2em] mb-1.5">INTEL BRIEF</div>
+              <p className="font-mono text-[9px] text-neutral-300 leading-relaxed">{raw}</p>
             </div>
           );
         })()}
 
-        {caseData.tags && caseData.tags.filter((t) => t !== "auto-seeded").length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {caseData.tags.filter((t) => t !== "auto-seeded").map((tag) => (
-              <span
-                key={tag}
-                className="px-1.5 py-0.5 border border-[#ffffff0d] font-mono text-[8px] text-neutral-700 uppercase"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-            </div>
-          )}
-        </div>
-
-        {/* ══ SECTION 2: NEXT ACTION ══ */}
+        {/* ══ ZONE 3: NEXT ACTION (dominant command box) ══ */}
         {nextAction && (
-          <div className="p-2.5">
-            <div
-              className={cn("p-2.5 border space-y-2 cursor-pointer transition-colors", nextAction.color)}
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <button
+              className="atlas-next-action-box w-full text-left group"
               onClick={() => onNavigate(nextAction.navigate)}
             >
-              <div className="flex items-center gap-2">
-                <nextAction.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="font-mono text-[9px] uppercase tracking-widest font-bold">NEXT ACTION</span>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-1 rounded-full bg-red-500" style={{ boxShadow: "0 0 4px rgba(220,38,38,0.8)" }} />
+                <span className="font-mono text-[7px] text-neutral-600 uppercase tracking-[0.22em]">NEXT ACTION</span>
               </div>
-              <div className="font-mono text-[9px] opacity-80 leading-relaxed uppercase tracking-wide">
+              <div className={cn("font-mono text-[10px] font-bold uppercase tracking-wide leading-snug mb-2.5", nextAction.color)}>
                 {nextAction.message}
               </div>
-              <div className="font-mono text-[9px] opacity-60 uppercase tracking-widest hover:opacity-90 transition-opacity">
-                {nextAction.cta} →
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[8px] text-neutral-600 group-hover:text-neutral-400 uppercase tracking-widest transition-colors">{nextAction.cta}</span>
+                <nextAction.icon className="w-3 h-3 text-neutral-700 group-hover:text-neutral-400 transition-colors" />
               </div>
-            </div>
+            </button>
           </div>
         )}
 
-        {/* ══ SECTION 3: TRIAGE ACTIONS ══ */}
+        {/* ══ SECTION 3: TRIAGE SUMMARY + ACTIONS ══ */}
         {pendingMentions > 0 && (
-          <div>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            {/* Always-visible triage summary strip */}
+            <div className="atlas-triage-summary">
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-[9px] font-bold text-amber-500 uppercase tracking-widest tabular-nums">
+                  {pendingMentions} PENDING
+                </div>
+                <div className="font-mono text-[7px] text-neutral-700 uppercase tracking-wider mt-0.5">
+                  Entities awaiting analyst approval
+                </div>
+              </div>
+              <button
+                onClick={() => onNavigate("documents")}
+                className="font-mono text-[7px] text-neutral-700 hover:text-amber-400 uppercase tracking-widest transition-colors flex-shrink-0"
+              >
+                REVIEW →
+              </button>
+            </div>
             <button
               onClick={() => setTriageOpen(o => !o)}
               className={cn("atlas-collapse-btn", triageOpen && "open")}
             >
-              <div className="flex items-center gap-2">
-                <span>TRIAGE ACTIONS</span>
-                <span className="font-mono text-[7px] border px-1.5 py-0.5" style={{ color: "rgba(245,158,11,0.8)", borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.04)" }}>{pendingMentions}</span>
+              <div className="flex items-center gap-1.5">
+                <span>BULK ACTIONS</span>
               </div>
               <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{triageOpen ? "▲" : "▼"}</span>
             </button>
             {triageOpen && (
-              <div className="px-2 pb-2 space-y-1">
+              <div className="px-2 pb-2 space-y-1 atlas-fade-in">
                 {ctrlMsg && (
                   <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1 mb-1">{ctrlMsg}</div>
                 )}

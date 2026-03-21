@@ -714,19 +714,20 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
     0 1px 6px rgba(0,0,0,0.8) !important;
 }
 
-/* ── Upgraded nexus-header-strip ─────────────────────────────────────────────── */
+/* ── Upgraded nexus-header-strip (T009: sharper top bar authority) ───────────── */
 .nexus-header-strip {
   display: flex !important;
   align-items: center !important;
   gap: 0.5rem !important;
-  padding: 0.3rem 0.75rem !important;
+  padding: 0.22rem 0.75rem !important;
   background:
-    radial-gradient(ellipse 240% 100% at 0% 50%, rgba(220,38,38,0.045) 0%, transparent 55%),
-    rgba(255,255,255,0.015) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.055) !important;
+    radial-gradient(ellipse 280% 100% at 0% 50%, rgba(220,38,38,0.05) 0%, transparent 50%),
+    rgba(255,255,255,0.012) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.03),
-    inset 0 -1px 0 rgba(0,0,0,0.4) !important;
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset 0 -1px 0 rgba(0,0,0,0.5),
+    0 1px 0 rgba(220,38,38,0.08) !important;
 }
 
 /* ── Left rail ──────────────────────────────────────────────────────────────── */
@@ -1146,4 +1147,175 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .react-flow__node.selected:focus-visible {
   outline: none !important;
   box-shadow: none !important;
+}
+
+/* ── NEXT ACTION dominant command box (T003) ─────────────────────────────────── */
+.atlas-next-action-box {
+  display: block;
+  width: 100%;
+  padding: 0.875rem 0.875rem 0.75rem;
+  background:
+    radial-gradient(ellipse 200% 160% at 0% 0%, rgba(220,38,38,0.07) 0%, transparent 60%),
+    linear-gradient(135deg, rgba(14,4,4,0.9) 0%, rgba(6,6,14,0.7) 100%);
+  border-left: 2px solid rgba(220,38,38,0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.025),
+    inset 1px 0 0 rgba(220,38,38,0.08),
+    0 0 24px rgba(220,38,38,0.06);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.atlas-next-action-box:hover {
+  background:
+    radial-gradient(ellipse 200% 160% at 0% 0%, rgba(220,38,38,0.12) 0%, transparent 60%),
+    linear-gradient(135deg, rgba(18,5,5,0.95) 0%, rgba(8,8,18,0.8) 100%);
+  border-left-color: rgba(220,38,38,0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 1px 0 0 rgba(220,38,38,0.12),
+    0 0 32px rgba(220,38,38,0.1);
+}
+
+/* ── Panel depth / glass system (T006) ───────────────────────────────────────── */
+.atlas-panel {
+  background:
+    radial-gradient(ellipse 180% 120% at 0% 0%, rgba(255,255,255,0.022) 0%, transparent 55%),
+    rgba(4, 6, 12, 0.96);
+  border: 1px solid rgba(255,255,255,0.065);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 4px 24px rgba(0,0,0,0.5),
+    0 1px 6px rgba(0,0,0,0.7);
+}
+
+/* Elevated surface (above panel) */
+.atlas-elevated {
+  background:
+    radial-gradient(ellipse 160% 100% at 50% 0%, rgba(255,255,255,0.025) 0%, transparent 60%),
+    rgba(8, 11, 20, 0.98);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.055),
+    0 8px 32px rgba(0,0,0,0.6),
+    0 2px 8px rgba(0,0,0,0.8);
+}
+
+/* Edge highlight strip (top of glass panel) */
+.atlas-glass-edge::before {
+  content: '';
+  display: block;
+  height: 1px;
+  background: linear-gradient(to right, rgba(255,255,255,0.08), rgba(255,255,255,0.02), transparent);
+  margin-bottom: -1px;
+}
+
+/* ── Micro-interactions (T011) ───────────────────────────────────────────────── */
+
+/* Panel fade-in */
+@keyframes atlas-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.atlas-fade-in {
+  animation: atlas-fade-in 0.2s ease-out both;
+}
+
+/* Hover lift on intel cards */
+.atlas-intel-card {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.atlas-intel-card:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 6px 20px rgba(0,0,0,0.55);
+}
+
+/* Hover lift on data rows */
+.atlas-data-row {
+  transition: background 0.1s;
+}
+.atlas-data-row:hover {
+  background: rgba(255,255,255,0.018);
+}
+
+/* Button press feel */
+.atlas-btn {
+  transition: transform 0.08s ease, opacity 0.08s;
+}
+.atlas-btn:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+/* ── Graph node — stronger hover glow (T005) ─────────────────────────────────── */
+.atlas-graph-node:hover {
+  border-color: rgba(255,255,255,0.25) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 8px 28px rgba(0,0,0,0.8),
+    0 2px 8px rgba(0,0,0,0.9) !important;
+  transform: translateY(-1px);
+  transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s !important;
+}
+
+/* ── Triage summary zone (T004) ──────────────────────────────────────────────── */
+.atlas-triage-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  background: rgba(245,158,11,0.03);
+  border-left: 2px solid rgba(245,158,11,0.25);
+}
+
+/* ── Empty state improvements (T008) ────────────────────────────────────────── */
+.atlas-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1.5rem;
+  gap: 0.75rem;
+}
+.atlas-empty-state-icon {
+  width: 32px;
+  height: 32px;
+  opacity: 0.12;
+  margin-bottom: 0.25rem;
+}
+.atlas-empty-state-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+.atlas-empty-state-sub {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.18);
+  line-height: 1.6;
+  max-width: 200px;
+}
+.atlas-empty-state-action {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(220,38,38,0.5);
+  border: 1px solid rgba(220,38,38,0.2);
+  padding: 0.4rem 0.875rem;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+  cursor: pointer;
+  margin-top: 0.25rem;
+}
+.atlas-empty-state-action:hover {
+  color: rgba(220,38,38,0.8);
+  border-color: rgba(220,38,38,0.4);
+  background: rgba(220,38,38,0.04);
 }

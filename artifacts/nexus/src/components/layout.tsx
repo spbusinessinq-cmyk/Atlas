@@ -175,30 +175,30 @@ export function Layout({ children }: LayoutProps) {
         {/* Top header bar */}
         <header className={cn(
           "h-7 flex-shrink-0 flex items-center justify-between px-3 z-10 w-full",
-          "border-b border-[#ffffff0d] bg-[#030406]",
-          "shadow-[0_1px_0_rgba(255,255,255,0.02),0_2px_8px_rgba(0,0,0,0.4)]"
+          "border-b border-[#ffffff10] bg-[#020305]",
+          "shadow-[0_1px_0_rgba(220,38,38,0.07),0_2px_12px_rgba(0,0,0,0.5)]"
         )}>
           {/* Brand */}
           <div className="flex items-center gap-2">
             <AtlasRadar />
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white tracking-[0.2em] text-[11px] font-mono">
+              <span className="font-bold text-white tracking-[0.22em] text-[11px] font-mono" style={{ textShadow: "0 0 12px rgba(255,255,255,0.08)" }}>
                 RSR // ATLAS
               </span>
-              <span className="hidden md:block w-px h-3 bg-[#ffffff08]" />
-              <span className="hidden md:block font-mono text-[8px] text-neutral-700 uppercase tracking-widest">
+              <span className="hidden md:block w-px h-2.5 bg-[#ffffff0a]" />
+              <span className="hidden md:block font-mono text-[7px] text-neutral-800 uppercase tracking-widest">
                 ADVANCED TRACKING &amp; LINK ANALYSIS
               </span>
             </div>
           </div>
 
           {/* Telemetry strip */}
-          <div className="flex items-center gap-2.5 text-[8px] font-mono uppercase text-neutral-700 hidden md:flex tracking-widest">
+          <div className="flex items-center gap-3 text-[8px] font-mono uppercase hidden md:flex tracking-widest">
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_4px_rgba(34,197,94,0.5)]" />
-              <span className="text-neutral-600">ONLINE</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" style={{ boxShadow: "0 0 5px rgba(34,197,94,0.7)" }} />
+              <span className="text-green-700 tracking-[0.18em]">ONLINE</span>
             </div>
-            <TelemetryPip label="DOSSIERS" value={activeCaseCount} />
+            <TelemetryPip label="CASES"    value={activeCaseCount} />
             <TelemetryPip label="FLAGS"    value={flagCount}       warn={flagCount > 0} />
             <TelemetryPip label="DOCS"     value={docCount}        />
             <TelemetryPip label="ENTITIES" value={entityCount}     />
@@ -236,10 +236,13 @@ export function Layout({ children }: LayoutProps) {
 function TelemetryPip({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
   return (
     <>
-      <span className="w-px h-3 bg-[#ffffff08]" />
-      <span>
-        {label}:{" "}
-        <span className={warn ? "text-amber-400" : "text-neutral-400"}>{value}</span>
+      <span className="w-px h-2.5 bg-[#ffffff08]" />
+      <span className="flex items-center gap-1">
+        <span className="text-neutral-700 tracking-[0.14em]">{label}</span>
+        <span className={cn(
+          "tabular-nums font-bold tracking-normal",
+          warn && value > 0 ? "text-amber-400" : value > 0 ? "text-neutral-300" : "text-neutral-700"
+        )}>{value}</span>
       </span>
     </>
   );

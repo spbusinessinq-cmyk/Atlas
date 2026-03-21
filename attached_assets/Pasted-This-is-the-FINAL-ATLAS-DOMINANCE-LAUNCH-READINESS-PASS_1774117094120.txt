@@ -1,0 +1,230 @@
+This is the FINAL ATLAS DOMINANCE + LAUNCH READINESS PASS.
+
+Do NOT add new systems.
+Do NOT change backend logic.
+Do NOT rebuild routing.
+
+This pass is ONLY about:
+- authority
+- clarity
+- control
+- flow
+- visual dominance
+
+ATLAS must feel like a high-level intelligence command system, not a dashboard.
+
+Right now it is ~70% there.
+This pass brings it to launch quality.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T001 — COMMAND FLOW (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Right now the system feels like panels.
+
+We need a clear operational flow:
+
+TOP → “What is happening”
+MIDDLE → “What supports it”
+BOTTOM → “What do I do next”
+
+Reorganize CASE OVERVIEW into:
+
+1. CASE HEADER (thin, strong, fixed)
+2. PRIMARY INTEL BLOCK (main story)
+3. SUPPORTING EVIDENCE + SIGNALS
+4. ACTION ZONE (bottom)
+
+This must feel like reading a situation — not browsing widgets.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T002 — PRIMARY INTEL DOMINANCE
+━━━━━━━━━━━━━━━━━━━━━━
+
+The CASE SUMMARY is the most important thing.
+
+Fix it:
+
+- increase font size slightly
+- increase line height
+- give it breathing room
+- subtle left accent bar (glow)
+- slightly brighter text than everything else
+
+It should feel like:
+“this is the intelligence conclusion”
+
+Everything else is secondary.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T003 — RIGHT RAIL = ACTION SYSTEM (NOT NOISE)
+━━━━━━━━━━━━━━━━━━━━━━
+
+The right rail still feels bloated.
+
+Rebuild it as a tight command rail:
+
+ORDER:
+1. CASE STATUS (compact)
+2. CASE SNAPSHOT (3–4 lines max)
+3. NEXT ACTION (dominant box)
+4. TRIAGE SUMMARY (numbers only)
+5. TRIAGE ACTIONS (collapsed)
+6. QUALITY CONTROLS (collapsed)
+7. DOSSIER ACTIONS
+
+Rules:
+- collapse anything non-critical
+- reduce vertical height by ~30%
+- remove repeated labels
+- increase contrast between sections
+
+NEXT ACTION should be the ONLY visually loud box.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T004 — TRIAGE FIX (VERY IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Right now triage feels overwhelming.
+
+Fix:
+
+- show only:
+  “227 pending → 3 categories”
+- break into:
+  HIGH / MED / LOW buckets
+- show counts per bucket
+
+Only expand into full controls when clicked.
+
+Default view should feel manageable, not chaotic.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T005 — GRAPH INTERACTION FIX (CRITICAL BUG)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Fix node dragging:
+
+- implement smooth drag using pointermove
+- update position continuously during drag
+- do NOT wait for release
+- add slight easing (0.15–0.2)
+
+Also:
+- add subtle inertia on release
+- add hover highlight
+- soften edge lines slightly
+
+Graph should feel alive, not rigid.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T006 — PANEL DEPTH + GLASS SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━
+
+UI still feels flat.
+
+Apply:
+
+- layered backgrounds (3 levels):
+  base / panel / elevated
+- soft inner shadows
+- subtle blur (glass effect)
+- edge highlights (very faint)
+
+Every panel should feel like a physical layer.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T007 — COLOR DISCIPLINE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Too many accents competing.
+
+Lock system:
+
+- RED → problems / alerts only
+- AMBER → warnings / gaps
+- GREEN → confirmed / strong
+- CYAN → informational / neutral
+
+Reduce random usage.
+Increase meaning.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T008 — EMPTY STATES (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Empty states are still weak.
+
+Each must:
+- explain WHY empty
+- show WHAT to do next
+- include a single clear action
+
+Example:
+“No financial signals detected”
+→ add: “Ingest documents with budgets or contracts”
+
+━━━━━━━━━━━━━━━━━━━━━━
+T009 — HEADER + TOP BAR AUTHORITY
+━━━━━━━━━━━━━━━━━━━━━━
+
+Top bar is too passive.
+
+Make it:
+
+- thinner
+- sharper typography
+- subtle glow line underneath
+- stronger ONLINE / FLAGS / DOCS indicators
+
+It should feel like a live system status bar.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T010 — REMOVE VISUAL NOISE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Audit entire UI and remove:
+
+- duplicate labels
+- unnecessary borders
+- excessive spacing
+- low-value text
+
+Goal:
+reduce noise by ~20–30% without removing information.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T011 — MICRO INTERACTIONS
+━━━━━━━━━━━━━━━━━━━━━━
+
+Add:
+
+- hover lift on cards
+- smooth button transitions
+- subtle fade-in for panels
+- no abrupt jumps
+
+System should feel smooth and controlled.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T012 — FINAL RULE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Every screen must answer instantly:
+
+1. What is happening?
+2. Why does it matter?
+3. What should I do next?
+
+If any screen fails that — fix it.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+This is the final convergence pass.
+
+Do not overbuild.
+Do not add features.
+
+Refine, compress, and elevate.
+
+Make ATLAS feel like a real intelligence command system.
