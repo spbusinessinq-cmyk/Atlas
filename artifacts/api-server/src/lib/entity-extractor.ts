@@ -230,12 +230,77 @@ const MEDIA_SOURCE_BLOCKLIST = new Set([
 ]);
 
 const SPORTS_ENTERTAINMENT_BLOCKLIST = new Set([
-  "NFL", "NBA", "MLB", "NHL", "FIFA", "UEFA", "MLS", "PGA", "UFC",
-  "ESPN", "Fox Sports", "NBC Sports", "CBS Sports", "TNT Sports",
+  "NFL", "NBA", "MLB", "NHL", "FIFA", "UEFA", "MLS", "PGA", "UFC", "NCAA",
+  "ESPN", "Fox Sports", "NBC Sports", "CBS Sports", "TNT Sports", "Bleacher Report",
   "Super Bowl", "World Series", "NBA Finals", "Stanley Cup", "Champions League",
   "Playoffs", "Draft", "Trade Deadline", "Free Agency", "Hall of Fame",
   "Grammy", "Oscar", "Emmy", "Tony", "Box Office", "Billboard",
   "Hollywood Reporter", "Variety", "TMZ", "People Magazine", "Entertainment Weekly",
+  "Disney", "Pixar", "Warner Bros", "Universal Pictures", "Paramount", "Sony Pictures",
+  "Netflix", "HBO", "Hulu", "Amazon Prime", "Apple TV",
+  "Hollywood", "Oscars", "Golden Globes", "SAG Awards", "People's Choice",
+  "Comic-Con", "Coachella", "Sundance", "Cannes", "SXSW",
+  "Sports Illustrated", "The Athletic", "Deadline Hollywood", "The Hollywood Reporter",
+]);
+
+// Well-known celebrities and entertainers who should NOT be promoted
+// in non-entertainment investigative cases
+const CELEBRITY_PERSON_NAMES = new Set([
+  // Actors / Film
+  "Ryan Gosling", "Chuck Norris", "Tom Hanks", "Brad Pitt", "Angelina Jolie",
+  "Jennifer Aniston", "Leonardo DiCaprio", "Meryl Streep", "Denzel Washington",
+  "Will Smith", "Jennifer Lopez", "Scarlett Johansson", "Robert Downey",
+  "Dwayne Johnson", "Vin Diesel", "Chris Evans", "Chris Hemsworth",
+  "Zendaya", "Timothee Chalamet", "Florence Pugh", "Ana de Armas",
+  "Cate Blanchett", "Nicole Kidman", "Reese Witherspoon", "Natalie Portman",
+  "Emma Stone", "Emma Watson", "Anne Hathaway", "Julia Roberts",
+  "George Clooney", "Matt Damon", "Ben Affleck", "Keanu Reeves",
+  "Johnny Depp", "Tom Cruise", "Harrison Ford", "Sylvester Stallone",
+  "Arnold Schwarzenegger", "Bruce Willis", "Samuel Jackson", "Morgan Freeman",
+  "Clint Eastwood", "Robin Williams", "Jim Carrey", "Adam Sandler",
+  "Kevin Hart", "Chris Rock", "Dave Chappelle", "Eddie Murphy",
+  // Reality TV / Social Media
+  "Kim Kardashian", "Khloé Kardashian", "Kourtney Kardashian", "Kris Jenner",
+  "Kylie Jenner", "Kendall Jenner", "Cardi B", "Nicki Minaj",
+  "Paris Hilton", "Lindsay Lohan", "Britney Spears",
+  // Musicians
+  "Taylor Swift", "Beyoncé", "Rihanna", "Ariana Grande", "Billie Eilish",
+  "Lady Gaga", "Katy Perry", "Miley Cyrus", "Selena Gomez",
+  "Justin Bieber", "Drake", "Kanye West", "Jay-Z", "Eminem",
+  "Bruno Mars", "The Weeknd", "Post Malone", "Travis Scott",
+  "Ed Sheeran", "Adele", "Harry Styles", "Dua Lipa",
+  "Michael Jackson", "Prince", "Elvis Presley", "Madonna",
+  // Athletes
+  "LeBron James", "Michael Jordan", "Kobe Bryant", "Stephen Curry",
+  "Tom Brady", "Aaron Rodgers", "Patrick Mahomes", "Peyton Manning",
+  "Tiger Woods", "Phil Mickelson", "Roger Federer", "Rafael Nadal",
+  "Novak Djokovic", "Serena Williams", "Simone Biles",
+  "Cristiano Ronaldo", "Lionel Messi", "Neymar",
+  "Floyd Mayweather", "Conor McGregor", "Mike Tyson",
+  "Shaquille O'Neal", "Magic Johnson", "Larry Bird",
+  "Manny Pacquiao", "Oscar De La Hoya",
+  // Media personalities
+  "Oprah Winfrey", "Ellen DeGeneres", "Jimmy Fallon", "Jimmy Kimmel",
+  "Jay Leno", "David Letterman", "Conan O'Brien", "Stephen Colbert",
+  "Trevor Noah", "John Oliver", "Bill Maher",
+  "Ryan Seacrest", "Simon Cowell", "Gordon Ramsay",
+  "Steve Harvey", "Tyra Banks",
+]);
+
+// Foreign countries and non-investigative geographies that drift into
+// unrelated side-stories on domestic investigation cases
+const WORLD_GEOGRAPHY_DRIFT_BLOCKLIST = new Set([
+  // Foreign countries unlikely to be primary entities in US domestic investigations
+  "Iran", "Iraq", "Syria", "Yemen", "Afghanistan", "Libya", "Sudan",
+  "North Korea", "Cuba", "Venezuela", "Russia", "Ukraine", "Belarus",
+  "Somalia", "Myanmar", "Ethiopia", "Eritrea",
+  // These appear in sidebar "world news" links
+  "Gaza", "West Bank", "Kashmir", "Taiwan Strait",
+  // US states that appear in cross-story drift on city-level investigations
+  "Hawaii", "Alaska", "Puerto Rico", "Guam",
+  // Generic world/geography fragments appearing in sidebar RSS
+  "Middle East", "Sub-Saharan Africa", "Latin America", "Southeast Asia",
+  "Eastern Europe", "Central America",
 ]);
 
 // ── Role classification patterns ─────────────────────────────────────────────
@@ -767,11 +832,17 @@ export function computeTopicRelevance(
   const isInvCtx     = /\b(contract|fraud|corruption|bribery|kickback|embezzl|indictment|subpoena|audit|investigation|probe|misconduct|grant|fund|budget|procurement|appropriation|settlement|lawsuit)\b/i.test(combined);
 
   if (seedIntent === "housing_homelessness") {
-    const onTopic = /\b(shelter|homeless|housing|unhoused|affordable|voucher|wrap.around|social.services|supportive|navigation.center|motel|encampment|program|department|county|city|fund|contract|grant)\b/i.test(combined);
-    if ((isSportsCtx || isEntCtx) && !onTopic) return "OFF_TOPIC";
-    if (onTopic && queryRatio >= 0.5) return "HIGH";
-    if (onTopic || queryRatio >= 0.3) return "MEDIUM";
-    if (isInvCtx) return "MEDIUM";
+    const onTopic = /\b(shelter|homeless|housing|unhoused|affordable|voucher|wrap.around|social.services|supportive|navigation.center|motel|encampment|program|department|county|city|fund|contract|grant|landlord|tenant|rent|subsidy|rehousing|transitional|skid.row|bed|services|outreach|case.manager|coordinator)\b/i.test(combined);
+    // Hard off-topic signals for this intent
+    const isWorldNews = /\b(war|military|conflict|missile|bomb|nuclear|sanctions|troops|regime|coup|terrorist|insurgent|cease.fire|occupation)\b/i.test(combined);
+    const isCelebCtx  = /\b(celebrity|actor|actress|film|movie|album|concert|tour|debut|blockbuster|sequel|premiere|award.show|reality.tv|dating|romance)\b/i.test(combined);
+    if (isCelebCtx && !onTopic) return "OFF_TOPIC";
+    if (isSportsCtx && !onTopic) return "OFF_TOPIC";
+    if (isWorldNews && !onTopic) return "OFF_TOPIC";
+    if (onTopic && queryRatio >= 0.4) return "HIGH";
+    if (onTopic || queryRatio >= 0.25) return "MEDIUM";
+    if (isInvCtx && queryRatio >= 0.1) return "MEDIUM";
+    if (!onTopic && !isInvCtx) return "LOW";
     return "LOW";
   }
   if (seedIntent === "crime_corruption") {
@@ -869,9 +940,25 @@ export function shouldAdmitMention(
   if (isCrossStoryContamination(entityName, context))
     return { admit: false, rejectReason: "CROSS_STORY" };
 
-  // BLOCKLIST
+  // BLOCKLIST — media noise, navigation residue
   if (MEDIA_SOURCE_BLOCKLIST.has(entityName) || SKIP_NAMES.has(entityName))
     return { admit: false, rejectReason: "BLOCKLIST" };
+
+  // SPORTS / ENTERTAINMENT ORG BLOCKLIST — always blocked unless intent matches
+  if (SPORTS_ENTERTAINMENT_BLOCKLIST.has(entityName)) {
+    if (seedIntent !== "entertainment_film" && seedIntent !== "sports")
+      return { admit: false, rejectReason: "BLOCKLIST" };
+  }
+
+  // CELEBRITY PERSON BLOCKLIST — well-known entertainers/athletes blocked in non-entertainment cases
+  if (entityType === "person" && CELEBRITY_PERSON_NAMES.has(entityName)) {
+    if (seedIntent !== "entertainment_film" && seedIntent !== "sports")
+      return { admit: false, rejectReason: "TOPIC_MISMATCH" };
+  }
+
+  // WORLD GEOGRAPHY DRIFT — foreign countries/regions that drift into domestic investigation stories
+  if (WORLD_GEOGRAPHY_DRIFT_BLOCKLIST.has(entityName) && isSerious)
+    return { admit: false, rejectReason: "TOPIC_MISMATCH" };
 
   // COMMON_FIRST_NAME — single first name person with no title/role context
   if (entityType === "person" && words.length === 1 && COMMON_FIRST_NAMES.has(nameL)) {
@@ -899,8 +986,9 @@ export function shouldAdmitMention(
   if (isSerious && zone === "tail" && topicRelevance === "LOW" && role === "UNKNOWN")
     return { admit: false, rejectReason: "BOILERPLATE_CONTEXT" };
 
-  // For serious intents: LOW topic + UNKNOWN role + low confidence = reject
-  if (isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.72)
+  // For serious intents: LOW topic + UNKNOWN role + confidence below raised threshold = reject
+  // Raised from 0.72 to 0.80 to reduce noise — entities must be more clearly anchor-aligned
+  if (isSerious && topicRelevance === "LOW" && role === "UNKNOWN" && confidence < 0.80)
     return { admit: false, rejectReason: "LOW_CONFIDENCE" };
 
   // General: LOW topic relevance + UNKNOWN role + below threshold → suppress

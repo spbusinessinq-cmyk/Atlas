@@ -10,9 +10,26 @@ export interface PrintDossierParams {
     keyEntities?: Array<{ name: string; type: string; docCount: number }>;
     entityRelationships?: Array<{ entityAName: string; entityBName: string; relationType?: string; confidence?: string }>;
     timelineSignals?: Array<{ date?: string; title: string }>;
-    financialSignals?: Array<{ entityName: string; context: string; amount?: string; confidence?: number }>;
+    financialSignals?: Array<{
+      entityName: string;
+      amountRaw?: string;
+      amountDisplay?: string | null;
+      normalizedAmount?: number | null;
+      signalType?: string;
+      eventSummary?: string | null;
+      controlledBy?: string | null;
+      receivedBy?: string | null;
+      programName?: string | null;
+      confidence?: number | null;
+      inferred?: boolean;
+      context?: string;
+      amount?: string;
+    }>;
     investigativeAngles?: Array<{ angle: string }>;
     nextQueries?: string[];
+    knownGaps?: string[];
+    whyItMatters?: string;
+    confidenceNote?: string;
   };
 }
 
@@ -76,15 +93,18 @@ export function openPrintDossier(params: PrintDossierParams): void {
 
   const flows = s.financialSignals ?? [];
   const angles = s.investigativeAngles ?? [];
-  const gaps: string[] = [];
-  if (persons.length === 0) gaps.push("No individual actors identified — additional sourcing required.");
-  if (orgs.length === 0) gaps.push("No organizational entities confirmed — review entity triage queue.");
-  if (flows.length === 0) gaps.push("No financial flows detected — documents with budget or contract data recommended.");
-  if (timeline.length === 0) gaps.push("No timeline events mapped — chronological sourcing needed.");
-  if ((s.entityRelationships ?? []).length === 0) gaps.push("No confirmed entity relationships — link analysis pending.");
-  if (s.nextQueries && s.nextQueries.length > 0) {
-    s.nextQueries.slice(0, 4).forEach(q => gaps.push(`Expand: ${q}`));
-  }
+  // Use server-computed gaps if available, otherwise compute client-side fallback
+  const gaps: string[] = s.knownGaps && s.knownGaps.length > 0
+    ? s.knownGaps
+    : (() => {
+        const g: string[] = [];
+        if (persons.length === 0) g.push("No individual actors identified — additional sourcing required.");
+        if (orgs.length === 0) g.push("No organizational entities confirmed — review entity triage queue.");
+        if (flows.length === 0) g.push("No financial flows detected — documents with budget or contract data recommended.");
+        if (timeline.length === 0) g.push("No timeline events mapped — chronological sourcing needed.");
+        if ((s.entityRelationships ?? []).length === 0) g.push("No confirmed entity relationships — link analysis pending.");
+        return g;
+      })();
 
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -496,23 +516,27 @@ export function openPrintDossier(params: PrintDossierParams): void {
       <div class="key-finding-label">Intelligence Significance</div>
       <div class="key-finding-text" style="font-weight:400;font-size:10.5pt;line-height:1.65">
         ${(() => {
+          if (s.whyItMatters) return escapeHtml(s.whyItMatters);
           const parts: string[] = [];
-          if (angles.length > 0) {
-            parts.push(escapeHtml(angles[0].angle));
-          }
+          if (angles.length > 0) parts.push(escapeHtml(angles[0].angle));
           if (flows.length > 0) {
-            parts.push(`Financial signals involving ${escapeHtml(flows[0].entityName)} indicate potential resource flows warranting further investigation.`);
+            const amt = flows[0].amountDisplay ?? flows[0].amountRaw ?? flows[0].amount ?? "";
+            parts.push(`Financial signals${amt ? ` of ${escapeHtml(amt)}` : ""} involving ${escapeHtml(flows[0].entityName)} indicate potential resource flows warranting further investigation.`);
           }
           if (persons.length > 0 && orgs.length > 0) {
-            parts.push(`${persons.length} individual${persons.length !== 1 ? "s" : ""} and ${orgs.length} organization${orgs.length !== 1 ? "s" : ""} have been confirmed across ${documents.length} source${documents.length !== 1 ? "s" : ""}.`);
+            parts.push(`${persons.length} individual${persons.length !== 1 ? "s" : ""} and ${orgs.length} organization${orgs.length !== 1 ? "s" : ""} confirmed across ${documents.length} source${documents.length !== 1 ? "s" : ""}.`);
           }
           if (parts.length === 0) {
-            parts.push(`This case involves ${entities.length} confirmed ${entities.length === 1 ? "entity" : "entities"} across ${documents.length} source document${documents.length !== 1 ? "s" : ""}. Further sourcing is required to establish significance.`);
+            parts.push(`This case involves ${entities.length} confirmed ${entities.length === 1 ? "entity" : "entities"} across ${documents.length} source document${documents.length !== 1 ? "s" : ""}. Further sourcing required to establish significance.`);
           }
           return parts.slice(0, 2).join(" ");
         })()}
       </div>
     </div>
+    ${s.confidenceNote ? `
+    <div style="margin-top:12px;font-family:'Courier New',monospace;font-size:8pt;color:#888;letter-spacing:0.08em;text-transform:uppercase;border-top:1px solid #e8e8e8;padding-top:8px">
+      ${escapeHtml(s.confidenceNote)}
+    </div>` : ""}
   </div>
 
   ${(s.nextQueries ?? []).length > 0 ? `
@@ -533,16 +557,23 @@ export function openPrintDossier(params: PrintDossierParams): void {
     <div class="section-title">Financial Flows</div>
     <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
   </div>
-  ${flows.length > 0 ? flows.map(f => `
+  ${flows.length > 0 ? flows.map(f => {
+    const displayAmt = f.amountDisplay ?? f.amountRaw ?? f.amount ?? null;
+    const summary = f.eventSummary ?? f.context ?? null;
+    const sigType = f.signalType ? f.signalType.replace(/_/g, " ") : null;
+    return `
     <div class="flow-row">
-      <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
         <span class="flow-entity">${escapeHtml(f.entityName)}</span>
-        ${f.amount ? `<span class="flow-arrow">·</span><span style="font-weight:600;color:#c00">${escapeHtml(f.amount)}</span>` : ""}
+        ${displayAmt ? `<span style="font-family:'Courier New',monospace;font-weight:700;color:#b00000;font-size:11pt">${escapeHtml(displayAmt)}</span>` : ""}
       </div>
-      <div class="flow-context">${escapeHtml(f.context)}</div>
-      ${f.confidence !== undefined ? `<div class="flow-meta">CONFIDENCE: ${Math.round((f.confidence ?? 0) * 100)}%</div>` : ""}
-    </div>
-  `).join("") : `<div class="empty-note">No financial signals detected. Ingest documents containing budgets, contracts, or funding agreements.</div>`}
+      ${sigType ? `<div style="font-family:'Courier New',monospace;font-size:7.5pt;color:#888;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px">${escapeHtml(sigType)}</div>` : ""}
+      ${f.programName ? `<div style="font-size:9.5pt;color:#555;margin-top:3px">[${escapeHtml(f.programName)}]</div>` : ""}
+      ${summary ? `<div class="flow-context">${escapeHtml(summary.slice(0, 200))}</div>` : ""}
+      ${(f.controlledBy || f.receivedBy) ? `<div style="font-family:'Courier New',monospace;font-size:7.5pt;color:#999;margin-top:3px;letter-spacing:0.08em">${f.controlledBy ? `FROM: ${escapeHtml(f.controlledBy)}` : ""}${f.controlledBy && f.receivedBy ? " &nbsp;→&nbsp; " : ""}${f.receivedBy ? `TO: ${escapeHtml(f.receivedBy)}` : ""}</div>` : ""}
+      ${f.confidence !== undefined && f.confidence !== null ? `<div class="flow-meta">CONFIDENCE: ${Math.round((f.confidence ?? 0) * 100)}%${f.inferred ? " · INFERRED SIGNAL" : ""}</div>` : ""}
+    </div>`;
+  }).join("") : `<div class="empty-note">No financial signals detected. Ingest documents containing budgets, contracts, or funding agreements.</div>`}
 </div>
 
 <!-- PAGE 6: EVIDENCE -->

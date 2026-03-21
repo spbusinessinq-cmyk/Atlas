@@ -759,6 +759,9 @@ function CaseDetailInner({
             pendingMentions={pendingMentions}
             nextAction={nextAction}
             onNavigate={onSectionChange}
+            financialSignalCount={financialSignals?.length ?? 0}
+            timelineCount={timeline?.length ?? 0}
+            relationshipCount={relationships?.length ?? 0}
           />
         )}
       </aside>
@@ -2833,6 +2836,9 @@ function DefaultInspector({
   pendingMentions,
   nextAction,
   onNavigate,
+  financialSignalCount = 0,
+  timelineCount = 0,
+  relationshipCount = 0,
 }: {
   caseId: number;
   caseData: {
@@ -2847,6 +2853,9 @@ function DefaultInspector({
   pendingMentions: number;
   nextAction: NextActionConfig | null;
   onNavigate: (s: SectionId) => void;
+  financialSignalCount?: number;
+  timelineCount?: number;
+  relationshipCount?: number;
 }) {
   const queryClient = useQueryClient();
   const [ctrlMsg, setCtrlMsg] = React.useState<string | null>(null);
@@ -2860,6 +2869,8 @@ function DefaultInspector({
   const [qualityOpen, setQualityOpen] = React.useState(false);
   const [diagOpen, setDiagOpen] = React.useState(false);
   const [dossierSectionOpen, setDossierSectionOpen] = React.useState(false);
+  const [autoTriageResult, setAutoTriageResult] = React.useState<{ promoted: number; rejected: number; held: number } | null>(null);
+  const [autoTriageWorking, setAutoTriageWorking] = React.useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
@@ -2914,6 +2925,17 @@ function DefaultInspector({
       setCtrlMsg(`Purged ${d.purged ?? "?"} failed doc(s).`);
       await invalidate();
     } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+  };
+
+  const handleAutoTriage = async () => {
+    setAutoTriageWorking(true);
+    setAutoTriageResult(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/mentions/auto-triage`, { method: "POST" });
+      const d = await r.json();
+      setAutoTriageResult({ promoted: d.promoted ?? 0, rejected: d.rejected ?? 0, held: d.held ?? 0 });
+      await invalidate();
+    } catch { /* silent */ } finally { setAutoTriageWorking(false); }
   };
 
   const sd = parseSeedDiag(caseData.description);
@@ -3005,6 +3027,30 @@ function DefaultInspector({
                     {blockedDocs} source{blockedDocs > 1 ? "s" : ""} blocked
                   </div>
                 )}
+                {/* Coverage matrix — 5-dimension investigation readiness */}
+                {(() => {
+                  const docCount = sd ? (sd.ok + sd.partial) : documents.length;
+                  const entityCount = sd ? sd.finalPromoted : entities.length;
+                  const dimColor = (val: number, thresh: number) =>
+                    val >= thresh ? "rgba(34,197,94,0.6)" : val > 0 ? "rgba(245,158,11,0.5)" : "rgba(255,255,255,0.06)";
+                  const dims = [
+                    { label: "SRC",  val: docCount,              thresh: 3 },
+                    { label: "ENT",  val: entityCount,           thresh: 2 },
+                    { label: "REL",  val: relationshipCount,     thresh: 1 },
+                    { label: "FIN",  val: financialSignalCount,  thresh: 1 },
+                    { label: "TL",   val: timelineCount,         thresh: 2 },
+                  ];
+                  return (
+                    <div className="mt-2.5 flex items-end gap-1" title="Investigation coverage: SOURCES / ENTITIES / RELATIONSHIPS / FINANCIAL / TIMELINE">
+                      {dims.map(d => (
+                        <div key={d.label} className="flex flex-col items-center gap-0.5 flex-1">
+                          <div className="w-full h-1 rounded-full" style={{ background: dimColor(d.val, d.thresh) }} />
+                          <div className="font-mono text-[5.5px] text-neutral-800 uppercase">{d.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
               {/* Collapsible full system report */}
               <button onClick={() => setStatusOpen(o => !o)} className={cn("atlas-collapse-btn", statusOpen && "open")}>
@@ -3163,13 +3209,41 @@ function DefaultInspector({
                   Entities awaiting analyst approval
                 </div>
               </div>
-              <button
-                onClick={() => onNavigate("documents")}
-                className="font-mono text-[7px] text-neutral-700 hover:text-amber-400 uppercase tracking-widest transition-colors flex-shrink-0"
-              >
-                REVIEW →
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={handleAutoTriage}
+                  disabled={autoTriageWorking}
+                  className="font-mono text-[7px] uppercase tracking-widest transition-colors disabled:opacity-40"
+                  style={{ color: autoTriageWorking ? "rgba(139,92,246,0.4)" : "rgba(139,92,246,0.7)" }}
+                  title="Auto-classify pending entities using admission rules"
+                >
+                  {autoTriageWorking ? "TRIAGING…" : "AUTO-TRIAGE"}
+                </button>
+                <button
+                  onClick={() => onNavigate("documents")}
+                  className="font-mono text-[7px] text-neutral-700 hover:text-amber-400 uppercase tracking-widest transition-colors"
+                >
+                  REVIEW →
+                </button>
+              </div>
             </div>
+            {/* Auto-triage result feedback */}
+            {autoTriageResult && (
+              <div className="px-3 pb-2 flex items-center gap-3" style={{ borderTop: "1px solid rgba(255,255,255,0.03)" }}>
+                <div className="flex items-center gap-1">
+                  <div className="w-1 h-1 rounded-full bg-green-500" />
+                  <span className="font-mono text-[7px] text-green-600 uppercase">{autoTriageResult.promoted} PROMOTED</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-1 h-1 rounded-full bg-red-700" />
+                  <span className="font-mono text-[7px] text-red-800 uppercase">{autoTriageResult.rejected} REJECTED</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-1 h-1 rounded-full bg-amber-700" />
+                  <span className="font-mono text-[7px] text-amber-800 uppercase">{autoTriageResult.held} HELD</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -3332,16 +3406,37 @@ function DefaultInspector({
                           </div>
                         )}
 
-                        {/* FINANCIAL — T004: entity + context + confidence */}
+                        {/* FINANCIAL — T004: structured signals from financialSignalsTable */}
                         <div className="space-y-1">
                           <div className="text-[7px] text-green-700 uppercase tracking-[0.2em]">FINANCIAL FLOWS</div>
                           {(s.financialSignals?.length ?? 0) > 0 ? (
-                            s.financialSignals.slice(0, 4).map((f: any, i: number) => (
+                            s.financialSignals.slice(0, 5).map((f: any, i: number) => (
                               <div key={i} style={{ borderLeft: "2px solid rgba(34,197,94,0.2)", paddingLeft: "6px" }}>
-                                <div className="text-neutral-300 text-[8.5px] font-bold">{f.entityName}</div>
-                                <div className="text-neutral-600 text-[7.5px] leading-snug mt-0.5 line-clamp-2">{f.context.slice(0, 90)}</div>
-                                {f.confidence !== undefined && (
-                                  <div className="text-[7px] text-neutral-800 mt-0.5">CONF: {Math.round((f.confidence ?? 0) * 100)}%</div>
+                                <div className="flex items-baseline justify-between gap-1">
+                                  <div className="text-neutral-300 text-[8px] font-bold uppercase truncate">{f.entityName}</div>
+                                  {(f.amountDisplay || f.amountRaw) && (
+                                    <div className="text-green-500 text-[8.5px] font-mono font-bold flex-shrink-0">{f.amountDisplay ?? f.amountRaw}</div>
+                                  )}
+                                </div>
+                                {f.signalType && (
+                                  <div className="text-[7px] text-green-900 uppercase tracking-wider">{f.signalType.replace(/_/g, " ")}</div>
+                                )}
+                                {(f.eventSummary || f.programName) && (
+                                  <div className="text-neutral-700 text-[7.5px] leading-snug mt-0.5 line-clamp-2">
+                                    {f.programName ? `[${f.programName}] ` : ""}{f.eventSummary ?? ""}
+                                  </div>
+                                )}
+                                {(f.controlledBy || f.receivedBy) && (
+                                  <div className="text-[7px] text-neutral-800 mt-0.5 flex gap-2">
+                                    {f.controlledBy && <span>FROM: {f.controlledBy}</span>}
+                                    {f.receivedBy && <span>TO: {f.receivedBy}</span>}
+                                  </div>
+                                )}
+                                {f.confidence !== undefined && f.confidence !== null && (
+                                  <div className="text-[7px] text-neutral-800 mt-0.5 flex items-center gap-1">
+                                    <span>CONF: {Math.round((f.confidence ?? 0) * 100)}%</span>
+                                    {f.inferred && <span className="text-amber-900">INFERRED</span>}
+                                  </div>
                                 )}
                               </div>
                             ))
@@ -3367,32 +3462,41 @@ function DefaultInspector({
                           </div>
                         )}
 
-                        {/* GAPS — T005 */}
-                        {(() => {
-                          const gaps: string[] = [];
-                          if (!s.keyEntities?.some((e: any) => e.type === "person")) gaps.push("No individual actors confirmed");
-                          if ((s.financialSignals?.length ?? 0) === 0) gaps.push("No financial flows detected");
-                          if ((s.timelineSignals?.length ?? 0) === 0) gaps.push("No timeline events mapped");
-                          if ((s.entityRelationships?.length ?? 0) === 0) gaps.push("No confirmed relationships");
-                          return gaps.length > 0 ? (
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-1 h-1 rounded-full bg-neutral-700" />
-                                <span className="text-[7px] text-neutral-700 uppercase tracking-[0.2em]">GAPS</span>
-                              </div>
-                              {gaps.map((g, i) => (
-                                <div key={i} className="text-[7.5px] text-neutral-800 pl-2.5">· {g}</div>
-                              ))}
+                        {/* WHY THIS MATTERS */}
+                        {s.whyItMatters && (
+                          <div className="space-y-0.5" style={{ borderLeft: "2px solid rgba(239,68,68,0.25)", paddingLeft: "6px" }}>
+                            <div className="text-[7px] text-red-700 uppercase tracking-[0.2em]">WHY THIS MATTERS</div>
+                            <p className="text-neutral-500 leading-relaxed text-[8px]">{s.whyItMatters}</p>
+                          </div>
+                        )}
+
+                        {/* INTELLIGENCE GAPS — server-computed */}
+                        {(s.knownGaps?.length ?? 0) > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-1 h-1 rounded-full bg-amber-800" />
+                              <span className="text-[7px] text-amber-800 uppercase tracking-[0.2em]">INTELLIGENCE GAPS</span>
                             </div>
-                          ) : null;
-                        })()}
+                            {s.knownGaps.map((g: string, i: number) => (
+                              <div key={i} className="text-[7.5px] text-neutral-800 pl-2.5 leading-relaxed">· {g}</div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* CONFIDENCE NOTE */}
+                        {s.confidenceNote && (
+                          <div className="px-2 py-1.5 rounded" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                            <div className="text-[7px] text-neutral-800 uppercase tracking-[0.2em] mb-0.5">CONFIDENCE</div>
+                            <div className="text-[7.5px] text-neutral-700 leading-relaxed">{s.confidenceNote}</div>
+                          </div>
+                        )}
 
                         {/* QUERY EXPANSION */}
                         {s.nextQueries?.length > 0 && (
                           <div className="space-y-0.5">
                             <div className="text-[7px] text-neutral-700 uppercase tracking-[0.2em]">EXPAND</div>
-                            {s.nextQueries.slice(0, 3).map((q: string, i: number) => (
-                              <div key={i} className="text-neutral-800 text-[7.5px] truncate">→ {q}</div>
+                            {s.nextQueries.slice(0, 4).map((q: string, i: number) => (
+                              <div key={i} className="text-neutral-800 text-[7.5px] truncate font-mono">→ {q}</div>
                             ))}
                           </div>
                         )}

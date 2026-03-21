@@ -1,0 +1,221 @@
+MEGA PASS — ATLAS LAUNCH LOCK
+This is the final hardening pass. Do not cosmetic-only tweak. Audit, fix, verify, and ship. The goal is to make ATLAS feel like a real operator-grade intelligence platform with minimum manual burden.
+
+MISSION
+ATLAS must:
+1. auto-investigate intelligently from a seed target
+2. extract the RIGHT entities, money, timelines, and relationships
+3. reduce analyst busywork
+4. export a real printable dossier that actually works
+5. feel visually tighter, deeper, cleaner, and more command-grade
+
+CURRENT FAILURES TO FIX
+- EXPORT button is visible but not actually exporting/printing reliably
+- intelligence is still producing garbage entities and nonsense institutions
+- LA homelessness/funding cases still pull irrelevant stuff like Iran, Hawaii, LAPD, NCAA, Disney, Chuck Norris, Ryan Gosling, Animal Allies, Canine Literacy, etc.
+- financial flow still accepts weak/non-actionable noise
+- too many entities remain stuck in triage, creating operator overload
+- graph can still be weak/useless from low-value approvals
+- right rail is still too crowded and noisy
+- UI still lacks the polished coordinated depth of WHITEWING
+- operator still has to manually do too much review / approve / reject work
+
+DO THIS IN ONE PASS
+
+T001 — EXPORT / PDF HARD FIX
+Audit the full export path end-to-end and make it actually work.
+- “GENERATE & EXPORT” must:
+  1) compile dossier if needed
+  2) open printable report in a new window
+  3) trigger print dialog
+  4) fall back cleanly if popup blocked
+- add visible success/failure toast states
+- add a second direct endpoint check so export is verifiable in browser
+- verify export works on cases with weak, provisional, and strong dossiers
+- if browser-print is flaky, build a robust HTML print renderer that always opens with clean print-safe layout
+- make the printable report look like a real intelligence packet, not app UI
+
+T002 — ENTITY INTELLIGENCE PURGE
+Fix the brain.
+Any entity that is clearly not a real investigative actor/institution/program/location tied to the case must be blocked or heavily penalized.
+Specifically harden against:
+- celebrity/news side-story entities
+- generic nouns and slogans
+- tourism, entertainment, sports, media filler
+- irrelevant geographic names
+- government acronyms that appear in unrelated side stories
+- nonprofit/program names unrelated to the anchor target
+- “good news”, “analysis”, “overview”, “homepage”, “community room news”, etc.
+
+Implement:
+- stronger anchor proximity scoring
+- stronger case-domain scoring
+- source-title vs body weighting
+- off-topic side-story penalty
+- “cross-document aligned relevance” requirement before promotion
+- entity blacklist/skip expansion
+- institution sanity check: if org/entity has no semantic relation to target, downgrade or reject
+- person/org/location/program type correction before scoring
+- require at least one of:
+  a) appears in multiple aligned docs
+  b) appears near target anchor + funding/investigative language
+  c) appears in title/lead of a CORE aligned doc
+
+T003 — AUTO-TRIAGE / LESS OPERATOR LABOR
+Reduce manual review burden hard.
+Build operator-safe auto-triage:
+- auto-reject obvious junk, artifact, nav, boilerplate, entertainment drift, celebrity drift
+- auto-hold only the ambiguous middle
+- auto-promote only when confidence is high and anchor-aligned
+- add a triage summary like:
+  AUTO-REJECTED / AUTO-HELD / AUTO-PROMOTED / NEEDS REVIEW
+- add “review only held candidates” flow
+- bulk analyst actions should be simple, not a wall of buttons
+- remove any remaining pipeline-internal controls from operator view
+
+T004 — FINANCIAL INTELLIGENCE UPGRADE
+Money extraction must become sharper and more investigative.
+- distinguish real funding flows vs vague mentions
+- prioritize:
+  contracts, grants, appropriations, reimbursements, allocations, disbursements, audits, fraud misuse, redirected funds, emergency funding, sole-source awards
+- extract:
+  amount
+  amountDisplay
+  source entity / controller
+  recipient / beneficiary
+  program / fund name
+  action type
+  confidence
+  source document
+- suppress weak “non-numeric” garbage unless it is strongly anchor-aligned and clearly budget/program related
+- if a signal is non-numeric, mark it clearly as INFERRED / NON-NUMERIC and keep it visually secondary
+- build a better “money trail” summary in dossier and overview
+
+T005 — RELATIONSHIP / GRAPH INTELLIGENCE
+Graph must stop being a fragile toy.
+- relationships should prefer aligned core docs over loose co-mentions
+- require stronger pair scoring before confirmed edge creation
+- create edge types like:
+  CO_MENTION
+  FUNDS
+  CONTROLS
+  RECEIVES
+  AUDITS
+  OVERSEES
+  CONTRACTS_WITH
+  CONNECTED_TO
+- if evidence is weak, mark relationship as PROVISIONAL, not confirmed
+- improve graph layout stability and drag behavior:
+  dragging should glide in real time, not jump on release
+  node motion should feel smooth and controlled
+- improve node inspector with real evidence snippets and why the edge exists
+
+T006 — CASE RELEVANCE / SOURCE QUALITY HARDENING
+For each doc, compute and expose clearer intelligence quality:
+- CORE / RELEVANT / PERIPHERAL / OFF-TOPIC
+- aligned / partial / mismatched
+- title hit / lead hit / body hit
+- investigative type: funding / fraud / audit / procurement / legal / policy / program / scandal
+- stronger filtering so a case like “los angeles homeless funding” does not drift into unrelated world news or celebrity stories
+
+T007 — DOSSIER INTELLIGENCE QUALITY
+Dossier must read like an analyst wrote it.
+Rewrite dossier generation so it produces:
+- clear case summary
+- why this case matters
+- primary actors
+- primary institutions
+- strongest evidence
+- money trail
+- timeline
+- key relationships
+- known gaps
+- next investigative queries
+- confidence note
+The prose should be specific, cold, and investigative.
+No vague filler like “ATLAS assembled a viable starter graph.”
+Explain what was actually found and what is missing.
+
+T008 — RIGHT RAIL COMMAND RAIL FINAL
+Make the right rail disciplined and compact.
+Final structure:
+1. STATUS
+2. INTEL BRIEF
+3. NEXT ACTION
+4. TRIAGE SUMMARY
+5. DOSSIER ACTIONS
+6. DIAGNOSTICS (collapsed by default)
+Everything else hidden or collapsed.
+No giant walls of controls.
+No operator-facing junk.
+
+T009 — FULL ATLAS UI DEPTH PASS
+Make ATLAS visually match the seriousness of WHITEWING.
+Use WHITEWING as the standard for:
+- cleaner hierarchy
+- more depth
+- better glass
+- tighter spacing
+- stronger section accents
+- more deliberate lighting/glow
+- more premium empty states
+- less flat black dead space
+- more coordinated command-surface feel
+Improve:
+- left nav
+- center panels
+- right rail
+- top bar
+- cards
+- section headers
+- graph canvas
+- empty states
+- transitions
+Keep it restrained, not flashy SaaS.
+
+T010 — EMPTY STATE INTELLIGENCE
+Every empty panel must explain:
+- why it is empty
+- what the system already tried
+- what the operator should do next
+Examples:
+- no entities because all candidates failed relevance
+- no graph because no confirmed aligned entities
+- no financial signals because no contract/grant/budget language found
+- no timeline because no anchor-aligned dated events found
+
+T011 — TEST / VERIFY / PROVE
+Do not stop at code edits.
+Run full verification and report back with evidence.
+Test these cases specifically:
+- los angeles homeless funding
+- los angeles homeless spending 2024
+- disney yearly spending
+For each, verify:
+- export works
+- no nonsense entities promoted
+- right rail is compact
+- graph behaves smoothly
+- money extraction is cleaner
+- dossier reads better
+- empty states are informative
+- no new TypeScript/runtime errors
+
+T012 — FINAL SHIP REPORT
+At the end, give a hard summary:
+- what files changed
+- what logic changed
+- what was removed
+- what was verified
+- what still remains as true known limitations
+Do not oversell. Be exact.
+
+IMPORTANT
+This pass is not about adding more clutter.
+This pass is about:
+- intelligence precision
+- operator ease
+- visual authority
+- launch readiness
+
+Execute systematically, restart services, and verify in-browser before claiming complete.

@@ -386,6 +386,141 @@ router.post("/cases/:caseId/mentions/bulk-approve", async (req, res) => {
   res.json({ approved: toApprove.length });
 });
 
+// ── Auto-triage: intelligent automatic triage of pending mentions ───────────
+// POST /api/cases/:caseId/mentions/auto-triage
+// Classifies all pending mentions automatically:
+// - auto-promote: clearly anchor-aligned, role-bearing, high confidence
+// - auto-reject:  obviously junk (noise, off-topic, low-confidence bleed)
+// - auto-hold:    ambiguous middle (needs analyst review)
+// - keep pending: edge cases requiring full analyst attention
+router.post("/cases/:caseId/mentions/auto-triage", async (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
+
+  const pending = await db.select().from(entityMentionsTable).where(
+    and(eq(entityMentionsTable.caseId, caseId), eq(entityMentionsTable.status, "pending"))
+  );
+
+  const toPromote: number[] = [];
+  const toReject: number[]  = [];
+  const toHold: number[]    = [];
+
+  for (const m of pending) {
+    const ctx   = m.context ?? "";
+    const conf  = m.confidence ?? 0;
+    const nameL = m.entityName.toLowerCase().trim();
+
+    // Parse admission metadata encoded in context
+    const roleMatch   = ctx.match(/\[A:r=([^|]+)\|/);
+    const role        = roleMatch ? roleMatch[1] : "UNKNOWN";
+    const topicMatch  = ctx.match(/\|t=([^|]+)\|/);
+    const topic       = topicMatch ? topicMatch[1] : "LOW";
+    const zoneMatch   = ctx.match(/\|z=([^\]]+)/);
+    const zone        = zoneMatch ? zoneMatch[1] : "body";
+
+    const inTitleDekLead  = zone === "title" || zone === "dek" || zone === "lead";
+    const hasRealRole     = role !== "UNKNOWN" && role !== "PERSON";
+    const isHighTopic     = topic === "HIGH";
+    const isMedTopic      = topic === "MEDIUM";
+    const isLowTopic      = topic === "LOW";
+
+    // ── AUTO-REJECT criteria ─────────────────────────────────────────────
+    // Already-flagged junk: off-topic, blocklist, boilerplate
+    if (/BLOCKLIST|TOPIC_MISMATCH|BOILERPLATE|NAV_RESIDUE|CROSS_STORY/.test(ctx) && conf < 0.60) {
+      toReject.push(m.id); continue;
+    }
+    // Very low confidence regardless of context
+    if (conf < 0.50) { toReject.push(m.id); continue; }
+    // Side/footer zone with weak signal
+    if ((zone === "sidebar" || zone === "footer" || zone === "related") && conf < 0.70) {
+      toReject.push(m.id); continue;
+    }
+    // Short single-word entities with no real role and low confidence
+    if (!m.entityName.includes(" ") && m.entityType !== "person" && conf < 0.62) {
+      toReject.push(m.id); continue;
+    }
+    // Single-word org/location with LOW topic and no role = junk fragment
+    if (!m.entityName.includes(" ") && m.entityType !== "person" && isLowTopic && role === "UNKNOWN") {
+      toReject.push(m.id); continue;
+    }
+    // All-caps short acronym with no role
+    if (/^[A-Z]{1,4}$/.test(m.entityName.trim()) && role === "UNKNOWN") {
+      toReject.push(m.id); continue;
+    }
+    // Tail zone + LOW topic + no role = boilerplate bleed
+    if (zone === "tail" && isLowTopic && role === "UNKNOWN") {
+      toReject.push(m.id); continue;
+    }
+
+    // ── AUTO-PROMOTE criteria ────────────────────────────────────────────
+    // Title/dek/lead + HIGH topic + real role + high confidence
+    if (inTitleDekLead && isHighTopic && hasRealRole && conf >= 0.72) {
+      toPromote.push(m.id); continue;
+    }
+    // HIGH topic + real role + very high confidence (any zone)
+    if (isHighTopic && hasRealRole && conf >= 0.85) {
+      toPromote.push(m.id); continue;
+    }
+    // MEDIUM topic + real role + high confidence + premium zone
+    if (isMedTopic && hasRealRole && conf >= 0.78 && inTitleDekLead) {
+      toPromote.push(m.id); continue;
+    }
+    // GOVERNMENT_AGENCY or COMMITTEE role + HIGH/MEDIUM topic + decent confidence
+    if ((role === "GOVERNMENT_AGENCY" || role === "COMMITTEE" || role === "OFFICIAL") && (isHighTopic || isMedTopic) && conf >= 0.70) {
+      toPromote.push(m.id); continue;
+    }
+
+    // ── AUTO-HOLD criteria ───────────────────────────────────────────────
+    // MEDIUM topic + some role + moderate confidence = ambiguous, needs review
+    if (isMedTopic && conf >= 0.58) {
+      toHold.push(m.id); continue;
+    }
+    // LOW topic but role-bearing and decent confidence = hold for review
+    if (isLowTopic && hasRealRole && conf >= 0.68) {
+      toHold.push(m.id); continue;
+    }
+
+    // Default: reject remaining junk
+    if (isLowTopic && !hasRealRole) {
+      toReject.push(m.id); continue;
+    }
+    // Otherwise hold for analyst
+    toHold.push(m.id);
+  }
+
+  if (toPromote.length > 0) {
+    await db.update(entityMentionsTable)
+      .set({ status: "approved" })
+      .where(inArray(entityMentionsTable.id, toPromote));
+  }
+  if (toReject.length > 0) {
+    await db.update(entityMentionsTable)
+      .set({ status: "rejected" })
+      .where(inArray(entityMentionsTable.id, toReject));
+  }
+  if (toHold.length > 0) {
+    await db.update(entityMentionsTable)
+      .set({ status: "held" })
+      .where(inArray(entityMentionsTable.id, toHold));
+  }
+
+  const remainingPending = pending.length - toPromote.length - toReject.length - toHold.length;
+
+  await logEvent(
+    "auto_triage_complete",
+    `Auto-triage in case ${caseId}: promoted=${toPromote.length}, rejected=${toReject.length}, held=${toHold.length}, remaining=${remainingPending}`,
+    { caseId }
+  );
+
+  res.json({
+    autoPromoted: toPromote.length,
+    autoRejected: toReject.length,
+    autoHeld: toHold.length,
+    remainingPending,
+    total: pending.length,
+  });
+});
+
 function formatCase(
   c: typeof casesTable.$inferSelect,
   entityCount?: number,
