@@ -34,8 +34,43 @@ const STATUS_STYLES: Record<CaseStatus, { dot: string; text: string; label: stri
 
 type SeedStatus = "idle" | "seeding" | "done" | "error";
 type SeedTab = "target" | "urls" | "notes";
+type LauncherMode = "new" | "command";
+type CmdStatus = "idle" | "running" | "done" | "error";
+
+function parseCaseId(input: string): number | null {
+  const m = input.match(/(?:case[-\s#]?(\d+)|#(\d+)|(\d{4,6}))/i);
+  if (!m) return null;
+  const raw = m[1] || m[2] || m[3];
+  return raw ? parseInt(raw) : null;
+}
+
+function parseCommand(input: string): { intent: string; caseId: number | null; payload: string } | null {
+  const s = input.trim().toLowerCase();
+  const caseId = parseCaseId(input);
+  const quoteMatch = input.match(/"([^"]+)"/);
+  const payload = quoteMatch ? quoteMatch[1] : input.replace(/^(add|update|rebuild|recompile|attach)\s+/i, "").trim();
+
+  if (/add\s+(entity|person|org|organization)/.test(s)) return { intent: "add-entity", caseId, payload };
+  if (/add\s+(document|doc|file)/.test(s)) return { intent: "add-doc-note", caseId, payload: input };
+  if (/add\s+note/.test(s)) return { intent: "add-note", caseId, payload };
+  if (/attach\s+url|add\s+url/.test(s)) return { intent: "attach-url", caseId, payload: (input.match(/https?:\/\/\S+/)?.[0] ?? "") };
+  if (/rebuild\s+graph/.test(s)) return { intent: "rebuild-graph", caseId, payload: "" };
+  if (/recompile\s+dossier/.test(s)) return { intent: "recompile-dossier", caseId, payload: "" };
+  if (/update\s+entit/.test(s)) return { intent: "update-entities", caseId, payload };
+  return null;
+}
+
+const CMD_EXAMPLES = [
+  'add entity "LAHSA" to case 010001',
+  'add note "Subject identified at 0300" to case 000034',
+  'attach url https://example.com/report to case 000032',
+  'rebuild graph for case 000021',
+  'recompile dossier for case 000021',
+  'update entities in case 010001 with LA County Initiative',
+];
 
 function SeedLauncher() {
+  const [launcherMode, setLauncherMode] = useState<LauncherMode>("new");
   const [target, setTarget] = useState("");
   const [urlsRaw, setUrlsRaw] = useState("");
   const [rawNotes, setRawNotes] = useState("");
@@ -43,6 +78,13 @@ function SeedLauncher() {
   const [status, setStatus] = useState<SeedStatus>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [seededCaseId, setSeededCaseId] = useState<number | null>(null);
+
+  // Case command state
+  const [cmdInput, setCmdInput] = useState("");
+  const [cmdStatus, setCmdStatus] = useState<CmdStatus>("idle");
+  const [cmdResult, setCmdResult] = useState<string | null>(null);
+  const [cmdError, setCmdError] = useState<string | null>(null);
+
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -88,6 +130,94 @@ function SeedLauncher() {
     }
   };
 
+  const handleCommand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cmd = cmdInput.trim();
+    if (!cmd) return;
+    setCmdStatus("running");
+    setCmdResult(null);
+    setCmdError(null);
+
+    const parsed = parseCommand(cmd);
+    if (!parsed) {
+      setCmdError("Command not recognized. Try: add entity, add note, attach url, rebuild graph, recompile dossier");
+      setCmdStatus("error");
+      return;
+    }
+    const { intent, caseId, payload } = parsed;
+
+    if (!caseId) {
+      setCmdError("Could not identify case ID. Include 'case XXXXXX' in your command.");
+      setCmdStatus("error");
+      return;
+    }
+
+    const caseLabel = `CASE-${caseId.toString().padStart(6, "0")}`;
+
+    try {
+      if (intent === "add-entity") {
+        const entityName = payload;
+        if (!entityName) throw new Error("No entity name found. Use quotes: add entity \"Name\" to case 000001");
+        const resp = await fetch("/api/entities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: entityName, type: "organization", caseId, confidence: 0.7, source: "operator-command" }),
+        });
+        if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+        queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        setCmdResult(`Entity "${entityName}" added to ${caseLabel}`);
+      } else if (intent === "add-note") {
+        const content = payload || cmd;
+        const resp = await fetch("/api/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caseId, content }),
+        });
+        if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+        queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        setCmdResult(`Note added to ${caseLabel}`);
+      } else if (intent === "attach-url") {
+        const url = payload;
+        if (!url) throw new Error("No URL found in command");
+        const domain = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+        const resp = await fetch("/api/web-ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, title: url, sourceDomain: domain, caseId }),
+        });
+        if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+        queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        setCmdResult(`URL attached to ${caseLabel}`);
+      } else if (intent === "rebuild-graph") {
+        const resp = await fetch(`/api/cases/${caseId}/rebuild-graph`, { method: "POST" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        setCmdResult(`Graph rebuilt for ${caseLabel}`);
+      } else if (intent === "recompile-dossier") {
+        const resp = await fetch(`/api/cases/${caseId}/compile`, { method: "POST" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        setCmdResult(`Dossier recompiled for ${caseLabel}`);
+      } else if (intent === "update-entities") {
+        const resp = await fetch(`/api/cases/${caseId}/web-search-ingest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ queries: [payload], maxResults: 3 }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        setCmdResult(`Entity update queued for ${caseLabel} — ingesting "${payload}"`);
+      } else {
+        throw new Error("Unsupported command");
+      }
+      setCmdStatus("done");
+      setTimeout(() => { setCmdStatus("idle"); setCmdResult(null); }, 5000);
+    } catch (err) {
+      setCmdError(String((err as Error).message));
+      setCmdStatus("error");
+    }
+  };
+
   const tabs: { id: SeedTab; label: string; badge?: number }[] = [
     { id: "target", label: "TARGET" },
     { id: "urls", label: "SOURCE URLs", badge: parsedUrls.length || undefined },
@@ -99,33 +229,103 @@ function SeedLauncher() {
       <div className="nexus-header-strip border-b border-red-500/15">
         <div className="flex items-center gap-2 font-mono text-[9px] text-red-400 uppercase tracking-widest">
           <Zap className="w-3 h-3" />
-          START NEW INVESTIGATION
+          ATLAS SEED LAUNCHER
         </div>
-        <div className="font-mono text-[9px] text-neutral-700 uppercase">ATLAS SEED LAUNCHER</div>
+        <div className="flex items-center gap-1 border border-[#ffffff08]">
+          <button
+            type="button"
+            onClick={() => setLauncherMode("new")}
+            className={`px-3 py-1 font-mono text-[8px] uppercase tracking-widest transition-colors ${launcherMode === "new" ? "bg-red-500/15 text-red-400" : "text-neutral-600 hover:text-neutral-400"}`}
+          >
+            NEW INVESTIGATION
+          </button>
+          <button
+            type="button"
+            onClick={() => setLauncherMode("command")}
+            className={`px-3 py-1 font-mono text-[8px] uppercase tracking-widest transition-colors ${launcherMode === "command" ? "bg-cyan-500/10 text-cyan-400" : "text-neutral-600 hover:text-neutral-400"}`}
+          >
+            CASE COMMAND
+          </button>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[#ffffff08]">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1.5 font-mono text-[8px] uppercase tracking-widest flex items-center gap-1.5 transition-colors border-b-2 ${
-              activeTab === tab.id
-                ? "border-red-500 text-red-400 bg-red-500/[0.04]"
-                : "border-transparent text-neutral-600 hover:text-neutral-400"
-            }`}
-          >
-            {tab.label}
-            {tab.badge !== undefined && (
-              <span className="px-1 py-0 bg-red-500/20 text-red-400 text-[7px] rounded-sm">
-                {tab.badge}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* CASE COMMAND MODE */}
+      {launcherMode === "command" && (
+        <div className="p-4 space-y-3">
+          <div className="space-y-1">
+            <label className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest block">Operational Command</label>
+            <p className="font-mono text-[8px] text-neutral-700">Issue direct commands to active cases. ATLAS resolves the case, performs the action, and confirms.</p>
+          </div>
+          <form onSubmit={handleCommand} className="flex gap-2">
+            <input
+              type="text"
+              value={cmdInput}
+              onChange={e => { setCmdInput(e.target.value); if (cmdStatus !== "idle") { setCmdStatus("idle"); setCmdResult(null); setCmdError(null); } }}
+              placeholder='e.g. add entity "LAHSA" to case 010001'
+              disabled={cmdStatus === "running"}
+              className="flex-1 bg-black border border-[#ffffff12] text-white font-mono text-sm px-3 h-9 focus:outline-none focus:border-cyan-500/50 disabled:opacity-40 placeholder:text-neutral-700"
+            />
+            <button
+              type="submit"
+              disabled={!cmdInput.trim() || cmdStatus === "running"}
+              className="h-9 px-4 bg-cyan-800/60 hover:bg-cyan-700/60 disabled:bg-neutral-800 disabled:text-neutral-600 text-cyan-300 font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-1.5"
+            >
+              {cmdStatus === "running" ? <><span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />EXEC...</> : <>EXECUTE</>}
+            </button>
+          </form>
+          {cmdResult && (
+            <div className="flex items-center gap-2 text-green-400 font-mono text-[10px]">
+              <CheckCircle className="w-3 h-3 flex-shrink-0" />
+              {cmdResult}
+            </div>
+          )}
+          {cmdError && (
+            <div className="flex items-center gap-2 text-red-400 font-mono text-[10px]">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+              {cmdError}
+            </div>
+          )}
+          <div className="space-y-1 pt-1 border-t border-[#ffffff06]">
+            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">Command examples</div>
+            <div className="flex flex-col gap-1">
+              {CMD_EXAMPLES.map(ex => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => { setCmdInput(ex); setCmdStatus("idle"); setCmdResult(null); setCmdError(null); }}
+                  className="text-left font-mono text-[9px] text-neutral-700 hover:text-cyan-500 transition-colors truncate"
+                >
+                  → {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW INVESTIGATION MODE */}
+      {launcherMode === "new" && <>
+        <div className="flex border-b border-[#ffffff08]">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-1.5 font-mono text-[8px] uppercase tracking-widest flex items-center gap-1.5 transition-colors border-b-2 ${
+                activeTab === tab.id
+                  ? "border-red-500 text-red-400 bg-red-500/[0.04]"
+                  : "border-transparent text-neutral-600 hover:text-neutral-400"
+              }`}
+            >
+              {tab.label}
+              {tab.badge !== undefined && (
+                <span className="px-1 py-0 bg-red-500/20 text-red-400 text-[7px] rounded-sm">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
       <form onSubmit={handleSeed} className="p-4 space-y-3">
         {/* TARGET TAB */}
@@ -268,6 +468,7 @@ function SeedLauncher() {
           </div>
         )}
       </form>
+      </>}
     </div>
   );
 }

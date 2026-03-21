@@ -1760,6 +1760,11 @@ interface CaseBriefData {
   knownGaps: string[];
   suggestedNextQueries: string[];
   earlySignals?: EarlySignalEntry[];
+  keyFindings?: string[];
+  financialRedFlags?: string[];
+  powerNodes?: string[];
+  oversightFailures?: string[];
+  recommendedActions?: string[];
   stats: { totalDocs: number; usableDocs: number; totalEntities: number; totalTimeline: number; totalFinancial: number; totalRelationships?: number; totalMentions?: number };
 }
 
@@ -2238,6 +2243,106 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
               </div>
             )}
           </div>
+
+          {/* KEY FINDINGS */}
+          {(brief.keyFindings?.length ?? 0) > 0 && (
+            <div className="atlas-brief-section">
+              <button onClick={() => toggleSection("keyFindings")} className="atlas-brief-section-header w-full text-left">
+                <span className="font-mono text-[8px] text-red-500/80 uppercase tracking-widest flex-1">⬛ KEY FINDINGS ({brief.keyFindings!.length})</span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("keyFindings") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("keyFindings") && (
+                <div className="px-3 py-2 space-y-2">
+                  {brief.keyFindings!.map((f, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className="font-mono text-[8px] text-red-800 mt-0.5 flex-shrink-0">{(i + 1).toString().padStart(2, "0")}</span>
+                      <span className="font-mono text-[8px] text-neutral-300 leading-relaxed">{f}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FINANCIAL RED FLAGS */}
+          {(brief.financialRedFlags?.length ?? 0) > 0 && (
+            <div className="atlas-brief-section" style={{ borderColor: "rgba(239,68,68,0.12)" }}>
+              <button onClick={() => toggleSection("finRedFlags")} className="atlas-brief-section-header w-full text-left">
+                <span className="font-mono text-[8px] text-red-400/80 uppercase tracking-widest flex-1">◎ FINANCIAL RED FLAGS ({brief.financialRedFlags!.length})</span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("finRedFlags") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("finRedFlags") && (
+                <div className="px-3 py-2 space-y-1.5">
+                  {brief.financialRedFlags!.map((flag, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className="font-mono text-[8px] text-red-700 mt-0.5 flex-shrink-0">⚑</span>
+                      <span className="font-mono text-[8px] text-red-200/60 leading-relaxed">{flag}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* POWER NODES */}
+          {(brief.powerNodes?.length ?? 0) > 0 && (
+            <div className="atlas-brief-section">
+              <button onClick={() => toggleSection("powerNodes")} className="atlas-brief-section-header w-full text-left">
+                <span className="font-mono text-[8px] text-amber-500/70 uppercase tracking-widest flex-1">◉ POWER NODES ({brief.powerNodes!.length})</span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("powerNodes") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("powerNodes") && (
+                <div className="px-3 py-2 space-y-1.5">
+                  {brief.powerNodes!.map((node, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className="font-mono text-[8px] text-amber-700 mt-0.5 flex-shrink-0">◈</span>
+                      <span className="font-mono text-[8px] text-amber-200/50 leading-relaxed">{node}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* OVERSIGHT FAILURES */}
+          {(brief.oversightFailures?.length ?? 0) > 0 && (
+            <div className="atlas-brief-section" style={{ borderColor: "rgba(245,158,11,0.15)" }}>
+              <button onClick={() => toggleSection("oversightFails")} className="atlas-brief-section-header w-full text-left">
+                <span className="font-mono text-[8px] text-orange-600/70 uppercase tracking-widest flex-1">⚠ OVERSIGHT FAILURES ({brief.oversightFailures!.length})</span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("oversightFails") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("oversightFails") && (
+                <div className="px-3 py-2 space-y-1.5">
+                  {brief.oversightFailures!.map((fail, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className="font-mono text-[8px] text-orange-700 mt-0.5 flex-shrink-0">⚠</span>
+                      <span className="font-mono text-[8px] text-orange-200/50 leading-relaxed">{fail}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* RECOMMENDED ACTIONS */}
+          {(brief.recommendedActions?.length ?? 0) > 0 && (
+            <div className="atlas-brief-section" style={{ borderColor: "rgba(34,197,94,0.12)" }}>
+              <button onClick={() => toggleSection("recActions")} className="atlas-brief-section-header w-full text-left">
+                <span className="font-mono text-[8px] text-green-600/70 uppercase tracking-widest flex-1">→ RECOMMENDED ACTIONS ({brief.recommendedActions!.length})</span>
+                <span className="font-mono text-[8px] text-neutral-700">{expanded.has("recActions") ? "▲" : "▼"}</span>
+              </button>
+              {expanded.has("recActions") && (
+                <div className="px-3 py-2 space-y-1.5">
+                  {brief.recommendedActions!.map((action, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className="font-mono text-[8px] text-green-800 mt-0.5 flex-shrink-0">{(i + 1).toString().padStart(2, "0")}</span>
+                      <span className="font-mono text-[8px] text-green-300/60 leading-relaxed">{action}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Stats footer */}
           <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[#ffffff05]">

@@ -109,6 +109,13 @@ export interface CaseBrief {
   earlySignals: EarlySignalEntry[];
   caseHealth: "SPARSE" | "DEVELOPING" | "STRONG";
 
+  // T005+T006: Structured investigative intelligence sections
+  keyFindings: string[];
+  financialRedFlags: string[];
+  powerNodes: string[];
+  oversightFailures: string[];
+  recommendedActions: string[];
+
   stats: {
     totalDocs: number;
     usableDocs: number;
@@ -571,6 +578,13 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     dataQuality === "MODERATE" ? "DEVELOPING" :
     "SPARSE";
 
+  // ── T005+T006: Structured investigative intelligence sections ─────────────
+  const keyFindings = buildKeyFindings(primaryEntities, topFinancial, topTimeline, keyEvidence, relationships, targetMode, seedIntent);
+  const financialRedFlags = buildFinancialRedFlags(topFinancial, financialSignals, primaryEntities, keyEvidence);
+  const powerNodes = buildPowerNodes(primaryEntities, relationships, entities);
+  const oversightFailures = buildOversightFailures(topTimeline, topFinancial, primaryEntities, keyEvidence, targetMode);
+  const recommendedActions = buildRecommendedActions(dataQuality, primaryEntities, topTimeline, topFinancial, keyEvidence, targetMode, knownGaps);
+
   return {
     caseId,
     caseTitle: caseRow.title,
@@ -597,6 +611,11 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     suggestedNextQueries,
     earlySignals,
     caseHealth,
+    keyFindings,
+    financialRedFlags,
+    powerNodes,
+    oversightFailures,
+    recommendedActions,
     stats: {
       totalDocs: docs.length,
       usableDocs: usableCount,
@@ -1006,6 +1025,292 @@ function buildSuggestedQueries(
   }
 
   return [...new Set(queries)].slice(0, 6);
+}
+
+// ── T005+T006: Structured investigative intelligence builders ────────────────
+
+function buildKeyFindings(
+  primaryEntities: RankedEntity[],
+  topFinancial: RankedFinancialSignal[],
+  topTimeline: RankedTimelineEvent[],
+  keyEvidence: RankedDocument[],
+  relationships: { entityAId?: number | null; entityBId?: number | null; relationshipType?: string | null; confidence?: string | number | null }[],
+  targetMode: string | null,
+  seedIntent: string | undefined
+): string[] {
+  const findings: string[] = [];
+
+  // Finding 1: Primary actor network
+  const topPersons = primaryEntities.filter(e => e.type === "person").slice(0, 2);
+  const topOrgs = primaryEntities.filter(e => e.type !== "person").slice(0, 2);
+  if (topPersons.length > 0 && topOrgs.length > 0) {
+    findings.push(`${topPersons[0].name} holds documented ties to ${topOrgs[0].name} — both appear in multiple independent source documents.`);
+  } else if (topPersons.length >= 2) {
+    findings.push(`${topPersons[0].name} and ${topPersons[1].name} are co-documented across the evidence set — relationship warrants deeper mapping.`);
+  } else if (topOrgs.length > 0) {
+    findings.push(`${topOrgs[0].name} is the primary organizational node — ${primaryEntities[0]?.mentionCount ?? 0} mentions across ${primaryEntities[0]?.docSupport ?? 0} source documents.`);
+  }
+
+  // Finding 2: High-value financial signal
+  const topMoney = topFinancial.filter(f => f.normalizedAmount && f.normalizedAmount > 0).sort((a, b) => (b.normalizedAmount ?? 0) - (a.normalizedAmount ?? 0));
+  if (topMoney.length > 0) {
+    const f = topMoney[0];
+    const amtStr = f.amountDisplay || f.amountRaw;
+    const ctrlStr = f.controlledBy ? ` — controlled by ${f.controlledBy}` : "";
+    const recvStr = f.receivedBy ? ` → disbursed to ${f.receivedBy}` : "";
+    const progStr = f.programName ? ` under ${f.programName}` : "";
+    findings.push(`Largest confirmed financial signal: ${amtStr}${progStr}${ctrlStr}${recvStr}. Signal type: ${f.signalType?.replace(/_/g, " ")}.`);
+  }
+
+  // Finding 3: Legal/audit timeline event
+  const legalEvents = topTimeline.filter(t => ["LEGAL_ACTION", "AUDIT", "INVESTIGATION_STARTED"].includes(t.eventType));
+  if (legalEvents.length > 0) {
+    const e = legalEvents[0];
+    const clean = e.title.replace(/^\[[A-Z_]+\]\s*/, "");
+    findings.push(`Legal/oversight event confirmed: "${clean}" [${e.eventDate?.slice(0, 10) ?? "date unknown"}].`);
+  }
+
+  // Finding 4: Document quality signal
+  const tier1Docs = keyEvidence.filter(d => d.priority === "TIER-1");
+  if (tier1Docs.length > 0) {
+    const d = tier1Docs[0];
+    findings.push(`TIER-1 source document identified: "${d.title}" (${d.entityCount} entities, ${d.hasFinancial ? "financial signals, " : ""}${d.hasTimeline ? "timeline events, " : ""}score: ${Math.round(d.score)}).`);
+  }
+
+  // Finding 5: Relationship density signal
+  if (relationships.length >= 3) {
+    findings.push(`${relationships.length} documented entity relationships extracted — network density suggests organized institutional involvement.`);
+  } else if (primaryEntities.length >= 3) {
+    findings.push(`${primaryEntities.length} promoted entities with no confirmed relationship links — relationship mapping recommended as next step.`);
+  }
+
+  // Finding 6: Multi-doc entity corroboration
+  const multiDocEntities = primaryEntities.filter(e => e.docSupport >= 3);
+  if (multiDocEntities.length > 0) {
+    findings.push(`${multiDocEntities.length} entity/entities confirmed across 3+ independent documents — high corroboration confidence.`);
+  }
+
+  return findings.filter(Boolean).slice(0, 6);
+}
+
+function buildFinancialRedFlags(
+  topFinancial: RankedFinancialSignal[],
+  allFinancial: RankedFinancialSignal[],
+  primaryEntities: RankedEntity[],
+  keyEvidence: RankedDocument[]
+): string[] {
+  const flags: string[] = [];
+
+  // Unusually large single payment
+  const bigPayments = topFinancial.filter(f => f.normalizedAmount && f.normalizedAmount >= 1_000_000);
+  if (bigPayments.length > 0) {
+    const b = bigPayments[0];
+    const amt = b.amountDisplay || b.amountRaw;
+    flags.push(`Large-value transaction detected: ${amt} — ${b.signalType?.replace(/_/g, " ") ?? "type unclassified"} via ${b.programName ?? b.entityName ?? "unknown program"}.`);
+  }
+
+  // No-bid / sole-source signal
+  const isSoleSource = allFinancial.some(f =>
+    f.eventSummary?.toLowerCase().includes("no-bid") ||
+    f.eventSummary?.toLowerCase().includes("sole source") ||
+    f.eventSummary?.toLowerCase().includes("emergency contract") ||
+    f.eventSummary?.toLowerCase().includes("direct award")
+  );
+  if (isSoleSource) flags.push("Potential no-bid or sole-source contracting language detected — competitive procurement may have been bypassed.");
+
+  // Funding to single recipient
+  const byReceiver = new Map<string, number>();
+  for (const f of allFinancial) {
+    const recv = f.receivedBy ?? f.entityName;
+    if (recv && f.normalizedAmount) byReceiver.set(recv, (byReceiver.get(recv) ?? 0) + f.normalizedAmount);
+  }
+  const topRecv = [...byReceiver.entries()].sort((a, b) => b[1] - a[1]);
+  if (topRecv.length > 0 && topRecv[0][1] >= 500_000) {
+    const totalInflow = [...byReceiver.values()].reduce((a, b) => a + b, 0);
+    const sharePct = totalInflow > 0 ? Math.round((topRecv[0][1] / totalInflow) * 100) : 0;
+    if (sharePct >= 40) {
+      flags.push(`${topRecv[0][0]} receives an outsized share of documented funding (≥${sharePct}% concentration) — potential dependency or improper favoritism.`);
+    }
+  }
+
+  // Non-numeric / opaque funding language
+  const opaqueCount = allFinancial.filter(f => f.signalType?.startsWith("NON_NUMERIC") || f.amountDisplay === "NON-NUMERIC").length;
+  if (opaqueCount >= 2) flags.push(`${opaqueCount} funding references use non-numeric language (e.g. "significant funding," "major investment") — deliberate financial obfuscation possible.`);
+
+  // Inferred cross-doc signals
+  const inferredCount = allFinancial.filter(f => f.inferredSignal).length;
+  if (inferredCount >= 2) flags.push(`${inferredCount} financial signals are cross-document inferences, not direct quotations — verify primary source documents.`);
+
+  return flags.filter(Boolean).slice(0, 5);
+}
+
+function buildPowerNodes(
+  primaryEntities: RankedEntity[],
+  relationships: { entityAId?: number | null; entityBId?: number | null; confidence?: string | number | null }[],
+  allEntities: { id?: number | null; name: string; type?: string | null }[]
+): string[] {
+  const nodes: string[] = [];
+
+  // Compute degree centrality for each entity
+  const degree = new Map<number, number>();
+  for (const r of relationships) {
+    if (r.entityAId) degree.set(r.entityAId, (degree.get(r.entityAId) ?? 0) + 1);
+    if (r.entityBId) degree.set(r.entityBId, (degree.get(r.entityBId) ?? 0) + 1);
+  }
+
+  // Sort entities by degree + mention weight
+  const scored = primaryEntities.map(e => ({
+    entity: e,
+    degree: degree.get(e.id) ?? 0,
+    score: (degree.get(e.id) ?? 0) * 2 + e.mentionCount * 0.5 + e.docSupport,
+  })).sort((a, b) => b.score - a.score);
+
+  const top = scored.slice(0, 3);
+
+  for (const { entity, degree: deg } of top) {
+    const typeLabel = entity.type === "person" ? "Person" : entity.type === "government_agency" ? "Gov. Agency" : entity.type === "organization" ? "Organization" : "Entity";
+    const relNote = deg > 0 ? ` — ${deg} documented link${deg > 1 ? "s" : ""}` : "";
+    const mentionNote = entity.mentionCount > 1 ? `, ${entity.mentionCount} mentions across ${entity.docSupport} doc${entity.docSupport > 1 ? "s" : ""}` : "";
+    nodes.push(`${entity.name} [${typeLabel}]${relNote}${mentionNote}.`);
+  }
+
+  // Detect bridging nodes (appear on both sides of relationships)
+  const bridgeIds = new Set<number>();
+  for (const r of relationships) {
+    if (r.entityAId && r.entityBId) {
+      bridgeIds.add(r.entityAId);
+      bridgeIds.add(r.entityBId);
+    }
+  }
+  const bridges = allEntities.filter(e => e.id && bridgeIds.has(e.id) && !top.find(t => t.entity.id === e.id));
+  if (bridges.length > 0) {
+    nodes.push(`${bridges.slice(0, 2).map(b => b.name).join(", ")} function as network bridge${bridges.length > 1 ? "s" : ""} — connecting otherwise separate clusters.`);
+  }
+
+  if (nodes.length === 0) {
+    if (primaryEntities.length > 0) {
+      nodes.push(`${primaryEntities[0].name} is the sole promoted entity — additional ingest required to map power network.`);
+    } else {
+      nodes.push("No power nodes identified — promote entities and map relationships to reveal network structure.");
+    }
+  }
+
+  return nodes.filter(Boolean).slice(0, 4);
+}
+
+function buildOversightFailures(
+  topTimeline: RankedTimelineEvent[],
+  topFinancial: RankedFinancialSignal[],
+  primaryEntities: RankedEntity[],
+  keyEvidence: RankedDocument[],
+  targetMode: string | null
+): string[] {
+  const failures: string[] = [];
+
+  // No legal/audit events despite financial signals
+  const hasLegal = topTimeline.some(t => ["LEGAL_ACTION", "AUDIT", "INVESTIGATION_STARTED"].includes(t.eventType));
+  const hasFinancial = topFinancial.length > 0;
+  if (!hasLegal && hasFinancial) {
+    failures.push("No audit, legal, or investigative events documented despite financial signals — potential accountability gap.");
+  }
+
+  // Long gap between financial signals and any oversight
+  const financialDates = topFinancial.map(f => f.documentTitle).filter(Boolean);
+  if (hasLegal && hasFinancial) {
+    const legalDate = topTimeline.find(t => ["LEGAL_ACTION", "AUDIT", "INVESTIGATION_STARTED"].includes(t.eventType))?.eventDate;
+    if (legalDate) {
+      failures.push(`Oversight action not initiated until ${legalDate?.slice(0, 10) ?? "unknown date"} — investigate whether early warning signals were ignored.`);
+    }
+  }
+
+  // Government agency as primary entity with no oversight signal
+  const govAgencies = primaryEntities.filter(e => e.type === "government_agency");
+  if (govAgencies.length > 0 && !hasLegal) {
+    failures.push(`${govAgencies[0].name} is a primary actor with no documented oversight review — missing inspector general or audit reporting.`);
+  }
+
+  // Large public funds with low credibility sources
+  const govFunds = topFinancial.filter(f => f.normalizedAmount && f.normalizedAmount >= 1_000_000);
+  const hasGovSource = keyEvidence.some(d => d.source?.toLowerCase().includes(".gov") || d.title?.toLowerCase().includes("audit") || d.title?.toLowerCase().includes("inspector general"));
+  if (govFunds.length > 0 && !hasGovSource) {
+    failures.push(`$${(govFunds.reduce((a, f) => a + (f.normalizedAmount ?? 0), 0) / 1_000_000).toFixed(1)}M in public funds documented — no government accountability source (audit/IG report) ingested yet.`);
+  }
+
+  // Pattern: rapid funding approvals in timeline
+  const fundingApprovals = topTimeline.filter(t => t.eventType === "FUNDING_APPROVED" || t.eventType === "CONTRACT_AWARDED");
+  if (fundingApprovals.length >= 3) {
+    failures.push(`${fundingApprovals.length} separate funding approvals or contract awards documented — frequency may indicate rubber-stamp oversight.`);
+  }
+
+  if (failures.length === 0 && targetMode === "scandal_target") {
+    failures.push("Insufficient data to assess oversight failures — ingest inspector general reports, audit findings, or regulatory filings.");
+  }
+
+  return failures.filter(Boolean).slice(0, 5);
+}
+
+function buildRecommendedActions(
+  dataQuality: "STRONG" | "MODERATE" | "WEAK" | "EMPTY",
+  primaryEntities: RankedEntity[],
+  topTimeline: RankedTimelineEvent[],
+  topFinancial: RankedFinancialSignal[],
+  keyEvidence: RankedDocument[],
+  targetMode: string | null,
+  knownGaps: string[]
+): string[] {
+  const actions: string[] = [];
+
+  if (dataQuality === "EMPTY") {
+    actions.push("Run a targeted web ingest session to begin evidence collection.");
+    actions.push("Start with official government, court, or news sources for highest-quality signals.");
+    return actions;
+  }
+
+  // Evidence gaps
+  if (knownGaps.some(g => g.includes("Thin document"))) {
+    actions.push("Expand document base — ingest 5–10 additional sources before drawing conclusions.");
+  }
+
+  // Entity relationship mapping
+  const noRelationships = topTimeline.length === 0;
+  if (primaryEntities.length >= 2 && noRelationships) {
+    actions.push(`Map relationship between ${primaryEntities[0].name} and ${primaryEntities[1].name} — check shared board memberships, contracts, or co-signatures.`);
+  }
+
+  // No legal/audit events
+  const hasLegal = topTimeline.some(t => ["LEGAL_ACTION", "AUDIT", "INVESTIGATION_STARTED"].includes(t.eventType));
+  if (!hasLegal) {
+    actions.push("Search for inspector general reports, GAO audits, or PACER court records related to primary entities.");
+  }
+
+  // Financial follow-up
+  if (topFinancial.length > 0) {
+    const topRecv = topFinancial[0].receivedBy ?? topFinancial[0].entityName;
+    if (topRecv) {
+      actions.push(`Pull public disclosure records for ${topRecv} — verify lobbying filings, 990s, or state contractor databases.`);
+    }
+  } else {
+    actions.push("No financial signals detected — request SAM.gov, FPDS, or USASpending records for primary entities.");
+  }
+
+  // FOIA opportunity
+  if (primaryEntities.some(e => e.type === "government_agency")) {
+    const agency = primaryEntities.find(e => e.type === "government_agency");
+    actions.push(`File FOIA/public records request with ${agency?.name ?? "relevant agency"} for contracts, meeting minutes, and internal communications.`);
+  }
+
+  // Source credibility upgrade
+  const hasGovDocs = keyEvidence.some(d => d.priority === "TIER-1");
+  if (!hasGovDocs) {
+    actions.push("Upgrade evidence quality — ingest primary-source documents (government filings, court records, official audits).");
+  }
+
+  // Timeline reconstruction
+  if (topTimeline.length < 3) {
+    actions.push("Reconstruct timeline — search for dated contract awards, board meeting minutes, or regulatory actions to anchor the chronology.");
+  }
+
+  return [...new Set(actions)].filter(Boolean).slice(0, 6);
 }
 
 // ── Persist compiled brief ────────────────────────────────────────────────────

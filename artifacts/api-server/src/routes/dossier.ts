@@ -10,6 +10,7 @@ import {
   financialSignalsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { compileCaseBrief } from "../lib/case-compiler";
 
 const router: IRouter = Router();
 
@@ -473,6 +474,21 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   };
   const recommendedActions = buildRecommendedActions();
 
+  // Pull new intelligence fields from compiled brief
+  let keyFindings: string[] = [];
+  let financialRedFlags: string[] = [];
+  let powerNodes: string[] = [];
+  let oversightFailures: string[] = [];
+  let briefRecommendedActions: string[] = [];
+  try {
+    const brief = await compileCaseBrief(caseId);
+    keyFindings = brief.keyFindings ?? [];
+    financialRedFlags = brief.financialRedFlags ?? [];
+    powerNodes = brief.powerNodes ?? [];
+    oversightFailures = brief.oversightFailures ?? [];
+    briefRecommendedActions = brief.recommendedActions ?? [];
+  } catch { /* use empty arrays */ }
+
   return res.json({
     caseId,
     caseTitle: caseData.title,
@@ -493,7 +509,11 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
       confidenceNote,
       powerStructure,
       riskFlags,
-      recommendedActions,
+      recommendedActions: briefRecommendedActions.length > 0 ? briefRecommendedActions : recommendedActions,
+      keyFindings,
+      financialRedFlags,
+      powerNodes,
+      oversightFailures,
     },
     meta: {
       entityCount: entities.length,

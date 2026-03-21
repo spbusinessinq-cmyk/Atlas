@@ -10,7 +10,11 @@ import {
   ReactFlowProvider,
   useNodesState,
   useEdgesState,
+  NodeToolbar,
+  Handle,
+  Position,
   type Edge,
+  type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -24,9 +28,320 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight, RotateCcw, Maximize2, Eye, EyeOff, GitBranch } from "lucide-react";
+import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight, RotateCcw, Maximize2, Eye, EyeOff, GitBranch, Crosshair, Unlink, Target } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
+
+// ─── Custom AtlasNode with hover micro-controls ──────────────────────────────
+
+interface AtlasNodeData {
+  label: string;
+  type: string;
+  color: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onDeleteGlobal: () => void;
+  onIsolate: () => void;
+  onFocus: () => void;
+  [key: string]: unknown;
+}
+
+const NODE_BTN = {
+  display: "flex", alignItems: "center", gap: "3px",
+  padding: "2px 6px",
+  background: "rgba(4,6,12,0.97)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: "1px",
+  color: "rgba(255,255,255,0.7)",
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: "8px",
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.06em",
+  cursor: "pointer",
+  transition: "all 0.1s",
+  whiteSpace: "nowrap" as const,
+} as React.CSSProperties;
+
+function AtlasNode({ data, selected }: NodeProps) {
+  const d = data as AtlasNodeData;
+  const [hovered, setHovered] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const isVisible = hovered || selected;
+  const color = d.color as string;
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setConfirmDelete(false); }}
+      style={{ position: "relative" }}
+    >
+      <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 6, height: 6 }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 6, height: 6 }} />
+
+      <NodeToolbar isVisible={isVisible} position={Position.Top} offset={6} style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+        {!confirmDelete ? (
+          <>
+            <button
+              style={{ ...NODE_BTN, color: "rgba(6,182,212,0.9)" }}
+              title="Focus node"
+              onClick={e => { e.stopPropagation(); d.onFocus(); }}
+            >
+              <Crosshair style={{ width: 8, height: 8 }} />
+            </button>
+            <button
+              style={{ ...NODE_BTN, color: "rgba(245,158,11,0.9)" }}
+              title="Isolate node — hide others"
+              onClick={e => { e.stopPropagation(); d.onIsolate(); }}
+            >
+              <Target style={{ width: 8, height: 8 }} />
+            </button>
+            <button
+              style={{ ...NODE_BTN, color: "rgba(255,255,255,0.6)" }}
+              title="Open dossier"
+              onClick={e => { e.stopPropagation(); d.onSelect(); }}
+            >
+              <ScanLine style={{ width: 8, height: 8 }} />
+              DOSSIER
+            </button>
+            <button
+              style={{ ...NODE_BTN, color: "rgba(239,68,68,0.7)", borderColor: "rgba(239,68,68,0.2)" }}
+              title="Remove from graph"
+              onClick={e => { e.stopPropagation(); d.onRemove(); }}
+            >
+              <Unlink style={{ width: 8, height: 8 }} />
+            </button>
+            <button
+              style={{ ...NODE_BTN, color: "rgba(239,68,68,0.9)", borderColor: "rgba(239,68,68,0.3)", background: "rgba(20,2,2,0.97)" }}
+              title="Delete globally"
+              onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+            >
+              <Trash2 style={{ width: 8, height: 8 }} />
+            </button>
+          </>
+        ) : (
+          <>
+            <span style={{ ...NODE_BTN, color: "rgba(239,68,68,0.9)", background: "rgba(20,2,2,0.97)", border: "1px solid rgba(239,68,68,0.4)" }}>DELETE?</span>
+            <button
+              style={{ ...NODE_BTN, color: "#fff", background: "rgba(180,20,20,0.9)", border: "1px solid rgba(239,68,68,0.5)" }}
+              onClick={e => { e.stopPropagation(); d.onDeleteGlobal(); setConfirmDelete(false); }}
+            >YES</button>
+            <button
+              style={{ ...NODE_BTN }}
+              onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}
+            >NO</button>
+          </>
+        )}
+      </NodeToolbar>
+
+      {/* Node box — matches original buildNodeStyle */}
+      <div style={{
+        background: selected
+          ? "linear-gradient(135deg, rgba(6,9,15,0.98) 0%, rgba(8,12,20,0.98) 100%)"
+          : "linear-gradient(135deg, rgba(4,6,12,0.97) 0%, rgba(6,9,15,0.97) 100%)",
+        color: selected ? "#ffffff" : "rgba(255,255,255,0.88)",
+        border: selected ? `1px solid ${color}80` : "1px solid rgba(255,255,255,0.1)",
+        borderLeft: `2px solid ${color}`,
+        borderRadius: "1px",
+        padding: "9px 14px",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: "10px",
+        width: 158,
+        textAlign: "left",
+        textTransform: "uppercase",
+        fontWeight: "600",
+        letterSpacing: "0.04em",
+        boxShadow: selected
+          ? `inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px ${color}30, 0 0 24px ${color}35, 0 6px 24px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.9)`
+          : "inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.75), 0 1px 6px rgba(0,0,0,0.9)",
+        outline: "none",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        cursor: "pointer",
+      }}>
+        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130, color }}>
+          {d.label as string}
+        </div>
+        <div style={{ fontSize: "7px", color: "rgba(255,255,255,0.25)", marginTop: "3px", letterSpacing: "0.08em" }}>
+          {(d.type as string).replace(/_/g, " ")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const ATLAS_NODE_TYPES = { atlas: AtlasNode } as const;
+
+// ─── Manual Add Panel (T003) ─────────────────────────────────────────────────
+
+function ManualAddPanel({
+  caseId,
+  entities,
+  addMode,
+  setAddMode,
+  onClose,
+  onSuccess,
+}: {
+  caseId: number;
+  entities: Entity[];
+  addMode: "entity" | "relationship";
+  setAddMode: (m: "entity" | "relationship") => void;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Entity form
+  const [eName, setEName] = useState("");
+  const [eType, setEType] = useState("organization");
+  const [eConf, setEConf] = useState("0.7");
+  const [eNotes, setENotes] = useState("");
+
+  // Relationship form
+  const [relA, setRelA] = useState("");
+  const [relB, setRelB] = useState("");
+  const [relLabel, setRelLabel] = useState("associated_with");
+  const [relConf, setRelConf] = useState("0.6");
+  const [relNote, setRelNote] = useState("");
+
+  const queryClient = useQueryClient();
+
+  const handleAddEntity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eName.trim()) { setErr("Name required"); return; }
+    setBusy(true); setErr(null);
+    try {
+      const resp = await fetch("/api/entities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: eName.trim(), type: eType, caseId, confidence: parseFloat(eConf) || 0.7, source: eNotes.trim() || "manual" }),
+      });
+      if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+      onSuccess();
+    } catch (ex) { setErr(String((ex as Error).message)); } finally { setBusy(false); }
+  };
+
+  const handleAddRelationship = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const aId = parseInt(relA);
+    const bId = parseInt(relB);
+    if (!aId || !bId) { setErr("Select both entities"); return; }
+    if (aId === bId) { setErr("Source and target must be different"); return; }
+    setBusy(true); setErr(null);
+    try {
+      const resp = await fetch("/api/relationships", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entityAId: aId, entityBId: bId, relationshipType: relLabel.trim() || "associated_with", confidence: parseFloat(relConf) || 0.6, description: relNote.trim() || undefined }),
+      });
+      if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      onSuccess();
+    } catch (ex) { setErr(String((ex as Error).message)); } finally { setBusy(false); }
+  };
+
+  const panelStyle: React.CSSProperties = {
+    position: "absolute", bottom: 48, right: 16, width: 280, zIndex: 30,
+    background: "rgba(4,6,12,0.97)", border: "1px solid rgba(255,255,255,0.1)",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.8)",
+    fontFamily: "'JetBrains Mono', monospace",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", background: "#000", border: "1px solid rgba(255,255,255,0.12)",
+    color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px",
+    padding: "4px 8px", height: 28, outline: "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "8px", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3,
+  };
+
+  return (
+    <div style={panelStyle}>
+      <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", gap: 6 }}>
+        <span style={{ fontSize: "8px", color: "rgba(6,182,212,0.8)", textTransform: "uppercase", letterSpacing: "0.1em", flex: 1 }}>ADD TO GRAPH</span>
+        <button
+          onClick={() => setAddMode("entity")}
+          style={{ fontSize: "8px", color: addMode === "entity" ? "rgba(6,182,212,0.9)" : "rgba(255,255,255,0.3)", background: addMode === "entity" ? "rgba(6,182,212,0.08)" : "transparent", border: "1px solid " + (addMode === "entity" ? "rgba(6,182,212,0.3)" : "rgba(255,255,255,0.07)"), padding: "2px 6px", cursor: "pointer", letterSpacing: "0.06em" }}
+        >ENTITY</button>
+        <button
+          onClick={() => setAddMode("relationship")}
+          style={{ fontSize: "8px", color: addMode === "relationship" ? "rgba(245,158,11,0.9)" : "rgba(255,255,255,0.3)", background: addMode === "relationship" ? "rgba(245,158,11,0.08)" : "transparent", border: "1px solid " + (addMode === "relationship" ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.07)"), padding: "2px 6px", cursor: "pointer", letterSpacing: "0.06em" }}
+        >LINK</button>
+        <button onClick={onClose} style={{ color: "rgba(255,255,255,0.3)", cursor: "pointer" }}><X style={{ width: 12, height: 12 }} /></button>
+      </div>
+
+      <div style={{ padding: "10px 12px" }}>
+        {err && <div style={{ fontSize: "9px", color: "#ef4444", marginBottom: 8, padding: "4px 6px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(20,2,2,0.8)" }}>{err}</div>}
+
+        {addMode === "entity" ? (
+          <form onSubmit={handleAddEntity} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>
+              <label style={labelStyle}>Entity Name</label>
+              <input style={inputStyle} value={eName} onChange={e => setEName(e.target.value)} placeholder="e.g. LAHSA" />
+            </div>
+            <div>
+              <label style={labelStyle}>Type</label>
+              <select style={{ ...inputStyle, cursor: "pointer" }} value={eType} onChange={e => setEType(e.target.value)}>
+                <option value="person">Person</option>
+                <option value="organization">Organization</option>
+                <option value="company">Company</option>
+                <option value="government_agency">Government Agency</option>
+                <option value="location">Location</option>
+                <option value="event">Event</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Confidence (0–1)</label>
+              <input style={inputStyle} value={eConf} onChange={e => setEConf(e.target.value)} type="number" min="0" max="1" step="0.05" />
+            </div>
+            <div>
+              <label style={labelStyle}>Source / Notes</label>
+              <input style={inputStyle} value={eNotes} onChange={e => setENotes(e.target.value)} placeholder="e.g. operator, field report" />
+            </div>
+            <button type="submit" disabled={busy} style={{ background: busy ? "#1a1a1a" : "rgba(6,182,212,0.15)", border: "1px solid rgba(6,182,212,0.3)", color: "rgba(6,182,212,0.9)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.08em", padding: "5px 0", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+              {busy ? "ADDING..." : "ADD ENTITY"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleAddRelationship} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>
+              <label style={labelStyle}>Source Entity</label>
+              <select style={{ ...inputStyle, cursor: "pointer" }} value={relA} onChange={e => setRelA(e.target.value)}>
+                <option value="">Select entity A...</option>
+                {entities.map(e => <option key={e.id} value={String(e.id)}>{e.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Target Entity</label>
+              <select style={{ ...inputStyle, cursor: "pointer" }} value={relB} onChange={e => setRelB(e.target.value)}>
+                <option value="">Select entity B...</option>
+                {entities.map(e => <option key={e.id} value={String(e.id)}>{e.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Relationship Type</label>
+              <input style={inputStyle} value={relLabel} onChange={e => setRelLabel(e.target.value)} placeholder="e.g. associated_with, owns, contracted" />
+            </div>
+            <div>
+              <label style={labelStyle}>Confidence (0–1)</label>
+              <input style={inputStyle} value={relConf} onChange={e => setRelConf(e.target.value)} type="number" min="0" max="1" step="0.05" />
+            </div>
+            <div>
+              <label style={labelStyle}>Supporting Note</label>
+              <input style={inputStyle} value={relNote} onChange={e => setRelNote(e.target.value)} placeholder="Evidence or rationale" />
+            </div>
+            <button type="submit" disabled={busy} style={{ background: busy ? "#1a1a1a" : "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "rgba(245,158,11,0.9)", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.08em", padding: "5px 0", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+              {busy ? "ADDING..." : "ADD LINK"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function generateExpansionSuggestions(name: string, type: string): string[] {
   const base = name.replace(/"/g, "");
@@ -125,6 +440,7 @@ function buildNodeStyle(color: string, isSelected: boolean) {
 export default function GraphCanvas({
   entities,
   relationships,
+  caseId,
   selectedEntityId,
   selectedRelId,
   onEntitySelect,
@@ -134,8 +450,9 @@ export default function GraphCanvas({
   showSuggested = true,
   onToggleSuggested,
 }: GraphCanvasProps) {
-  const posStorageKey = `atlas-graph-pos-${entities[0]?.caseId ?? "default"}`;
-  const rfRef = useRef<{ fitView: (opts?: object) => void } | null>(null);
+  const posStorageKey = `atlas-graph-pos-${entities[0]?.caseId ?? caseId ?? "default"}`;
+  const rfRef = useRef<{ fitView: (opts?: object) => void; fitBounds?: (bounds: object, opts?: object) => void } | null>(null);
+  const queryClient = useQueryClient();
 
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>(() => {
     try {
@@ -146,6 +463,9 @@ export default function GraphCanvas({
 
   const [hideIsolated, setHideIsolated] = useState(false);
   const [hideLowDegree, setHideLowDegree] = useState(false);
+  const [isolatedEntityId, setIsolatedEntityId] = useState<number | null>(null);
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addMode, setAddMode] = useState<"entity" | "relationship">("entity");
 
   const handleResetLayout = useCallback(() => {
     setNodePositions({});
@@ -169,14 +489,38 @@ export default function GraphCanvas({
     return degree;
   }, [relationships]);
 
-  // Filter entities based on active toggles
+  // Filter entities based on active toggles + isolation
   const visibleEntities = useMemo(() => {
+    if (isolatedEntityId !== null) {
+      const connectedIds = new Set<number>([isolatedEntityId]);
+      relationships.forEach(r => {
+        if (r.entityAId === isolatedEntityId) connectedIds.add(r.entityBId);
+        if (r.entityBId === isolatedEntityId) connectedIds.add(r.entityAId);
+      });
+      return entities.filter(e => connectedIds.has(e.id));
+    }
     return entities.filter(e => {
       if (hideIsolated && !confirmedEdgeEntityIds.has(e.id)) return false;
       if (hideLowDegree && (confirmedDegree[e.id] || 0) <= 1) return false;
       return true;
     });
-  }, [entities, hideIsolated, hideLowDegree, confirmedEdgeEntityIds, confirmedDegree]);
+  }, [entities, hideIsolated, hideLowDegree, confirmedEdgeEntityIds, confirmedDegree, isolatedEntityId, relationships]);
+
+  // Node-level action callbacks
+  const handleNodeRemove = useCallback(async (entityId: number) => {
+    const eid = entityId;
+    const cid = caseId || entities[0]?.caseId;
+    if (!cid) return;
+    await fetch(`/api/cases/${cid}/entities/${eid}`, { method: "DELETE" });
+    queryClient.invalidateQueries({ queryKey: [`/api/cases/${cid}/summary`] });
+  }, [caseId, entities, queryClient]);
+
+  const handleNodeDeleteGlobal = useCallback(async (entityId: number) => {
+    await fetch(`/api/entities/${entityId}`, { method: "DELETE" });
+    const cid = caseId || entities[0]?.caseId;
+    if (cid) queryClient.invalidateQueries({ queryKey: [`/api/cases/${cid}/summary`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/entities"] });
+  }, [caseId, entities, queryClient]);
 
   // Compute "source of truth" nodes from entity list + saved positions
   const computedNodes = useMemo(() => {
@@ -193,12 +537,22 @@ export default function GraphCanvas({
       const pos = nodePositions[entity.id.toString()] || defaultPos;
       return {
         id: entity.id.toString(),
-        data: { label: entity.name, type: entity.type },
+        type: "atlas",
+        data: {
+          label: entity.name,
+          type: entity.type,
+          color,
+          isSelected,
+          onSelect: () => onEntitySelect(entity.id),
+          onRemove: () => handleNodeRemove(entity.id),
+          onDeleteGlobal: () => handleNodeDeleteGlobal(entity.id),
+          onIsolate: () => setIsolatedEntityId(prev => prev === entity.id ? null : entity.id),
+          onFocus: () => rfRef.current?.fitView({ padding: 0.5, duration: 400 }),
+        },
         position: pos,
-        style: buildNodeStyle(color, isSelected),
       };
     });
-  }, [visibleEntities, selectedEntityId, nodePositions]);
+  }, [visibleEntities, selectedEntityId, nodePositions, onEntitySelect, handleNodeRemove, handleNodeDeleteGlobal]);
 
   // useNodesState/useEdgesState give ReactFlow internal control over drag positions
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(computedNodes);
@@ -367,6 +721,7 @@ export default function GraphCanvas({
           edges={rfEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          nodeTypes={ATLAS_NODE_TYPES}
           fitView
           fitViewOptions={{ padding: 0.2 }}
           colorMode="dark"
@@ -399,6 +754,33 @@ export default function GraphCanvas({
           />
         </ReactFlow>
       </ReactFlowProvider>
+
+      {/* Isolation indicator */}
+      {isolatedEntityId !== null && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1" style={{ background: "rgba(4,6,12,0.97)", border: "1px solid rgba(245,158,11,0.4)", fontFamily: "'JetBrains Mono', monospace", fontSize: "8px", color: "rgba(245,158,11,0.9)", letterSpacing: "0.08em" }}>
+          <Target className="w-2.5 h-2.5" />
+          ISOLATED: {entities.find(e => e.id === isolatedEntityId)?.name ?? "NODE"}
+          <button onClick={() => setIsolatedEntityId(null)} style={{ color: "rgba(255,255,255,0.5)", cursor: "pointer", marginLeft: 4 }}>
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* Manual Add overlay panel */}
+      {showAddPanel && (
+        <ManualAddPanel
+          caseId={caseId || entities[0]?.caseId || 0}
+          entities={entities}
+          addMode={addMode}
+          setAddMode={setAddMode}
+          onClose={() => setShowAddPanel(false)}
+          onSuccess={() => {
+            const cid = caseId || entities[0]?.caseId;
+            if (cid) queryClient.invalidateQueries({ queryKey: [`/api/cases/${cid}/summary`] });
+            setShowAddPanel(false);
+          }}
+        />
+      )}
 
       {/* Layout controls overlay */}
       <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1">
@@ -495,6 +877,24 @@ export default function GraphCanvas({
         >
           <RotateCcw className="w-2.5 h-2.5" />
           RESET
+        </button>
+        <button
+          onClick={() => { setShowAddPanel(v => !v); setAddMode("entity"); }}
+          title="Manually add entity or relationship to graph"
+          style={{
+            display: "flex", alignItems: "center", gap: "0.25rem",
+            padding: "0.2rem 0.5rem",
+            background: showAddPanel ? "rgba(6,182,212,0.08)" : "rgba(2,4,10,0.9)",
+            border: showAddPanel ? "1px solid rgba(6,182,212,0.3)" : "1px solid rgba(255,255,255,0.07)",
+            color: showAddPanel ? "rgba(6,182,212,0.9)" : "rgba(255,255,255,0.3)",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+            textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+            transition: "all 0.12s",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+          }}
+        >
+          <Plus className="w-2.5 h-2.5" />
+          ADD
         </button>
       </div>
 

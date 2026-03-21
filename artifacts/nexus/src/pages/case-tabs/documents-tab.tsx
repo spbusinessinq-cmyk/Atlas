@@ -1243,102 +1243,376 @@ function MentionCard({
   );
 }
 
+type IngestTab = "file" | "url" | "text" | "note";
+
+type ToastState = { msg: string; type: "success" | "error" } | null;
+
+function IngestToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
+  React.useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(onDismiss, 4000);
+    return () => clearTimeout(t);
+  }, [toast, onDismiss]);
+  if (!toast) return null;
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 font-mono text-[9px] uppercase tracking-wider ${toast.type === "success" ? "bg-green-500/10 border border-green-500/30 text-green-400" : "bg-red-500/10 border border-red-500/30 text-red-400"}`}>
+      {toast.type === "success" ? <CheckCircle2 className="w-3 h-3 flex-shrink-0" /> : <AlertCircle className="w-3 h-3 flex-shrink-0" />}
+      <span className="truncate">{toast.msg}</span>
+    </div>
+  );
+}
+
 function UploadDocumentDialog({ caseId }: { caseId: number }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<IngestTab>("file");
+  const [toast, setToast] = useState<ToastState>(null);
+  const [busy, setBusy] = useState(false);
+
+  // FILE tab state
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileTitle, setFileTitle] = useState("");
+  const [fileSource, setFileSource] = useState("");
+
+  // URL tab state
+  const [urlVal, setUrlVal] = useState("");
+  const [urlTitle, setUrlTitle] = useState("");
+  const [urlSource, setUrlSource] = useState("");
+
+  // TEXT tab state
+  const [textContent, setTextContent] = useState("");
+  const [textTitle, setTextTitle] = useState("");
+  const [textSource, setTextSource] = useState("");
+
+  // NOTE tab state
+  const [noteContent, setNoteContent] = useState("");
+
   const queryClient = useQueryClient();
   const uploadMutation = useUploadDocument({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (doc) => {
         queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+        const caseLabel = `CASE-${caseId.toString().padStart(6, "0")}`;
+        setToast({ msg: `Evidence ingested into ${caseLabel} — ${(doc as any).title || selectedFile?.name || "file"}`, type: "success" });
+        setSelectedFile(null);
+        setFileTitle("");
+        setFileSource("");
+        if (fileRef.current) fileRef.current.value = "";
         setOpen(false);
+      },
+      onError: (err) => {
+        setToast({ msg: `Upload failed: ${(err as Error).message || "Unknown error"}`, type: "error" });
       },
     },
   });
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const file = fd.get("file") as File;
-    if (!file || file.size === 0) return;
-    uploadMutation.mutate({
-      data: {
-        file,
-        caseId,
-        title: fd.get("title") as string,
-        source: fd.get("source") as string,
-      },
-    });
+  const resetTabs = () => {
+    setSelectedFile(null); setFileTitle(""); setFileSource("");
+    setUrlVal(""); setUrlTitle(""); setUrlSource("");
+    setTextContent(""); setTextTitle(""); setTextSource("");
+    setNoteContent("");
+    if (fileRef.current) fileRef.current.value = "";
   };
 
+  const handleOpen = (v: boolean) => {
+    setOpen(v);
+    if (v) { setToast(null); setBusy(false); }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setSelectedFile(f);
+    if (f && !fileTitle) {
+      const clean = f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      setFileTitle(clean);
+    }
+  };
+
+  const handleSubmitFile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) { setToast({ msg: "Select a file first", type: "error" }); return; }
+    const title = fileTitle.trim() || selectedFile.name;
+    uploadMutation.mutate({ data: { file: selectedFile, caseId, title, source: fileSource.trim() || undefined as any } });
+  };
+
+  const handleSubmitUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = urlVal.trim();
+    if (!url) { setToast({ msg: "Enter a URL", type: "error" }); return; }
+    setBusy(true);
+    try {
+      const title = urlTitle.trim() || url.split("/").filter(Boolean).slice(-1)[0] || url;
+      const domain = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+      const resp = await fetch("/api/web-ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, title, sourceDomain: domain, source: urlSource.trim() || domain, caseId }),
+      });
+      if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      const caseLabel = `CASE-${caseId.toString().padStart(6, "0")}`;
+      setToast({ msg: `URL ingested into ${caseLabel}`, type: "success" });
+      setUrlVal(""); setUrlTitle(""); setUrlSource("");
+      setTimeout(() => setOpen(false), 1500);
+    } catch (err) {
+      setToast({ msg: `Ingest failed: ${(err as Error).message}`, type: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSubmitText = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = textContent.trim();
+    if (!text) { setToast({ msg: "Paste text content first", type: "error" }); return; }
+    setBusy(true);
+    try {
+      const title = textTitle.trim() || `Analyst Text — ${new Date().toLocaleDateString()}`;
+      const source = textSource.trim() || "analyst-text";
+      const resp = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, source, caseId, rawText: text, ingestMethod: "text", previewType: "text" }),
+      });
+      if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      const caseLabel = `CASE-${caseId.toString().padStart(6, "0")}`;
+      setToast({ msg: `Text ingested into ${caseLabel}`, type: "success" });
+      setTextContent(""); setTextTitle(""); setTextSource("");
+      setTimeout(() => setOpen(false), 1500);
+    } catch (err) {
+      setToast({ msg: `Ingest failed: ${(err as Error).message}`, type: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSubmitNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const content = noteContent.trim();
+    if (!content) { setToast({ msg: "Enter a note", type: "error" }); return; }
+    setBusy(true);
+    try {
+      const resp = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseId, content }),
+      });
+      if (!resp.ok) { const j = await resp.json().catch(() => ({})); throw new Error(j.error || `HTTP ${resp.status}`); }
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      const caseLabel = `CASE-${caseId.toString().padStart(6, "0")}`;
+      setToast({ msg: `Note added to ${caseLabel}`, type: "success" });
+      setNoteContent("");
+      setTimeout(() => setOpen(false), 1500);
+    } catch (err) {
+      setToast({ msg: `Failed: ${(err as Error).message}`, type: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ingestTabs: { id: IngestTab; label: string }[] = [
+    { id: "file", label: "FILE" },
+    { id: "url", label: "URL" },
+    { id: "text", label: "TEXT" },
+    { id: "note", label: "NOTE" },
+  ];
+
+  const isPending = uploadMutation.isPending || busy;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button className="bg-red-600 hover:bg-red-700 text-white rounded-none h-6 px-3 font-mono text-[10px] uppercase tracking-wider gap-1.5">
           <Upload className="w-3 h-3" /> INGEST
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px] border border-[#ffffff1a] bg-[#0d1117] rounded-none p-0">
+      <DialogContent className="sm:max-w-[440px] border border-[#ffffff1a] bg-[#0d1117] rounded-none p-0">
         <DialogTitle asChild>
           <div className="nexus-header-strip">
             <span className="nexus-label flex items-center gap-2">
               <Upload className="w-3 h-3 text-red-500" />
               INGEST EVIDENCE
             </span>
+            <span className="font-mono text-[8px] text-neutral-700">CASE-{caseId.toString().padStart(6, "0")}</span>
           </div>
         </DialogTitle>
-        <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          <div className="space-y-1">
-            <Label className="nexus-label">File</Label>
-            <div className="relative">
-              <Input
-                type="file"
-                name="file"
-                required
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              />
-              <div className="w-full h-20 border border-dashed border-[#ffffff12] bg-[#000] flex flex-col items-center justify-center text-neutral-600 gap-1.5">
-                <Upload className="w-4 h-4 opacity-40" />
-                <span className="font-mono text-[9px] uppercase tracking-widest">
-                  DRAG &amp; DROP OR BROWSE
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="nexus-label">Document Title</Label>
-            <Input
-              name="title"
-              required
-              className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
-              placeholder="e.g. Bank_Statement_Q3.pdf"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="nexus-label">Intelligence Source</Label>
-            <Input
-              name="source"
-              className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
-              placeholder="e.g. Subpoena, Open Source"
-            />
-          </div>
-          <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d]">
-            <Button
+
+        {/* Tab bar */}
+        <div className="flex border-b border-[#ffffff08]">
+          {ingestTabs.map(t => (
+            <button
+              key={t.id}
               type="button"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-              className="rounded-none font-mono text-[10px] text-neutral-500 hover:text-white h-7"
+              onClick={() => { setTab(t.id); setToast(null); }}
+              className={`px-4 py-1.5 font-mono text-[8px] uppercase tracking-widest transition-colors border-b-2 ${tab === t.id ? "border-red-500 text-red-400 bg-red-500/[0.04]" : "border-transparent text-neutral-600 hover:text-neutral-400"}`}
             >
-              CANCEL
-            </Button>
-            <Button
-              type="submit"
-              disabled={uploadMutation.isPending}
-              className="bg-red-600 hover:bg-red-700 text-white rounded-none font-mono text-[10px] px-4 h-7"
-            >
-              {uploadMutation.isPending ? "UPLOADING..." : "TRANSMIT"}
-            </Button>
-          </div>
-        </form>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {toast && <div className="px-4 pt-3"><IngestToast toast={toast} onDismiss={() => setToast(null)} /></div>}
+
+        {/* FILE TAB */}
+        {tab === "file" && (
+          <form onSubmit={handleSubmitFile} className="p-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="nexus-label">File</Label>
+              <div
+                className="w-full h-16 border border-dashed border-[#ffffff15] bg-[#000] flex flex-col items-center justify-center text-neutral-600 gap-1 cursor-pointer hover:border-red-500/30 transition-colors"
+                onClick={() => fileRef.current?.click()}
+              >
+                {selectedFile ? (
+                  <>
+                    <FileText className="w-3.5 h-3.5 text-red-500/70" />
+                    <span className="font-mono text-[9px] text-red-400/80 uppercase tracking-wider truncate max-w-[320px] px-2">{selectedFile.name}</span>
+                    <span className="font-mono text-[8px] text-neutral-700">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 opacity-30" />
+                    <span className="font-mono text-[9px] uppercase tracking-widest">CLICK TO BROWSE</span>
+                  </>
+                )}
+              </div>
+              <input ref={fileRef} type="file" className="hidden" onChange={handleFileChange} />
+            </div>
+            <div className="space-y-1">
+              <Label className="nexus-label">Document Title</Label>
+              <Input
+                value={fileTitle}
+                onChange={e => setFileTitle(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="Auto-filled from filename"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="nexus-label">Intelligence Source</Label>
+              <Input
+                value={fileSource}
+                onChange={e => setFileSource(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="e.g. Subpoena, FOIA, Open Source"
+              />
+            </div>
+            <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d]">
+              <Button type="button" variant="ghost" onClick={() => { setOpen(false); resetTabs(); }} className="rounded-none font-mono text-[10px] text-neutral-500 hover:text-white h-7">CANCEL</Button>
+              <Button type="submit" disabled={isPending || !selectedFile} className="bg-red-600 hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white rounded-none font-mono text-[10px] px-4 h-7">
+                {uploadMutation.isPending ? "UPLOADING..." : "TRANSMIT"}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* URL TAB */}
+        {tab === "url" && (
+          <form onSubmit={handleSubmitUrl} className="p-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="nexus-label">Source URL</Label>
+              <Input
+                value={urlVal}
+                onChange={e => setUrlVal(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="https://example.com/article"
+                type="url"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="nexus-label">Document Title (optional)</Label>
+              <Input
+                value={urlTitle}
+                onChange={e => setUrlTitle(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="Auto-extracted from page"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="nexus-label">Intelligence Source</Label>
+              <Input
+                value={urlSource}
+                onChange={e => setUrlSource(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="Auto-detected from domain"
+              />
+            </div>
+            <p className="font-mono text-[8px] text-neutral-700">ATLAS will fetch full article content, extract entities, and add to case vault.</p>
+            <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d]">
+              <Button type="button" variant="ghost" onClick={() => { setOpen(false); resetTabs(); }} className="rounded-none font-mono text-[10px] text-neutral-500 hover:text-white h-7">CANCEL</Button>
+              <Button type="submit" disabled={isPending || !urlVal.trim()} className="bg-red-600 hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white rounded-none font-mono text-[10px] px-4 h-7">
+                {busy ? "INGESTING..." : "TRANSMIT"}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* TEXT TAB */}
+        {tab === "text" && (
+          <form onSubmit={handleSubmitText} className="p-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="nexus-label">Document Title</Label>
+              <Input
+                value={textTitle}
+                onChange={e => setTextTitle(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="e.g. Briefing Transcript — April 2024"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="nexus-label">Source Attribution</Label>
+              <Input
+                value={textSource}
+                onChange={e => setTextSource(e.target.value)}
+                className="bg-[#000] border-[#ffffff1a] rounded-none focus-visible:ring-0 focus-visible:border-red-500 text-sm font-mono h-8"
+                placeholder="e.g. Confidential informant, leaked email"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="nexus-label">Raw Text Content</Label>
+              <textarea
+                value={textContent}
+                onChange={e => setTextContent(e.target.value)}
+                rows={6}
+                className="w-full bg-black border border-[#ffffff1a] text-white font-mono text-[11px] px-3 py-2 focus:outline-none focus:border-red-500/50 placeholder:text-neutral-700 resize-none"
+                placeholder="Paste document content, transcript, or extracted text..."
+              />
+              {textContent.trim().length > 0 && (
+                <div className="font-mono text-[8px] text-neutral-700">{textContent.trim().length} characters</div>
+              )}
+            </div>
+            <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d]">
+              <Button type="button" variant="ghost" onClick={() => { setOpen(false); resetTabs(); }} className="rounded-none font-mono text-[10px] text-neutral-500 hover:text-white h-7">CANCEL</Button>
+              <Button type="submit" disabled={isPending || !textContent.trim()} className="bg-red-600 hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white rounded-none font-mono text-[10px] px-4 h-7">
+                {busy ? "INGESTING..." : "TRANSMIT"}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* NOTE TAB */}
+        {tab === "note" && (
+          <form onSubmit={handleSubmitNote} className="p-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="nexus-label">Analyst Note</Label>
+              <textarea
+                value={noteContent}
+                onChange={e => setNoteContent(e.target.value)}
+                rows={7}
+                className="w-full bg-black border border-[#ffffff1a] text-white font-mono text-[11px] px-3 py-2 focus:outline-none focus:border-amber-500/50 placeholder:text-neutral-700 resize-none"
+                placeholder="e.g. Subject was observed at 0300 hours. Vehicle registration linked to shell company. Recommend surveillance on warehouse unit 4B..."
+              />
+              {noteContent.trim().length > 0 && (
+                <div className="font-mono text-[8px] text-neutral-700">{noteContent.trim().length} characters · Saved to case notes panel</div>
+              )}
+            </div>
+            <div className="pt-2 flex justify-end gap-2 border-t border-[#ffffff0d]">
+              <Button type="button" variant="ghost" onClick={() => { setOpen(false); resetTabs(); }} className="rounded-none font-mono text-[10px] text-neutral-500 hover:text-white h-7">CANCEL</Button>
+              <Button type="submit" disabled={isPending || !noteContent.trim()} className="bg-amber-600 hover:bg-amber-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white rounded-none font-mono text-[10px] px-4 h-7">
+                {busy ? "SAVING..." : "SAVE NOTE"}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

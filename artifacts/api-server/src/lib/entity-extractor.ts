@@ -493,15 +493,30 @@ export const INSTITUTION_PATTERN = /\b(Department|Agency|University|Committee|Co
  * validateEntityShape — structural guard against garbage extraction.
  * Returns null if valid, or a reason string if invalid.
  */
+// T007: Dollar/numeric entity name patterns — these are NOT valid entity names
+const DOLLAR_ENTITY_PATTERN = /^[\$£€¥]?\s*\d[\d,\.]*\s*(billion|million|thousand|trillion|bn|mn|tr|[BMKT])?\b/i;
+const PURE_NUMERIC = /^[\d\s\$£€,%\.\/\-\+]+$/;
+const TRUNCATED_NAME = /\.{2,}$|…$/;
+const URL_FRAGMENT = /^https?:\/\/|www\.|\.com|\.org|\.gov/i;
+const JUNK_PHRASE_STARTERS = /^(said|says|told|stated|added|noted|wrote|reported|according|following|including|regarding|related|based|located|founded|established)/i;
+
 export function validateEntityShape(name: string, entityType: string): "ARTIFACT_ENTITY" | null {
   const trimmed = name.trim();
   const words = trimmed.split(/\s+/);
 
   // Hard rules — apply to all types
+  if (trimmed.length < 2) return "ARTIFACT_ENTITY";                        // too short
   if (words.length > 5) return "ARTIFACT_ENTITY";                          // >5 words → stitched garbage
   if (/["'""]/.test(trimmed)) return "ARTIFACT_ENTITY";                    // contains quotes
   if (/[;:]/.test(trimmed)) return "ARTIFACT_ENTITY";                      // contains colon or semicolon
   if (words.length > 3 && trimmed === trimmed.toUpperCase()) return "ARTIFACT_ENTITY"; // ALL CAPS phrase >3 words
+  if (DOLLAR_ENTITY_PATTERN.test(trimmed)) return "ARTIFACT_ENTITY";       // dollar/numeric amount
+  if (PURE_NUMERIC.test(trimmed)) return "ARTIFACT_ENTITY";                // pure numbers/symbols
+  if (TRUNCATED_NAME.test(trimmed)) return "ARTIFACT_ENTITY";              // truncated mid-name
+  if (URL_FRAGMENT.test(trimmed)) return "ARTIFACT_ENTITY";                // URL fragment
+  if (JUNK_PHRASE_STARTERS.test(trimmed)) return "ARTIFACT_ENTITY";        // starts like a verb phrase
+  if (/^\d{4}$/.test(trimmed)) return "ARTIFACT_ENTITY";                   // bare year
+  if (trimmed.length > 60) return "ARTIFACT_ENTITY";                       // excessive length → sentence fragment
 
   // Person-specific: must have at least 2 words
   if (entityType === "person") {

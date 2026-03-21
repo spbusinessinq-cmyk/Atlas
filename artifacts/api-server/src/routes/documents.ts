@@ -94,10 +94,10 @@ router.get("/documents/:id/download", async (req, res) => {
 });
 
 router.post("/documents", async (req, res) => {
-  const { title, filePath, source, publishDate, caseId } = req.body;
+  const { title, filePath, source, publishDate, caseId, rawText, ingestMethod, previewType, sourceUrl, sourceDomain } = req.body;
   const rows = await db
     .insert(documentsTable)
-    .values({ title, filePath, source, publishDate, caseId })
+    .values({ title, filePath, source, publishDate, caseId, rawText, ingestMethod, previewType, sourceUrl, sourceDomain })
     .returning();
   res.status(201).json(formatDoc(rows[0]));
 });

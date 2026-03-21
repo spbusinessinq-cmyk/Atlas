@@ -64,6 +64,16 @@ The project is structured as a pnpm monorepo using Node.js and TypeScript, empha
 
 10. **Triage Hardening:** Dead link detection on case links in triage queue (shows ⚠ NOT FOUND for invalid case IDs). CaseDetail 404 shows styled fallback instead of plain error. TriageDetailPanel with full analyst console (confidence, credibility, flags, delete, case link validation).
 
+11. **Evidence Ingest Overhaul (ATLAS FINAL MEGA PASS):** Multi-tab upload dialog with FILE, URL, TEXT, and NOTE tabs. Each mode uses the correct backend fields (`ingestMethod`, `previewType`, `sourceUrl`, `sourceDomain`, `rawText`). URL mode auto-parses domain and shows character count.
+
+12. **Graph God Mode (AtlasNode + NodeToolbar):** Custom `AtlasNode` component with hover micro-controls via `NodeToolbar` from `@xyflow/react`. Per-node: FOCUS (isolate subgraph), REMOVE (from graph view only), DELETE (global entity purge with confirmation). `ManualAddPanel` sidebar in graph tab for manually creating entities and relationships.
+
+13. **Launcher Command Mode:** `SeedLauncher` has a dual-mode toggle — NEW INVESTIGATION launches the standard seed pipeline, CASE COMMAND routes freeform operator commands to `parseCommand()` / `handleCommand()` which resolve cases by ID (`case XXXXXX` / `#XXXXXX`) and execute API actions (recompile, rebuild graph, etc.).
+
+14. **Investigative Intelligence Sections (Finding Extraction Overhaul):** `CaseBrief` extended with `keyFindings`, `financialRedFlags`, `powerNodes`, `oversightFailures`, `recommendedActions`. Five new builder functions in `case-compiler.ts` populate these fields. Case overview displays them in collapsible sections. Dossier print includes a new "Investigative Intelligence" dossier page with all five sections.
+
+15. **Entity Name Normalization (Graph Source Accuracy):** `validateEntityShape()` now blocks: numeric/dollar amounts, pure numeric strings, truncated names ending in `…`, URL fragments, junk-verb-phrase starters, bare years (4-digit), and names over 60 characters. Six new constants (`DOLLAR_ENTITY_PATTERN`, `PURE_NUMERIC`, `TRUNCATED_NAME`, `URL_FRAGMENT`, `JUNK_PHRASE_STARTERS`) guard the admission pipeline.
+
 **API Routes:**
 *   Comprehensive RESTful API routes under `/api` for CRUD operations across all core data models, including specific endpoints for document upload, analysis, web search/ingestion, and entity mention management.
 

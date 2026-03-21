@@ -1,0 +1,344 @@
+ATLAS FINAL MEGA PASS — EVIDENCE INGEST + GRAPH GOD MODE + CASE COMMANDS + EXTRACTION OVERHAUL
+
+MISSION
+This is the next ATLAS mega pass.
+Do not plan. Do not summarize first. Implement everything, restart services, verify visually, then return a final ship report.
+
+This pass fixes broken evidence ingest, upgrades graph control, adds command-style case updates from the launcher, and hardens extraction/intelligence quality to operator-grade.
+
+━━━━━━━━━━━━━━━━━━
+T001 — FIX EVIDENCE INGEST (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+BUG:
+The INGEST EVIDENCE modal opens, lets the user choose a file, but the document does not actually ingest into the case.
+
+Fix the full upload pipeline end-to-end.
+
+REQUIREMENTS:
+- File chooser must actually attach selected file
+- Transmit button must upload to backend
+- Backend must persist file/document record to the correct case
+- On success, document must instantly appear in Document Vault without manual refresh
+- Show success toast:
+  "Evidence ingested into CASE-xxxxx"
+- Show error toast with real failure reason if upload fails
+- Disable TRANSMIT while upload is in progress
+- Add loading state on button
+- Add file name preview after selection
+- Validate required fields before submit
+- If intelligence source/title empty, use smart defaults from filename
+
+VERIFY:
+Upload a real file and confirm it appears in the active case document vault.
+
+━━━━━━━━━━━━━━━━━━
+T002 — GRAPH NODE MICRO-CONTROLS (GOD MODE)
+━━━━━━━━━━━━━━━━━━
+The graph needs direct node controls sitting visually above each box, exactly where an operator expects them.
+
+For every node in Link Analysis add compact hover controls ABOVE the node:
+- + Link
+- + Entity
+- + Document
+- Edit
+- Remove from graph
+- Delete globally (with confirm)
+- Isolate
+- Focus
+
+Behavior:
+- Controls appear on hover/focus
+- Controls anchor to the node itself, not some distant panel
+- Smooth fade in/out
+- Must not block dragging
+- Must feel precise and immediate
+
+Also add edge controls on hover:
+- remove edge
+- upgrade edge confidence
+- downgrade edge confidence
+- relabel edge
+
+━━━━━━━━━━━━━━━━━━
+T003 — MANUAL ADD TO GRAPH
+━━━━━━━━━━━━━━━━━━
+Operators must be able to manually add things into a graph.
+
+Add “ADD TO GRAPH” workflows for:
+1. Entity from case registry
+2. Document from document vault
+3. Manual new entity
+4. Manual new relationship
+
+Flow:
+- click Add to Graph
+- choose target case graph
+- add item to current graph or another active case graph
+
+If multiple active case graphs exist, show a selector:
+- current case
+- CASE-xxxxx
+- CASE-xxxxx
+
+Manual entity creation requires:
+- name
+- type
+- confidence
+- optional notes
+- optional source attribution
+
+Manual edge creation requires:
+- source node
+- target node
+- edge label
+- confidence
+- supporting note
+
+━━━━━━━━━━━━━━━━━━
+T004 — MAIN LAUNCHER COMMAND MODE
+━━━━━━━━━━━━━━━━━━
+The launcher should not only create new investigations.
+It must also understand operational commands.
+
+Upgrade launcher to support two modes:
+
+MODE A — New Investigation
+Current behavior stays.
+
+MODE B — Case Command
+Natural-language operational commands like:
+- add entity "LAHSA" to case 010001
+- add document to case 02341
+- update entities in case 010001 with LA County Homeless Initiative
+- add note to case 000034
+- attach URL to case 000032
+- rebuild graph for case 000021
+- recompile dossier for case 000021
+
+Build parser:
+- detect intent
+- resolve case id
+- resolve object type
+- execute action
+- return confirmation
+
+UI:
+- top-level tabs:
+  NEW INVESTIGATION
+  CASE COMMAND
+- command examples shown underneath input
+- result toast with exact action completed
+
+━━━━━━━━━━━━━━━━━━
+T005 — FINDING EXTRACTION OVERHAUL
+━━━━━━━━━━━━━━━━━━
+Current finding extraction is too weak.
+Rebuild it to operator-level intelligence.
+
+New extraction goals:
+- prioritize investigative findings, not generic summaries
+- detect:
+  - corruption indicators
+  - contract awards
+  - appropriations
+  - recipient/beneficiary
+  - oversight failures
+  - timeline actions
+  - agency/person/company role
+  - financial anomalies
+  - repeated co-mentions
+  - quote-worthy findings
+  - legal / audit / court / inspector general significance
+
+Build stronger ranking:
+Top findings should favor:
+- multi-source corroboration
+- high-trust domains
+- explicit money movement
+- role-bearing entities
+- audit/investigation keywords
+- direct actions, not fluff
+- anchor overlap with case target
+
+Penalize:
+- entertainment junk
+- soft feature content
+- passive filler
+- off-topic side mentions
+- celebrity drift
+- weak contextual references
+- generic budget blurbs with no investigative value
+
+━━━━━━━━━━━━━━━━━━
+T006 — CASE FINDINGS STRUCTURE
+━━━━━━━━━━━━━━━━━━
+In dossier and overview, findings must become structured and powerful.
+
+Create server-computed sections:
+- Top Findings
+- Financial Red Flags
+- Power Nodes
+- Oversight / Accountability Failures
+- Recommended Analyst Moves
+
+Each finding should include:
+- headline
+- why it matters
+- source count
+- confidence
+- linked entities
+- linked docs
+
+Make this read like a real intelligence product.
+
+━━━━━━━━━━━━━━━━━━
+T007 — GRAPH-SOURCE ACCURACY
+━━━━━━━━━━━━━━━━━━
+Clean up graph node naming and junk labels.
+
+Fix cases where broken or ugly node labels appear, including:
+- malformed names
+- partial truncation that destroys meaning
+- generic title artifacts
+- duplicated source/title fragments
+
+Rules:
+- preserve readable real names
+- use proper normalization
+- block junk node generation
+- prevent title artifact nodes from entering graph automatically
+
+━━━━━━━━━━━━━━━━━━
+T008 — ACTIVE CASE GRAPH PICKER
+━━━━━━━━━━━━━━━━━━
+Anywhere operator adds entity/doc/link manually, if there are active graphs show:
+- current graph highlighted
+- list of active cases with graph counts
+- allow insert into another case graph
+
+This must work from:
+- graph view
+- entity registry
+- document vault
+- launcher command mode
+
+━━━━━━━━━━━━━━━━━━
+T009 — DOCUMENT-TO-GRAPH + ENTITY-TO-GRAPH ACTIONS
+━━━━━━━━━━━━━━━━━━
+In Document Vault add action:
+- Add to Graph
+
+In Entity Registry add action:
+- Add to Graph
+
+When clicked:
+- opens graph target picker
+- inserts item into graph
+- shows toast:
+  "Added to CASE-xxxxx graph"
+
+━━━━━━━━━━━━━━━━━━
+T010 — COMPLETE OPERATOR CONTROLS
+━━━━━━━━━━━━━━━━━━
+Every major ATLAS area needs operator-grade controls.
+
+Document Vault:
+- analyze
+- view
+- add to graph
+- delete
+- reclassify
+- mark high value
+
+Entity Registry:
+- approve
+- reject
+- edit
+- delete
+- add to graph
+- open relationships
+
+Link Analysis:
+- node controls
+- edge controls
+- add node
+- add edge
+- remove node
+- isolate/focus
+- fit/reset
+
+Triage:
+- approve
+- reject
+- hold
+- open source
+- open triage detail
+- open linked case if valid
+
+━━━━━━━━━━━━━━━━━━
+T011 — EVIDENCE INGEST TYPES
+━━━━━━━━━━━━━━━━━━
+Expand ingest modal so operator can ingest:
+- file
+- URL
+- raw pasted text
+- analyst note
+
+Tabs:
+- FILE
+- URL
+- TEXT
+- NOTE
+
+Each path should ingest into the current case correctly.
+
+━━━━━━━━━━━━━━━━━━
+T012 — BLACKDOG STATUS HARDENING
+━━━━━━━━━━━━━━━━━━
+BLACKDOG integration must be real and visible.
+
+Requirements:
+- show “Protected by BLACKDOG”
+- green/amber/red live status
+- if not configured, clearly say:
+  "BLACKDOG URL not configured"
+- if configured but unreachable:
+  "BLACKDOG unreachable"
+- if reachable:
+  "BLACKDOG connected"
+
+Do not fake success state.
+
+━━━━━━━━━━━━━━━━━━
+T013 — FULL E2E VERIFICATION
+━━━━━━━━━━━━━━━━━━
+Test and verify all of this live:
+
+1. create a new case
+2. use CASE COMMAND mode to add entity to an existing case
+3. ingest file into case
+4. ingest URL into case
+5. ingest raw note into case
+6. add entity manually to graph
+7. add document manually to graph
+8. add relationship manually
+9. hover node and verify micro-controls appear above node
+10. delete/remove node from graph
+11. open triage and verify no dead route
+12. confirm BLACKDOG status behavior
+13. verify top findings quality improved
+14. verify no new TypeScript/server errors
+
+━━━━━━━━━━━━━━━━━━
+T014 — FINAL SHIP REPORT
+━━━━━━━━━━━━━━━━━━
+Return:
+- exact files changed
+- exact features added
+- exact bugs fixed
+- test proof
+- any remaining blocker
+
+Do not give vague language.
+Do not say “should”.
+Say what is DONE and VERIFIED.

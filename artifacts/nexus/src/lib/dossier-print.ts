@@ -33,6 +33,10 @@ export interface PrintDossierParams {
     powerStructure?: string;
     riskFlags?: string[];
     recommendedActions?: string[];
+    keyFindings?: string[];
+    financialRedFlags?: string[];
+    powerNodes?: string[];
+    oversightFailures?: string[];
   };
 }
 
@@ -613,6 +617,55 @@ export function openPrintDossier(params: PrintDossierParams): void {
   `).join("") : `<div class="empty-note">No timeline events mapped. Ingest chronological source material.</div>`}
 </div>
 
+<!-- KEY FINDINGS PAGE (T005/T006) -->
+${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 || (s.powerNodes ?? []).length > 0 || (s.oversightFailures ?? []).length > 0) ? `
+<div class="page">
+  <div class="section-number">SECTION 07-A</div>
+  <div class="section-header">
+    <div class="section-title">Investigative Intelligence</div>
+    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  </div>
+
+  ${(s.keyFindings ?? []).length > 0 ? `
+  <div class="actor-group-label" style="color:#900000">Key Findings</div>
+  ${(s.keyFindings ?? []).map((f, i) => `
+    <div style="display:flex;gap:14px;padding:10px 0;border-bottom:1px solid #f0f0f0;align-items:baseline">
+      <span style="font-family:'Courier New',monospace;color:#900000;font-size:9pt;flex-shrink:0;font-weight:bold">${(i + 1).toString().padStart(2, "0")}</span>
+      <span style="font-size:10.5pt;color:#222;line-height:1.6">${escapeHtml(String(f))}</span>
+    </div>
+  `).join("")}
+  <div style="margin-bottom:24px"></div>` : ""}
+
+  ${(s.financialRedFlags ?? []).length > 0 ? `
+  <div class="actor-group-label" style="color:#c00000;border-color:#f0c0c0;margin-top:24px">Financial Red Flags</div>
+  ${(s.financialRedFlags ?? []).map(flag => `
+    <div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #f5e5e5;align-items:baseline">
+      <span style="color:#c00000;font-size:11pt;flex-shrink:0">⚑</span>
+      <span style="font-size:10.5pt;color:#444;line-height:1.6">${escapeHtml(String(flag))}</span>
+    </div>
+  `).join("")}
+  <div style="margin-bottom:24px"></div>` : ""}
+
+  ${(s.powerNodes ?? []).length > 0 ? `
+  <div class="actor-group-label" style="color:#7a5c00;border-color:#e8d8a0;margin-top:24px">Power Nodes</div>
+  ${(s.powerNodes ?? []).map(node => `
+    <div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #f5f0e5;align-items:baseline">
+      <span style="color:#a07000;font-size:11pt;flex-shrink:0">◈</span>
+      <span style="font-size:10.5pt;color:#444;line-height:1.6">${escapeHtml(String(node))}</span>
+    </div>
+  `).join("")}
+  <div style="margin-bottom:24px"></div>` : ""}
+
+  ${(s.oversightFailures ?? []).length > 0 ? `
+  <div class="actor-group-label" style="color:#8a4500;border-color:#f0d0b0;margin-top:24px">Oversight Failures</div>
+  ${(s.oversightFailures ?? []).map(fail => `
+    <div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #f5ece0;align-items:baseline">
+      <span style="color:#c05000;font-size:11pt;flex-shrink:0">⚠</span>
+      <span style="font-size:10.5pt;color:#555;line-height:1.6">${escapeHtml(String(fail))}</span>
+    </div>
+  `).join("")}` : ""}
+</div>` : ""}
+
 <!-- PAGE 8: POWER STRUCTURE + RISK FLAGS -->
 <div class="page">
   <div class="section-number">SECTION 07</div>
@@ -687,7 +740,7 @@ export function openPrintDossier(params: PrintDossierParams): void {
         <td style="padding:7px 8px;font-weight:600;color:#222;font-size:10pt">${escapeHtml(r.entityAName)}</td>
         <td style="padding:7px 8px;text-align:center;font-family:'Courier New',monospace;font-size:8pt;color:#b00000;letter-spacing:0.05em">${escapeHtml((r.relationType ?? "LINKED").replace(/_/g, " ").toUpperCase())}</td>
         <td style="padding:7px 8px;font-weight:600;color:#222;font-size:10pt">${escapeHtml(r.entityBName)}</td>
-        <td style="padding:7px 8px;text-align:right;font-family:'Courier New',monospace;font-size:8.5pt;color:${r.confidence === "HIGH" ? "#006600" : r.confidence === "LOW" ? "#c00000" : "#666"}">${escapeHtml(r.confidence ?? "—")}</td>
+        <td style="padding:7px 8px;text-align:right;font-family:'Courier New',monospace;font-size:8.5pt;color:#666">${escapeHtml(String(r.confidence ?? "—"))}</td>
       </tr>`).join("")}
     </tbody>
   </table>
