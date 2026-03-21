@@ -1351,6 +1351,8 @@ function classifyEventType(sentence: string): string {
   return "EVENT";
 }
 
+const TIMELINE_EXTRACT_ACTION = /\b(?:approved?|funded?|allocated?|appropriated?|awarded?|contracted?|charged?|investigated?|indicted?|announced?|launched?|signed?|enacted?|ordered?|expanded?|audited?|subpoenaed?|arrested?|convicted?|sentenced?|settled?|dismissed?|reformed?|initiated?|established?|created?|passed?|opened?|founded?|started?|began?|purchased?|acquired?|sued?)\b/i;
+
 export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
   if (!text || text.trim().length < 20) return [];
 
@@ -1362,6 +1364,9 @@ export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
   for (const sentence of sentences) {
     const dateStr = extractDateFromSentence(sentence);
     if (!dateStr) continue;
+
+    // Strict mode: require an investigative action keyword
+    if (!TIMELINE_EXTRACT_ACTION.test(sentence)) continue;
 
     const eventType = classifyEventType(sentence);
     const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 200);
@@ -1386,6 +1391,10 @@ export interface ExtractedFinancialSignal {
   signalType: string;
   eventSummary: string;
   entityName: string | null;
+  controlledBy: string | null;
+  receivedBy: string | null;
+  programName: string | null;
+  financialConfidence: number;
 }
 
 const MONEY_PATTERN = /(?:(USD|US\$|\$|£|€|GBP|EUR)\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMKT])\b|(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMK])\b(?:\s*(?:USD|US dollars?|dollars?))?|(USD|US\$|\$|£|€)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?))/gi;
@@ -1397,14 +1406,20 @@ const FINANCIAL_AD_COPY_PATTERN = /\b(sale|discount|off|coupon|promo|deal\s+of\s
 const FINANCIAL_SPORTS_PATTERN = /\b(signing\s+bonus|contract\s+extension\s+for|salary\s+cap\s+hit|years?\s+deal|year\s+contract|nfl|nba|mlb|nhl|mls)\b/i;
 
 const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
-  { regex: /\b(?:contract(?:ed?|s)?|sole.source|no.bid)\b/i, type: "CONTRACT" },
-  { regex: /\b(?:grant(?:ed?|s)?|subgrant)\b/i, type: "GRANT" },
-  { regex: /\b(?:fund(?:ed?|ing|s)?|financed?)\b/i, type: "FUNDING" },
-  { regex: /\b(?:appropriat(?:ed?|ion|ions)?|budget(?:ed?)?|allocated?|allocation)\b/i, type: "APPROPRIATION" },
-  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?|reimburse)\b/i, type: "PAYMENT" },
-  { regex: /\b(?:award(?:ed?|s)?|won)\b/i, type: "AWARD" },
-  { regex: /\b(?:invest(?:ed?|ment|ing)|invested)\b/i, type: "INVESTMENT" },
+  { regex: /\b(?:fraud|embezzl|kickback|brib(?:e|ery)|misappropriat|stolen|diverted|siphoned|laundered)\b/i, type: "FRAUD_MISUSE" },
+  { regex: /\b(?:contract(?:ed?|s)?|sole.source|no.bid|procurement|awarded?\s+contract|rfp|rfq)\b/i, type: "CONTRACT" },
+  { regex: /\b(?:grant(?:ed?|s)?|subgrant|cooperative\s+agreement)\b/i, type: "GRANT" },
+  { regex: /\b(?:appropriat(?:ed?|ion|ions)?|budget(?:ed?)?|allocated?|allocation|congressional|legislative)\b/i, type: "APPROPRIATION" },
+  { regex: /\b(?:cut|reduc(?:ed?|tion)|eliminated?|rescission|clawback|withh(?:eld?|olding)|frozen|freeze|pulled)\b/i, type: "CUT_REALLOCATION" },
+  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?|reimburse|disburs(?:ed?|ement)|expenditure|spent|expended)\b/i, type: "EXPENDITURE" },
+  { regex: /\b(?:fund(?:ed?|ing|s)?|financed?|award(?:ed?|s)?|invest(?:ed?|ment|ing)|subsidized?)\b/i, type: "PROGRAM_FUNDING" },
 ];
+
+const FUNDING_HARD_GATE = /\b(funded?|grant(?:ed?)?|contract(?:ed?)?|appropriated?|allocated?|awarded?|paid?|payment|budget|procurement|reimburse|disburse|spending|expenditure|invest(?:ment|ed)|subsidized?|sole.source|no.bid)\b/i;
+
+const CONTROL_VERB_PATTERN = /\b(?:controlled?\s+by|overseen?\s+by|managed?\s+by|administered?\s+by|directed?\s+by|authorized?\s+by|approved?\s+by|led?\s+by|operated?\s+by)\b/i;
+const RECEIVE_VERB_PATTERN = /\b(?:received?\s+by|awarded?\s+to|paid?\s+to|granted?\s+to|contracted?\s+(?:to|with)|given\s+to|allocated?\s+to|disbursed?\s+to|transferred?\s+to)\b/i;
+const PROGRAM_INDICATOR = /\b(?:program|project|initiative|fund|grant|contract|appropriation)\b/i;
 
 function normalizeAmount(raw: string): { amount: number | null; currency: string; display: string } {
   let currency = "USD";
@@ -1448,7 +1463,58 @@ function getSignalType(context: string): string {
   return "FUNDING";
 }
 
-export function extractFinancialSignals(text: string): ExtractedFinancialSignal[] {
+function extractActorNearVerb(sentence: string, verbPattern: RegExp): string | null {
+  const m = verbPattern.exec(sentence);
+  if (!m) return null;
+  const afterVerb = sentence.slice(m.index + m[0].length).trim();
+  const nm = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4})\b/.exec(afterVerb);
+  return nm ? nm[1] : null;
+}
+
+function extractProgramName(sentence: string): string | null {
+  const m = /\b(?:the\s+)?([A-Z][A-Za-z\s]{3,40}(?:Program|Project|Initiative|Fund|Act|Grant))\b/.exec(sentence);
+  return m ? m[1].trim() : null;
+}
+
+function scoreFinancialConfidence(
+  sentence: string,
+  signalType: string,
+  entityName: string | null,
+  anchorTokens: string[]
+): number {
+  let score = 0.0;
+
+  // Funding hard gate present (base requirement)
+  if (FUNDING_HARD_GATE.test(sentence)) score += 0.25;
+
+  // Has explicit action keyword (award, paid, allocated, etc.)
+  if (/\b(?:awarded?|paid?|allocated?|appropriated?|contracted?|granted?|disbursed?|funded?|invested?)\b/i.test(sentence)) score += 0.20;
+
+  // Named actor in sentence
+  if (entityName) score += 0.15;
+
+  // controlledBy or receivedBy verb phrase
+  if (CONTROL_VERB_PATTERN.test(sentence) || RECEIVE_VERB_PATTERN.test(sentence)) score += 0.15;
+
+  // High-severity signal type
+  if (signalType === "FRAUD_MISUSE" || signalType === "CONTRACT" || signalType === "APPROPRIATION") score += 0.10;
+  else if (signalType === "GRANT" || signalType === "CUT_REALLOCATION") score += 0.05;
+
+  // Has program name
+  if (PROGRAM_INDICATOR.test(sentence)) score += 0.05;
+
+  // Anchor token overlap (bonus up to 0.10 for 2+ tokens)
+  if (anchorTokens.length > 0) {
+    const lower = sentence.toLowerCase();
+    const hits = anchorTokens.filter(t => lower.includes(t)).length;
+    if (hits >= 2) score += 0.10;
+    else if (hits === 1) score += 0.05;
+  }
+
+  return Math.min(1.0, Math.round(score * 100) / 100);
+}
+
+export function extractFinancialSignals(text: string, anchorTokens: string[] = []): ExtractedFinancialSignal[] {
   if (!text || text.trim().length < 20) return [];
 
   const signals: ExtractedFinancialSignal[] = [];
@@ -1456,9 +1522,16 @@ export function extractFinancialSignals(text: string): ExtractedFinancialSignal[
   const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 10);
 
   for (const sentence of sentences) {
-    if (!FINANCIAL_PROXIMITY_PATTERN.test(sentence)) continue;
+    // F1: BOTH a monetary amount AND a hard funding keyword must be present
+    if (!FUNDING_HARD_GATE.test(sentence)) continue;
+
+    // F4: Kill noise — ad copy, sports, entertainment
     if (FINANCIAL_AD_COPY_PATTERN.test(sentence)) continue;
     if (FINANCIAL_SPORTS_PATTERN.test(sentence)) continue;
+
+    // F4: Additional garbage patterns
+    const COMMUNITY_NOISE = /\b(festival|concert|parade|raffle|bake\s+sale|donation\s+drive|fundraiser|gala|auction|charity\s+run|walk\s+for|community\s+event|annual\s+dinner|gofundme|crowdfund)\b/i;
+    if (COMMUNITY_NOISE.test(sentence)) continue;
 
     MONEY_PATTERN.lastIndex = 0;
     let match;
@@ -1467,18 +1540,31 @@ export function extractFinancialSignals(text: string): ExtractedFinancialSignal[
       if (!amountRaw || amountRaw.length < 2) continue;
 
       const { amount, currency, display } = normalizeAmount(amountRaw);
-      if (amount === null || amount < 1000) continue;
+      // Require at least $10,000 minimum to avoid trivial mentions
+      if (amount === null || amount < 10_000) continue;
 
       const dedupKey = display;
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
 
+      // F2: 6-type classification
       const signalType = getSignalType(sentence);
       const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
 
-      let entityName: string | null = null;
-      const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence);
-      if (properNounMatch) entityName = properNounMatch[1];
+      // F3: Extract WHO controls and WHO receives
+      const controlledBy = extractActorNearVerb(sentence, CONTROL_VERB_PATTERN);
+      const receivedBy = extractActorNearVerb(sentence, RECEIVE_VERB_PATTERN);
+      const programName = extractProgramName(sentence);
+
+      // Primary entity name: prefer receivedBy, then first proper noun
+      let entityName: string | null = receivedBy ?? controlledBy ?? null;
+      if (!entityName) {
+        const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence);
+        if (properNounMatch) entityName = properNounMatch[1];
+      }
+
+      // F5: Confidence scoring
+      const financialConfidence = scoreFinancialConfidence(sentence, signalType, entityName, anchorTokens);
 
       signals.push({
         amountRaw,
@@ -1488,6 +1574,10 @@ export function extractFinancialSignals(text: string): ExtractedFinancialSignal[
         signalType,
         eventSummary: summary,
         entityName,
+        controlledBy,
+        receivedBy,
+        programName,
+        financialConfidence,
       });
       if (signals.length >= 20) return signals;
     }
@@ -1898,25 +1988,35 @@ export interface RawTimelineEvent {
 
 export interface RawFinancialSignal {
   amountRaw: string;
+  amountDisplay?: string;
   normalizedAmount?: number | null;
   currency?: string;
   signalType: string;
   eventSummary?: string | null;
   entityName?: string | null;
+  controlledBy?: string | null;
+  receivedBy?: string | null;
+  programName?: string | null;
+  financialConfidence?: number;
 }
 
+const TIMELINE_ACTION_KEYWORDS = /\b(?:approved?|funded?|allocated?|appropriated?|awarded?|contracted?|charged?|investigated?|indicted?|announced?|launched?|signed?|enacted?|ordered?|expanded?|audited?|subpoenaed?|arrested?|convicted?|sentenced?|settled?|dismissed?|reformed?|initiated?|established?|created?|passed?)\b/i;
+
 /**
- * Filter extracted timeline events using anchor token overlap.
- * Rejects events with no anchor token in their summary.
+ * Filter extracted timeline events using anchor token overlap + action keyword.
+ * Rejects events with no anchor token OR no action keyword in their summary.
  */
 export function filterTimelineByAnchor(
   events: RawTimelineEvent[],
   anchor: CaseAnchor
 ): RawTimelineEvent[] {
-  if (anchor.anchorTokens.length === 0) return events;
   const primaryTokens = anchor.anchorTokens.slice(0, 8);
   return events.filter(ev => {
     const text = `${ev.summary} ${ev.eventType}`.toLowerCase();
+    // Must have an action keyword (strict mode)
+    if (!TIMELINE_ACTION_KEYWORDS.test(ev.summary)) return false;
+    // If no anchor tokens, accept any action-keyword event
+    if (primaryTokens.length === 0) return true;
     // Accept if any anchor token appears in the event summary
     return primaryTokens.some(t => text.includes(t));
   });
@@ -1924,18 +2024,21 @@ export function filterTimelineByAnchor(
 
 /**
  * Filter extracted financial signals using anchor token overlap.
- * Rejects signals with no anchor relevance.
+ * Strict mode: requires anchor overlap AND the signal must have context.
+ * Signals without any context (no summary, no entity) are rejected.
  */
 export function filterFinancialByAnchor(
   signals: RawFinancialSignal[],
   anchor: CaseAnchor
 ): RawFinancialSignal[] {
-  if (anchor.anchorTokens.length === 0) return signals;
   const primaryTokens = anchor.anchorTokens.slice(0, 8);
   return signals.filter(sig => {
+    // Reject signals with no context whatsoever
+    if (!sig.eventSummary && !sig.entityName) return false;
+    // If no anchor tokens, apply financial-only proximity check
+    if (primaryTokens.length === 0) return !!sig.eventSummary;
     const text = `${sig.eventSummary ?? ""} ${sig.entityName ?? ""} ${sig.amountRaw}`.toLowerCase();
-    // Accept if any anchor token appears, OR if no entity context (can't filter)
-    if (!sig.eventSummary && !sig.entityName) return true;
+    // Accept if any anchor token appears
     return primaryTokens.some(t => text.includes(t));
   });
 }

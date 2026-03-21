@@ -49,10 +49,15 @@ export interface RankedTimelineEvent {
 export interface RankedFinancialSignal {
   id: number;
   amountRaw: string;
+  amountDisplay: string | null;
   normalizedAmount: number | null;
   signalType: string;
   eventSummary: string | null;
   entityName: string | null;
+  controlledBy: string | null;
+  receivedBy: string | null;
+  programName: string | null;
+  financialConfidence: number | null;
   documentTitle: string | null;
 }
 
@@ -423,13 +428,22 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     const entityLower = (fs.entityName || "").toLowerCase();
     if (entityLower && entityNameSet.has(entityLower)) score += 20;
 
+    const conf = fs.financialConfidence ? Number(fs.financialConfidence) : null;
+    // Boost score by confidence
+    if (conf !== null) score += conf * 10;
+
     scoredFinancial.push({
       id: fs.id,
       amountRaw: fs.amountRaw || "",
+      amountDisplay: (fs as any).amountDisplay || null,
       normalizedAmount: fs.normalizedAmount ? Number(fs.normalizedAmount) : null,
       signalType: fs.signalType || "UNKNOWN",
       eventSummary: fs.eventSummary || null,
       entityName: fs.entityName || null,
+      controlledBy: (fs as any).controlledBy || null,
+      receivedBy: (fs as any).receivedBy || null,
+      programName: (fs as any).programName || null,
+      financialConfidence: conf,
       documentTitle: fs.documentTitle || null,
       _score: score,
     });
@@ -583,8 +597,10 @@ function buildWhatThisCaseIs(
   // Financial signal with specifics
   if (financial.length > 0) {
     const topAmt = financial[0];
-    const context = topAmt.eventSummary ? ` (${topAmt.eventSummary.slice(0, 80)})` : "";
-    parts.push(`Financial exposure: ${topAmt.amountRaw} — ${topAmt.signalType}${context}.`);
+    const amountStr = topAmt.amountDisplay || topAmt.amountRaw;
+    const actor = topAmt.receivedBy ? ` → ${topAmt.receivedBy}` : topAmt.entityName ? ` linked to ${topAmt.entityName}` : "";
+    const program = topAmt.programName ? ` via ${topAmt.programName}` : "";
+    parts.push(`Financial exposure: ${amountStr} — ${topAmt.signalType}${actor}${program}.`);
     if (financial.length > 1) parts.push(`${financial.length - 1} additional financial signal${financial.length > 2 ? "s" : ""} detected.`);
   }
 
@@ -656,8 +672,11 @@ function buildCurrentState(
   // Financial state
   if (financial.length > 0) {
     const top = financial[0];
-    const entity = top.entityName ? ` linked to ${top.entityName}` : "";
-    parts.push(`Largest financial signal: ${top.amountRaw}${entity} (${top.signalType}).`);
+    const amountStr = top.amountDisplay || top.amountRaw;
+    const receiver = top.receivedBy ? ` → ${top.receivedBy}` : top.entityName ? ` linked to ${top.entityName}` : "";
+    const program = top.programName ? ` (${top.programName})` : "";
+    const confStr = top.financialConfidence !== null ? ` [conf: ${Math.round((top.financialConfidence ?? 0) * 100)}%]` : "";
+    parts.push(`Largest financial signal: ${amountStr}${receiver}${program} — ${top.signalType}${confStr}.`);
   }
 
   // Entity state

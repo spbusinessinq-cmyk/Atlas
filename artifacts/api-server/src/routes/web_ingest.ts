@@ -1356,27 +1356,40 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         }
       }
 
-      // ── Auto-extract financial signals (anchor-filtered) ─────────────────
+      // ── Auto-extract financial signals (anchor-filtered, confidence-gated) ──
       if (relevance.priority !== "NOISE") {
         try {
-          const rawSignals = extractFinancialSignals(textForAnalysis);
+          const rawSignals = extractFinancialSignals(textForAnalysis, caseAnchor.anchorTokens);
           const signals = filterFinancialByAnchor(rawSignals, caseAnchor);
+          let financialInserted = 0;
+          let financialRejected = 0;
           for (const sig of signals) {
+            const conf = (sig as any).financialConfidence ?? 0;
+            if (conf < 0.60) { financialRejected++; continue; }
             try {
               await db.insert(financialSignalsTable).values({
                 amountRaw: sig.amountRaw,
+                amountDisplay: (sig as any).amountDisplay ?? null,
                 normalizedAmount: sig.normalizedAmount ?? null,
                 currency: sig.currency ?? "USD",
                 signalType: sig.signalType,
                 eventSummary: sig.eventSummary ?? null,
                 entityName: sig.entityName ?? null,
+                controlledBy: (sig as any).controlledBy ?? null,
+                receivedBy: (sig as any).receivedBy ?? null,
+                programName: (sig as any).programName ?? null,
+                financialConfidence: conf,
                 documentId: doc.id,
                 documentTitle: result.title,
                 caseId,
               });
+              financialInserted++;
             } catch {
               // skip duplicate/constraint errors
             }
+          }
+          if (financialRejected > 0) {
+            console.log(`[ATLAS-FINANCIAL] doc=${doc.id} inserted=${financialInserted} rejected_low_conf=${financialRejected}`);
           }
         } catch {
           // don't let financial extraction crash the pipeline
@@ -2083,19 +2096,26 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           }
         } catch { /* don't crash pipeline */ }
 
-        // ── Auto-extract financial signals (recovery pass, anchor-filtered) ─
+        // ── Auto-extract financial signals (recovery pass, confidence-gated) ──
         try {
-          const rawSignals = extractFinancialSignals(textForAnalysis);
+          const rawSignals = extractFinancialSignals(textForAnalysis, caseAnchor.anchorTokens);
           const signals = filterFinancialByAnchor(rawSignals, caseAnchor);
           for (const sig of signals) {
+            const conf = (sig as any).financialConfidence ?? 0;
+            if (conf < 0.60) continue;
             try {
               await db.insert(financialSignalsTable).values({
                 amountRaw: sig.amountRaw,
+                amountDisplay: (sig as any).amountDisplay ?? null,
                 normalizedAmount: sig.normalizedAmount ?? null,
                 currency: sig.currency ?? "USD",
                 signalType: sig.signalType,
                 eventSummary: sig.eventSummary ?? null,
                 entityName: sig.entityName ?? null,
+                controlledBy: (sig as any).controlledBy ?? null,
+                receivedBy: (sig as any).receivedBy ?? null,
+                programName: (sig as any).programName ?? null,
+                financialConfidence: conf,
                 documentId: doc.id,
                 documentTitle: result.title,
                 caseId,

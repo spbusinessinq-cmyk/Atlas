@@ -1,0 +1,253 @@
+You are executing a HIGH-IMPACT POWER PASS on ATLAS.
+
+Do not add fluff. Do not redesign the app. Do not create mock features.
+
+Focus ONLY on:
+1) precision of extracted signals (financial, timeline, entities)
+2) strict target alignment
+3) clean, meaningful graph inputs
+4) high-quality dossier inputs
+5) tighter, more professional UI (especially sidebars + panels)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — FINANCIAL SIGNAL INTELLIGENCE (CRITICAL FIX)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem:
+Financial extraction is currently naive. It pulls numbers without understanding:
+- what the money represents
+- who controls it
+- whether it’s actually tied to the case target
+
+Fix this immediately.
+
+F1) Only extract financial signals if ALL are true:
+- contains a real monetary value ($, million, billion, etc)
+- contains a funding context:
+  ("funding", "budget", "grant", "contract", "allocation", "spending", "appropriation", "audit")
+- is target-aligned (must reference case anchor or directly connected entity)
+
+If not → DO NOT create a financial signal
+
+---
+
+F2) Add financial classification types:
+
+Each signal MUST be one of:
+
+- APPROPRIATION (budget allocation)
+- CONTRACT (awarded funds)
+- EXPENDITURE (money spent)
+- FRAUD / MISUSE (allegations, charges)
+- CUT / REALLOCATION (funding removal)
+- PROGRAM FUNDING (ongoing initiative funding)
+
+Store:
+type
+amount
+actors involved
+source doc id
+confidence
+
+---
+
+F3) Add context extraction:
+
+Each financial signal must extract:
+
+- WHO controls the money
+- WHO receives the money
+- WHAT program / agency it belongs to
+- WHAT the money is for
+
+If missing → downgrade confidence or reject
+
+---
+
+F4) Kill garbage signals:
+
+Reject if:
+- number exists but no funding context
+- headline unrelated to case
+- community events / announcements / fluff
+- no actor tied to the money
+
+---
+
+F5) Add confidence scoring:
+
+financialConfidence =
++0.4 anchor alignment
++0.2 funding keywords
++0.2 named actors
++0.2 appears in 2+ docs
+
+Only show signals ≥ 0.6
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — ENTITY PRECISION HARDENING (NEXT LEVEL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+E1) Add HARD ENTITY GATE:
+
+Entity must satisfy:
+- appears in CORE doc OR
+- appears in ≥2 relevant docs with same context OR
+- appears near funding / contract / oversight language
+
+Else → HOLD or REJECT
+
+---
+
+E2) Add ROLE DETECTION:
+
+Each entity must be labeled:
+
+- GOVERNMENT
+- AGENCY
+- NONPROFIT
+- CONTRACTOR
+- INDIVIDUAL (OFFICIAL)
+- INDIVIDUAL (UNKNOWN)
+- MEDIA
+- LOCATION (only if critical)
+
+Reject entities with no role
+
+---
+
+E3) Add RELATION SEEDING:
+
+When entity appears near:
+- "awarded"
+- "received"
+- "approved"
+- "funded"
+- "oversight"
+- "investigation"
+
+Create a relationship seed immediately
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — TIMELINE FILTER (STRICT MODE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Only allow timeline events if:
+
+- contains a date AND
+- contains target anchor OR relevant entity AND
+- contains action keywords:
+  ("approved", "funded", "charged", "allocated", "investigated", "announced")
+
+Else → DROP
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — GRAPH ACTIVATION FIX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If:
+entities ≥ 3 AND
+at least 2 share documents OR relationships
+
+AUTO-BUILD graph
+
+Remove dependency on manual approval for initial graph seed
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — DOSSIER QUALITY UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Rewrite dossier builders to:
+
+- prioritize actors tied to MONEY
+- highlight flows, not just summaries
+- explicitly call out:
+  "who controls funds"
+  "who receives funds"
+  "where breakdowns occur"
+
+Add section:
+"FINANCIAL STRUCTURE"
+→ list signals + actors
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — SIDEBAR + PANEL UI HARDENING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Keep style, improve structure.
+
+S1) CASE OVERVIEW PANEL:
+- reduce text density
+- add spacing between sections
+- use clear hierarchy:
+  SIGNALS → ANGLES → NEXT ACTION
+
+---
+
+S2) TRIAGE ACTIONS:
+- group into 3 blocks:
+  FILTERING
+  PROMOTION
+  CLEANUP
+
+- reduce visual noise
+- consistent spacing + alignment
+- remove cluttered stacking
+
+---
+
+S3) BUTTON CONSISTENCY:
+- unify sizes
+- remove mixed padding
+- consistent hover states
+
+---
+
+S4) EMPTY STATES:
+Replace vague text with actionable:
+
+Instead of:
+"no financial flows detected"
+
+Use:
+"No valid funding signals detected — ingest documents with budget, contracts, or spending references"
+
+---
+
+S5) FLOW TRACE PANEL:
+- increase card padding
+- make amount visually dominant
+- tighten metadata lines
+- remove visual clutter
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — FINAL VALIDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After implementation:
+
+Run this case:
+"los angeles homeless funding"
+
+Expected outcome:
+
+- financial signals ONLY tied to funding actions
+- no random community/news noise
+- entities are real actors (agencies, officials, orgs)
+- timeline only shows meaningful events
+- graph forms automatically
+- dossier reads like an investigation, not a summary
+
+Do not stop until this is true.

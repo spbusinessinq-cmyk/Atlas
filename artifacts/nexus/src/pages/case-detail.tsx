@@ -2514,19 +2514,41 @@ function DossierCenterTab({ caseId, caseTitle }: { caseId: number; caseTitle: st
 
 function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlow[]; financialSignals: any[] }) {
   const SIGNAL_COLOR: Record<string, string> = {
+    fraud_misuse: "text-red-400",
+    contract: "text-purple-400",
+    grant: "text-emerald-400",
+    appropriation: "text-blue-400",
+    cut_reallocation: "text-orange-400",
+    expenditure: "text-yellow-400",
+    program_funding: "text-green-400",
     payment: "text-green-400",
     transfer: "text-cyan-400",
     investment: "text-blue-400",
     loan: "text-yellow-400",
     fine: "text-red-400",
     bribe: "text-red-500",
-    contract: "text-purple-400",
-    grant: "text-emerald-400",
     revenue: "text-green-500",
     expense: "text-orange-400",
   };
 
+  const SIGNAL_BORDER: Record<string, string> = {
+    fraud_misuse: "border-red-900/40",
+    contract: "border-purple-900/30",
+    grant: "border-emerald-900/30",
+    appropriation: "border-blue-900/30",
+    cut_reallocation: "border-orange-900/30",
+    expenditure: "border-yellow-900/20",
+    program_funding: "border-green-900/20",
+  };
+
   const hasData = financialSignals.length > 0 || moneyFlows.length > 0;
+
+  function confColor(conf: number | null): string {
+    if (conf === null) return "text-neutral-700";
+    if (conf >= 0.85) return "text-green-500";
+    if (conf >= 0.70) return "text-yellow-500";
+    return "text-orange-500";
+  }
 
   return (
     <div className="nexus-panel rounded-none h-full flex flex-col">
@@ -2534,19 +2556,19 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
         <span className="nexus-label">FLOW TRACE</span>
         {financialSignals.length > 0 && (
           <span className="font-mono text-[9px] text-green-500 pr-3">
-            {financialSignals.length} AUTO-DETECTED SIGNAL{financialSignals.length !== 1 ? "S" : ""}
+            {financialSignals.length} VERIFIED SIGNAL{financialSignals.length !== 1 ? "S" : ""}
           </span>
         )}
       </div>
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {!hasData ? (
-          <div className="py-12 text-center">
+          <div className="py-12 text-center space-y-2">
             <TrendingUp className="w-6 h-6 text-neutral-800 mx-auto mb-3" />
             <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
-              NO FINANCIAL FLOWS RECORDED
+              NO FINANCIAL SIGNALS DETECTED
             </div>
-            <div className="font-mono text-[9px] text-neutral-800 uppercase mt-1">
-              ANALYZE DOCUMENTS TO AUTO-DETECT SIGNALS
+            <div className="font-mono text-[9px] text-neutral-800 uppercase mt-1 max-w-[240px] mx-auto leading-relaxed">
+              INGEST DOCUMENTS REFERENCING BUDGETS, CONTRACTS, GRANTS OR APPROPRIATIONS TO AUTO-DETECT SIGNALS
             </div>
           </div>
         ) : (
@@ -2557,38 +2579,82 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
                   AUTO-DETECTED FINANCIAL SIGNALS
                 </div>
                 <div className="space-y-2">
-                  {financialSignals.map((sig: any) => (
+                  {financialSignals.map((sig: any) => {
+                    const typeKey = (sig.signalType || "").toLowerCase();
+                    const borderClass = SIGNAL_BORDER[typeKey] ?? "border-[#ffffff0d]";
+                    const conf: number | null = sig.financialConfidence ?? null;
+                    return (
                     <div
                       key={sig.id}
-                      className="p-3 border border-[#ffffff0d] bg-[#0a0e14] space-y-1.5"
+                      className={`p-3 border ${borderClass} bg-[#0a0e14] space-y-2`}
                     >
+                      {/* Header: type badge + amount */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] ${SIGNAL_COLOR[sig.signalType?.toLowerCase()] ?? "text-neutral-400"}`}>
+                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] ${SIGNAL_COLOR[typeKey] ?? "text-neutral-400"}`}>
                           {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
                         </span>
-                        {sig.entityName && (
-                          <span className="font-mono text-[10px] text-cyan-400 uppercase tracking-wide">
-                            {sig.entityName}
+                        {conf !== null && (
+                          <span className={`text-[8px] font-mono uppercase ${confColor(conf)}`}>
+                            CONF {Math.round(conf * 100)}%
                           </span>
                         )}
                         {(sig.amountDisplay || sig.amountRaw) && (
-                          <span className="ml-auto text-base font-bold text-green-400 font-mono tabular-nums">
+                          <span className="ml-auto text-lg font-bold text-green-400 font-mono tabular-nums leading-none">
                             {sig.amountDisplay || sig.amountRaw}
                           </span>
                         )}
                       </div>
+
+                      {/* Actor flow: controlledBy → receivedBy / entityName */}
+                      {(sig.controlledBy || sig.receivedBy || sig.entityName) && (
+                        <div className="flex items-center gap-1.5 flex-wrap font-mono text-[9px]">
+                          {sig.controlledBy && (
+                            <>
+                              <span className="text-neutral-600 uppercase">CONTROLS:</span>
+                              <span className="text-amber-400 uppercase">{sig.controlledBy}</span>
+                            </>
+                          )}
+                          {sig.controlledBy && sig.receivedBy && (
+                            <span className="text-green-700">→</span>
+                          )}
+                          {sig.receivedBy && (
+                            <>
+                              <span className="text-neutral-600 uppercase">RECEIVES:</span>
+                              <span className="text-cyan-400 uppercase">{sig.receivedBy}</span>
+                            </>
+                          )}
+                          {!sig.controlledBy && !sig.receivedBy && sig.entityName && (
+                            <>
+                              <span className="text-neutral-600 uppercase">ENTITY:</span>
+                              <span className="text-cyan-400 uppercase">{sig.entityName}</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Program name */}
+                      {sig.programName && (
+                        <div className="font-mono text-[9px] text-neutral-500 uppercase tracking-wide">
+                          PROGRAM: <span className="text-neutral-300">{sig.programName}</span>
+                        </div>
+                      )}
+
+                      {/* Event summary */}
                       {sig.eventSummary && (
-                        <p className="text-[11px] text-neutral-400 leading-relaxed font-mono">
-                          {sig.eventSummary.length > 180 ? sig.eventSummary.slice(0, 180) + "…" : sig.eventSummary}
+                        <p className="text-[11px] text-neutral-400 leading-relaxed font-mono border-t border-[#ffffff05] pt-1.5">
+                          {sig.eventSummary.length > 200 ? sig.eventSummary.slice(0, 200) + "…" : sig.eventSummary}
                         </p>
                       )}
+
+                      {/* Source */}
                       {sig.documentTitle && (
                         <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-                          SOURCE: {sig.documentTitle}
+                          SOURCE: {sig.documentTitle.length > 60 ? sig.documentTitle.slice(0, 60) + "…" : sig.documentTitle}
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
