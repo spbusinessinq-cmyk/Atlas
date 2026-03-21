@@ -6,9 +6,59 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+
+function EntityDeleteButton({ entity, caseId }: { entity: Entity; caseId: number }) {
+  const queryClient = useQueryClient();
+  const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleting(true);
+    try {
+      await fetch(`/api/cases/${caseId}/entities/${entity.id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/entities"] });
+    } finally {
+      setDeleting(false);
+      setConfirm(false);
+    }
+  };
+
+  if (confirm) {
+    return (
+      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="px-1.5 py-0.5 bg-red-700 hover:bg-red-600 text-white font-mono text-[7px] uppercase tracking-widest transition-colors disabled:opacity-40"
+        >
+          {deleting ? "…" : "YES"}
+        </button>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirm(false); }}
+          className="px-1.5 py-0.5 border border-neutral-700 text-neutral-500 hover:text-white font-mono text-[7px] uppercase tracking-widest transition-colors"
+        >
+          NO
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirm(true); }}
+      className="opacity-0 group-hover:opacity-100 p-1 text-neutral-700 hover:text-red-400 transition-all shrink-0"
+      title="Delete entity from case"
+    >
+      <Trash2 className="w-3 h-3" />
+    </button>
+  );
+}
 
 export default function EntitiesTab({ caseId, entities }: { caseId: number, entities: Entity[] }) {
   const [search, setSearch] = useState("");
@@ -156,8 +206,9 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
                       <span className="text-neutral-900">—</span>
                     )}
                   </div>
-                  <div className="w-16 text-right text-neutral-700 group-hover:text-red-600 font-mono text-[9px] uppercase">
-                    ACCESS →
+                  <div className="w-16 text-right text-neutral-700 group-hover:text-red-600 font-mono text-[9px] uppercase flex items-center justify-end gap-1">
+                    <EntityDeleteButton entity={entity} caseId={caseId} />
+                    <span className="group-hover:hidden">→</span>
                   </div>
                 </div>
               </Link>

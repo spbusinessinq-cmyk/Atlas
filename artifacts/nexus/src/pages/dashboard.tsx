@@ -33,9 +33,13 @@ const STATUS_STYLES: Record<CaseStatus, { dot: string; text: string; label: stri
 };
 
 type SeedStatus = "idle" | "seeding" | "done" | "error";
+type SeedTab = "target" | "urls" | "notes";
 
 function SeedLauncher() {
   const [target, setTarget] = useState("");
+  const [urlsRaw, setUrlsRaw] = useState("");
+  const [rawNotes, setRawNotes] = useState("");
+  const [activeTab, setActiveTab] = useState<SeedTab>("target");
   const [status, setStatus] = useState<SeedStatus>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [seededCaseId, setSeededCaseId] = useState<number | null>(null);
@@ -43,6 +47,12 @@ function SeedLauncher() {
   const queryClient = useQueryClient();
 
   const seed = target.trim();
+  const parsedUrls = urlsRaw
+    .split("\n")
+    .map((u) => u.trim())
+    .filter((u) => /^https?:\/\//i.test(u));
+  const hasNotes = rawNotes.trim().length > 0;
+
   const queryVariations = seed
     ? [seed, `${seed} investigation`, `${seed} contracts`, `${seed} funding`, `${seed} program`]
     : [];
@@ -57,7 +67,11 @@ function SeedLauncher() {
       const resp = await fetch("/api/cases/seed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target: seed }),
+        body: JSON.stringify({
+          target: seed,
+          sourceUrls: parsedUrls,
+          rawNotes: rawNotes.trim() || undefined,
+        }),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -74,6 +88,12 @@ function SeedLauncher() {
     }
   };
 
+  const tabs: { id: SeedTab; label: string; badge?: number }[] = [
+    { id: "target", label: "TARGET" },
+    { id: "urls", label: "SOURCE URLs", badge: parsedUrls.length || undefined },
+    { id: "notes", label: "RAW NOTES", badge: hasNotes ? 1 : undefined },
+  ];
+
   return (
     <div className="border border-red-500/20 bg-red-500/[0.03] mb-5">
       <div className="nexus-header-strip border-b border-red-500/15">
@@ -84,14 +104,38 @@ function SeedLauncher() {
         <div className="font-mono text-[9px] text-neutral-700 uppercase">ATLAS SEED LAUNCHER</div>
       </div>
 
-      <form onSubmit={handleSeed} className="p-4">
-        <div className="flex gap-3 items-end">
-          <div className="flex-1 space-y-1">
+      {/* Tabs */}
+      <div className="flex border-b border-[#ffffff08]">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-3 py-1.5 font-mono text-[8px] uppercase tracking-widest flex items-center gap-1.5 transition-colors border-b-2 ${
+              activeTab === tab.id
+                ? "border-red-500 text-red-400 bg-red-500/[0.04]"
+                : "border-transparent text-neutral-600 hover:text-neutral-400"
+            }`}
+          >
+            {tab.label}
+            {tab.badge !== undefined && (
+              <span className="px-1 py-0 bg-red-500/20 text-red-400 text-[7px] rounded-sm">
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSeed} className="p-4 space-y-3">
+        {/* TARGET TAB */}
+        {activeTab === "target" && (
+          <div className="space-y-2">
             <label className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest block">
               Investigation Target
             </label>
-            <p className="font-mono text-[8px] text-neutral-700 uppercase tracking-wide">
-              ATLAS auto-generates 5 search queries, ingests web sources, extracts entities &amp; financial signals, and builds your case graph automatically.
+            <p className="font-mono text-[8px] text-neutral-700">
+              ATLAS auto-generates investigative queries, ingests web sources, extracts entities &amp; financial signals, and builds your case graph.
             </p>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-600" />
@@ -107,65 +151,110 @@ function SeedLauncher() {
                 className="w-full bg-black border border-[#ffffff12] text-white font-mono text-sm pl-8 pr-3 h-9 focus:outline-none focus:border-red-500/50 disabled:opacity-40 placeholder:text-neutral-700"
               />
             </div>
-          </div>
-          <button
-            type="submit"
-            disabled={!seed || status === "seeding"}
-            className="h-9 px-5 bg-red-600 hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 flex-shrink-0"
-          >
-            {status === "seeding" ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                SEEDING...
-              </>
-            ) : (
-              <>
-                <Zap className="w-3 h-3" />
-                INITIATE
-              </>
+            {queryVariations.length > 0 && status === "idle" && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider self-center">Will search:</span>
+                {queryVariations.map((q) => (
+                  <span key={q} className="px-2 py-0.5 border border-[#ffffff08] bg-[#ffffff03] font-mono text-[9px] text-neutral-500">{q}</span>
+                ))}
+              </div>
             )}
-          </button>
-        </div>
-
-        {/* Query preview */}
-        {queryVariations.length > 0 && status === "idle" && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <span className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider self-center">
-              Will search:
-            </span>
-            {queryVariations.map((q) => (
-              <span
-                key={q}
-                className="px-2 py-0.5 border border-[#ffffff08] bg-[#ffffff03] font-mono text-[9px] text-neutral-500"
-              >
-                {q}
-              </span>
-            ))}
           </div>
         )}
 
+        {/* SOURCE URLs TAB */}
+        {activeTab === "urls" && (
+          <div className="space-y-2">
+            <label className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest block">
+              Analyst Source URLs
+            </label>
+            <p className="font-mono text-[8px] text-neutral-700">
+              One URL per line. ATLAS will fetch and ingest each source directly into the case document vault and run entity extraction.
+            </p>
+            <textarea
+              value={urlsRaw}
+              onChange={(e) => setUrlsRaw(e.target.value)}
+              disabled={status === "seeding"}
+              placeholder={"https://example.com/article-one\nhttps://example.com/article-two"}
+              rows={5}
+              className="w-full bg-black border border-[#ffffff12] text-white font-mono text-[11px] px-3 py-2 focus:outline-none focus:border-amber-500/50 disabled:opacity-40 placeholder:text-neutral-700 resize-none"
+            />
+            {parsedUrls.length > 0 && (
+              <div className="space-y-1">
+                <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest">{parsedUrls.length} valid URL{parsedUrls.length !== 1 ? "s" : ""} detected</div>
+                {parsedUrls.map((u) => (
+                  <div key={u} className="flex items-center gap-1.5 font-mono text-[9px] text-amber-600">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
+                    <span className="truncate">{u}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* RAW NOTES TAB */}
+        {activeTab === "notes" && (
+          <div className="space-y-2">
+            <label className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest block">
+              Raw Analyst Notes
+            </label>
+            <p className="font-mono text-[8px] text-neutral-700">
+              Paste unstructured notes, evidence fragments, or briefing text. ATLAS will process them as a source document and extract entities.
+            </p>
+            <textarea
+              value={rawNotes}
+              onChange={(e) => setRawNotes(e.target.value)}
+              disabled={status === "seeding"}
+              placeholder="Subject was observed at 0300 hours near the Port of Long Beach. Vehicle registration linked to shell company..."
+              rows={7}
+              className="w-full bg-black border border-[#ffffff12] text-white font-mono text-[11px] px-3 py-2 focus:outline-none focus:border-purple-500/50 disabled:opacity-40 placeholder:text-neutral-700 resize-none"
+            />
+            {hasNotes && (
+              <div className="font-mono text-[8px] text-purple-500/70 uppercase tracking-widest">
+                {rawNotes.trim().length} chars · Will be ingested as analyst notes document
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action row */}
+        <div className="flex items-center gap-3 pt-1 border-t border-[#ffffff06]">
+          <button
+            type="submit"
+            disabled={!seed || status === "seeding"}
+            className="h-8 px-5 bg-red-600 hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+          >
+            {status === "seeding" ? (
+              <><span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />SEEDING...</>
+            ) : (
+              <><Zap className="w-3 h-3" />INITIATE</>
+            )}
+          </button>
+          {(parsedUrls.length > 0 || hasNotes) && (
+            <div className="flex items-center gap-2 font-mono text-[8px] text-neutral-600">
+              {parsedUrls.length > 0 && <span className="text-amber-600/70">+{parsedUrls.length} URL{parsedUrls.length !== 1 ? "s" : ""}</span>}
+              {hasNotes && <span className="text-purple-500/70">+NOTES</span>}
+              <span>will be ingested alongside auto-search</span>
+            </div>
+          )}
+        </div>
+
         {/* Seeding progress */}
         {status === "seeding" && (
-          <div className="mt-3 space-y-1.5">
+          <div className="space-y-1.5">
             <div className="font-mono text-[9px] text-orange-400 uppercase tracking-widest animate-pulse">
               ATLAS IS INGESTING SOURCES AND BUILDING ENTITY GRAPH...
             </div>
             <div className="h-0.5 bg-neutral-900 overflow-hidden">
               <div className="h-full bg-red-500 animate-[scan_2s_linear_infinite]" style={{ width: "40%" }} />
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {queryVariations.map((q) => (
-                <span key={q} className="px-2 py-0.5 border border-orange-500/20 bg-orange-500/5 font-mono text-[9px] text-orange-500/70">
-                  {q}
-                </span>
-              ))}
-            </div>
           </div>
         )}
 
         {/* Success */}
         {status === "done" && seededCaseId && (
-          <div className="mt-3 flex items-center gap-2 text-green-400 font-mono text-[10px]">
+          <div className="flex items-center gap-2 text-green-400 font-mono text-[10px]">
             <CheckCircle className="w-3.5 h-3.5" />
             CASE-{seededCaseId.toString().padStart(6, "0")} CREATED — REDIRECTING TO INVESTIGATION...
           </div>
@@ -173,7 +262,7 @@ function SeedLauncher() {
 
         {/* Error */}
         {status === "error" && (
-          <div className="mt-3 flex items-center gap-2 text-red-400 font-mono text-[10px]">
+          <div className="flex items-center gap-2 text-red-400 font-mono text-[10px]">
             <AlertTriangle className="w-3.5 h-3.5" />
             SEED FAILED: {errorMsg}
           </div>
@@ -491,13 +580,19 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
   );
 }
 
+const WIPE_PHRASE = "WIPE ATLAS";
+
 function SystemWipePanel() {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"idle" | "confirm" | "wiping" | "done" | "error">("idle");
+  const [confirmInput, setConfirmInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  const phraseMatch = confirmInput.trim().toUpperCase() === WIPE_PHRASE;
+
   const handleWipe = async () => {
+    if (!phraseMatch) return;
     setPhase("wiping");
     try {
       const resp = await fetch("/api/admin/wipe", {
@@ -510,6 +605,7 @@ function SystemWipePanel() {
         throw new Error(err.error || `HTTP ${resp.status}`);
       }
       setPhase("done");
+      setConfirmInput("");
       await queryClient.invalidateQueries();
     } catch (err) {
       setErrorMsg(String(err));
@@ -517,10 +613,15 @@ function SystemWipePanel() {
     }
   };
 
+  const handleClose = () => {
+    setOpen(false);
+    if (phase !== "done") { setPhase("idle"); setConfirmInput(""); }
+  };
+
   return (
     <div className="mt-5 border border-red-950/40 bg-red-950/[0.02]">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => (open ? handleClose() : setOpen(true))}
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-red-950/10 transition-colors"
       >
         <div className="flex items-center gap-2 font-mono text-[8px] text-red-900 uppercase tracking-widest">
@@ -551,22 +652,32 @@ function SystemWipePanel() {
           )}
 
           {phase === "confirm" && (
-            <div className="border border-red-800/60 bg-red-950/20 p-3 space-y-2">
+            <div className="border border-red-800/60 bg-red-950/20 p-3 space-y-3">
               <div className="font-mono text-[9px] text-red-400 uppercase tracking-widest">
-                ⚠ FINAL CONFIRMATION REQUIRED
+                ⚠ AUTHORIZATION REQUIRED
               </div>
-              <p className="font-mono text-[8px] text-neutral-500">
-                This will destroy all investigation data permanently. There is no recovery option.
+              <p className="font-mono text-[8px] text-neutral-500 leading-relaxed">
+                This will destroy all investigation data permanently. There is no recovery option.<br />
+                Type <span className="text-red-400 font-bold">{WIPE_PHRASE}</span> to authorize.
               </p>
+              <input
+                type="text"
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                placeholder={`Type "${WIPE_PHRASE}" to confirm`}
+                className="w-full bg-black border border-red-800/40 text-red-300 font-mono text-[10px] px-2 py-1.5 focus:outline-none focus:border-red-500 placeholder:text-neutral-700"
+                autoFocus
+              />
               <div className="flex gap-2">
                 <button
                   onClick={handleWipe}
-                  className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
+                  disabled={!phraseMatch}
+                  className="px-3 py-1.5 bg-red-700 hover:bg-red-600 disabled:bg-neutral-800 disabled:text-neutral-600 disabled:cursor-not-allowed text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
                 >
                   CONFIRM — WIPE ALL DATA
                 </button>
                 <button
-                  onClick={() => setPhase("idle")}
+                  onClick={() => { setPhase("idle"); setConfirmInput(""); }}
                   className="px-3 py-1.5 border border-neutral-700 text-neutral-500 hover:text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
                 >
                   CANCEL
@@ -597,7 +708,7 @@ function SystemWipePanel() {
               </div>
               {errorMsg && <p className="font-mono text-[8px] text-neutral-600">{errorMsg}</p>}
               <button
-                onClick={() => setPhase("idle")}
+                onClick={() => { setPhase("idle"); setConfirmInput(""); }}
                 className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase tracking-widest underline"
               >
                 RESET

@@ -143,8 +143,22 @@ export default function CaseDetail() {
     );
   if (!summary)
     return (
-      <div className="p-8 text-red-500 font-mono text-xs uppercase tracking-widest">
-        ERROR 404: FILE NOT FOUND OR CLASSIFIED.
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6">
+        <div className="border border-amber-500/25 bg-amber-500/[0.03] px-8 py-8 max-w-md w-full mx-4 text-center space-y-4">
+          <div className="font-mono text-[10px] text-amber-500 uppercase tracking-[0.25em] mb-2">ATLAS // FILE ACCESS ERROR</div>
+          <div className="font-mono text-[22px] font-bold text-white uppercase tracking-tight">CASE NOT FOUND</div>
+          <div className="font-mono text-[9px] text-neutral-600 leading-relaxed">
+            FILE ID {caseId ? `CASE-${String(caseId).padStart(6,"0")}` : "UNKNOWN"} DOES NOT EXIST OR HAS BEEN PURGED FROM THE SYSTEM.
+          </div>
+          <div className="flex flex-col gap-2 mt-4">
+            <a href="/" className="w-full py-2 border border-red-500/40 bg-red-500/[0.05] text-red-400 font-mono text-[9px] uppercase tracking-widest hover:bg-red-500/[0.10] transition-colors flex items-center justify-center gap-2">
+              ← RETURN TO DOSSIER REGISTRY
+            </a>
+            <a href="/triage" className="w-full py-2 border border-amber-500/20 text-amber-600 font-mono text-[9px] uppercase tracking-widest hover:bg-amber-500/[0.05] transition-colors flex items-center justify-center gap-2">
+              OPEN TRIAGE QUEUE
+            </a>
+          </div>
+        </div>
       </div>
     );
 

@@ -659,9 +659,228 @@ export function openPrintDossier(params: PrintDossierParams): void {
   ${gaps.length > 0 ? gaps.map(g => `
     <div class="gap-row">${escapeHtml(g)}</div>
   `).join("") : `<div style="font-size:10.5pt;color:#555;padding:12px 0">All major intelligence requirements satisfied at current confidence level.</div>`}
-  <div style="margin-top:48px;border-top:1px solid #e0e0e0;padding-top:16px">
-    <div style="font-family:'Courier New',monospace;font-size:7.5pt;color:#aaa;letter-spacing:0.15em;text-transform:uppercase">
-      ATLAS-CORE AUTOMATED INTELLIGENCE REPORT &nbsp;·&nbsp; GENERATED ${escapeHtml(dateStr.toUpperCase())} AT ${escapeHtml(timeStr)} &nbsp;·&nbsp; CASE-${String(caseId).padStart(6, "0")} &nbsp;·&nbsp; FOR AUTHORIZED USE ONLY
+</div>
+
+<!-- PAGE 10: ENTITY NETWORK MAP (text-based) -->
+<div class="page">
+  <div class="section-number">SECTION 09</div>
+  <div class="section-header">
+    <div class="section-title">Entity Network Map</div>
+    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  </div>
+  <div style="margin-bottom:20px;font-size:10.5pt;color:#555">
+    Confirmed entity relationships extracted from ingested source material. Confidence ratings reflect evidence chain strength.
+  </div>
+  ${(s.entityRelationships ?? []).length > 0 ? `
+  <table style="width:100%;border-collapse:collapse;font-size:10pt">
+    <thead>
+      <tr style="border-bottom:2px solid #1a1a1a">
+        <th style="text-align:left;padding:7px 8px;font-family:'Courier New',monospace;font-size:7.5pt;letter-spacing:0.12em;color:#666;font-weight:600">ENTITY A</th>
+        <th style="text-align:center;padding:7px 8px;font-family:'Courier New',monospace;font-size:7.5pt;letter-spacing:0.12em;color:#666;font-weight:600">VECTOR</th>
+        <th style="text-align:left;padding:7px 8px;font-family:'Courier New',monospace;font-size:7.5pt;letter-spacing:0.12em;color:#666;font-weight:600">ENTITY B</th>
+        <th style="text-align:right;padding:7px 8px;font-family:'Courier New',monospace;font-size:7.5pt;letter-spacing:0.12em;color:#666;font-weight:600">CONF</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(s.entityRelationships ?? []).slice(0, 20).map((r, i) => `
+      <tr style="border-bottom:1px solid ${i % 2 === 0 ? "#f5f5f5" : "#efefef"};background:${i % 2 === 0 ? "#fff" : "#fafafa"}">
+        <td style="padding:7px 8px;font-weight:600;color:#222;font-size:10pt">${escapeHtml(r.entityAName)}</td>
+        <td style="padding:7px 8px;text-align:center;font-family:'Courier New',monospace;font-size:8pt;color:#b00000;letter-spacing:0.05em">${escapeHtml((r.relationType ?? "LINKED").replace(/_/g, " ").toUpperCase())}</td>
+        <td style="padding:7px 8px;font-weight:600;color:#222;font-size:10pt">${escapeHtml(r.entityBName)}</td>
+        <td style="padding:7px 8px;text-align:right;font-family:'Courier New',monospace;font-size:8.5pt;color:${r.confidence === "HIGH" ? "#006600" : r.confidence === "LOW" ? "#c00000" : "#666"}">${escapeHtml(r.confidence ?? "—")}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>
+  ${(s.entityRelationships ?? []).length > 20 ? `<div style="margin-top:12px;font-family:'Courier New',monospace;font-size:8pt;color:#888">+ ${(s.entityRelationships ?? []).length - 20} ADDITIONAL RELATIONSHIPS — VIEW FULL GRAPH IN ATLAS SYSTEM</div>` : ""}
+  ` : `<div class="empty-note">No confirmed entity relationships mapped. Approve entity mentions and build link graph in ATLAS.</div>`}
+
+  ${entities.length > 0 ? `
+  <div style="margin-top:36px">
+    <div class="actor-group-label">Entity Classification Summary</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:12px">
+      <div style="border:1px solid #e0e0e0;padding:14px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">PERSONS</div>
+        <div style="font-size:22pt;font-weight:bold;color:#111;line-height:1">${persons.length}</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;padding:14px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">ORGANIZATIONS</div>
+        <div style="font-size:22pt;font-weight:bold;color:#111;line-height:1">${orgs.length}</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;padding:14px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">OTHER ENTITIES</div>
+        <div style="font-size:22pt;font-weight:bold;color:#111;line-height:1">${otherEntities.length}</div>
+      </div>
+    </div>
+  </div>
+  ` : ""}
+</div>
+
+<!-- PAGE 11: SOURCE CREDIBILITY ASSESSMENT -->
+<div class="page">
+  <div class="section-number">SECTION 10</div>
+  <div class="section-header">
+    <div class="section-title">Source Credibility Assessment</div>
+    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  </div>
+  <div style="margin-bottom:20px;font-size:10.5pt;color:#555">
+    Signal quality scores for ingested source documents. Higher scores indicate greater relevance, verifiability, and corroboration.
+  </div>
+  ${documents.length > 0 ? `
+  <table style="width:100%;border-collapse:collapse;font-size:9.5pt">
+    <thead>
+      <tr style="border-bottom:2px solid #1a1a1a">
+        <th style="text-align:left;padding:6px 8px;font-family:'Courier New',monospace;font-size:7pt;color:#666;font-weight:600;letter-spacing:0.12em">#</th>
+        <th style="text-align:left;padding:6px 8px;font-family:'Courier New',monospace;font-size:7pt;color:#666;font-weight:600;letter-spacing:0.12em">SOURCE DOCUMENT</th>
+        <th style="text-align:left;padding:6px 8px;font-family:'Courier New',monospace;font-size:7pt;color:#666;font-weight:600;letter-spacing:0.12em">ORIGIN</th>
+        <th style="text-align:right;padding:6px 8px;font-family:'Courier New',monospace;font-size:7pt;color:#666;font-weight:600;letter-spacing:0.12em">SIGNAL SCORE</th>
+        <th style="text-align:center;padding:6px 8px;font-family:'Courier New',monospace;font-size:7pt;color:#666;font-weight:600;letter-spacing:0.12em">TIER</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${documents.slice(0, 15).map((d, i) => {
+        const score = d.signalScore !== null && d.signalScore !== undefined ? Math.round((d.signalScore ?? 0) * 100) : null;
+        const scoreColor = score !== null ? (score >= 70 ? "#006600" : score >= 40 ? "#996600" : "#c00000") : "#aaa";
+        return `
+      <tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:6px 8px;font-family:'Courier New',monospace;font-size:8pt;color:#aaa">${String(i + 1).padStart(2, "0")}</td>
+        <td style="padding:6px 8px;font-weight:500;color:#222;font-size:9pt;max-width:3in;overflow:hidden">${escapeHtml(d.title.slice(0, 70))}${d.title.length > 70 ? "…" : ""}</td>
+        <td style="padding:6px 8px;font-family:'Courier New',monospace;font-size:8pt;color:#666">${d.source ? escapeHtml(d.source.slice(0, 25)) : "—"}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:'Courier New',monospace;font-weight:700;color:${scoreColor};font-size:9.5pt">${score !== null ? score + "%" : "—"}</td>
+        <td style="padding:6px 8px;text-align:center;font-family:'Courier New',monospace;font-size:7.5pt;color:#888">${d.tier ? escapeHtml(d.tier) : "—"}</td>
+      </tr>`;
+      }).join("")}
+    </tbody>
+  </table>
+  ${documents.length > 15 ? `<div style="margin-top:10px;font-family:'Courier New',monospace;font-size:8pt;color:#888">+ ${documents.length - 15} ADDITIONAL SOURCES IN DOCUMENT VAULT</div>` : ""}
+  <div style="margin-top:28px;border-top:1px solid #e0e0e0;padding-top:16px">
+    <div class="actor-group-label">Corpus Integrity Summary</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px">
+      <div style="border:1px solid #e8e8e8;padding:12px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px">TOTAL SOURCES</div>
+        <div style="font-size:18pt;font-weight:bold;color:#111">${documents.length}</div>
+      </div>
+      <div style="border:1px solid #e8e8e8;padding:12px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px">HIGH SIGNAL</div>
+        <div style="font-size:18pt;font-weight:bold;color:#006600">${documents.filter(d => (d.signalScore ?? 0) >= 0.7).length}</div>
+      </div>
+      <div style="border:1px solid #e8e8e8;padding:12px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px">MEDIUM SIGNAL</div>
+        <div style="font-size:18pt;font-weight:bold;color:#996600">${documents.filter(d => (d.signalScore ?? 0) >= 0.4 && (d.signalScore ?? 0) < 0.7).length}</div>
+      </div>
+      <div style="border:1px solid #e8e8e8;padding:12px;background:#fafafa">
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#888;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px">LOW / FAILED</div>
+        <div style="font-size:18pt;font-weight:bold;color:#c00000">${documents.filter(d => (d.signalScore ?? 0) < 0.4).length}</div>
+      </div>
+    </div>
+  </div>
+  ` : `<div class="empty-note">No source documents in vault. Ingest documents to generate credibility assessment.</div>`}
+</div>
+
+<!-- PAGE 12: RECOMMENDED ACTIONS & NEXT STEPS -->
+<div class="page">
+  <div class="section-number">SECTION 11</div>
+  <div class="section-header">
+    <div class="section-title">Recommended Actions &amp; Next Steps</div>
+    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  </div>
+  ${(s.recommendedActions ?? []).length > 0 ? `
+  <div class="actor-group-label">Analyst Recommended Actions</div>
+  ${(s.recommendedActions ?? []).map((action, i) => `
+    <div style="display:flex;gap:14px;padding:12px 0;border-bottom:1px solid #f0f0f0;align-items:flex-start">
+      <span style="font-family:'Courier New',monospace;color:#b00000;font-size:12pt;font-weight:bold;flex-shrink:0;min-width:24px;line-height:1.4">${(i + 1).toString().padStart(2, "0")}</span>
+      <span style="font-size:11pt;color:#222;line-height:1.6">${escapeHtml(action)}</span>
+    </div>
+  `).join("")}` : `<div class="empty-note">No analyst actions generated at current confidence level.</div>`}
+
+  ${(s.nextQueries ?? []).length > 0 ? `
+  <div class="actor-group-label" style="margin-top:40px">Priority Intelligence Requirements</div>
+  <div style="font-size:10.5pt;color:#555;margin-bottom:16px">The following queries should be ingested or investigated to advance this case.</div>
+  ${(s.nextQueries ?? []).map((q, i) => `
+    <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #f5f5f5;align-items:baseline">
+      <span style="font-family:'Courier New',monospace;color:#888;font-size:9pt;flex-shrink:0">[PIR-${(i + 1).toString().padStart(2, "0")}]</span>
+      <span style="font-size:10.5pt;color:#333;font-style:italic">"${escapeHtml(q)}"</span>
+    </div>
+  `).join("")}` : ""}
+
+  <div style="margin-top:40px;background:#f8f8f8;border:1px solid #e0e0e0;padding:20px">
+    <div style="font-family:'Courier New',monospace;font-size:8pt;color:#888;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:10px">ATLAS SYSTEM ASSESSMENT</div>
+    <div style="font-size:10.5pt;color:#333;line-height:1.7">
+      ${s.confidenceNote ? escapeHtml(s.confidenceNote) : `This report was generated by the ATLAS automated intelligence platform. All findings should be independently verified before operational use. Evidence chains are documented in the source vault. Entity relationships reflect automated analysis and may require analyst review.`}
+    </div>
+    <div style="margin-top:14px;display:flex;gap:24px;align-items:center">
+      <div>
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#aaa;text-transform:uppercase;letter-spacing:0.15em">BUILD QUALITY</div>
+        <div style="font-family:'Courier New',monospace;font-size:9pt;font-weight:bold;color:#222;margin-top:2px">${escapeHtml(autoBuildQuality ?? "UNCLASSIFIED")}</div>
+      </div>
+      <div>
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#aaa;text-transform:uppercase;letter-spacing:0.15em">CONFIDENCE</div>
+        <div style="font-family:'Courier New',monospace;font-size:9pt;font-weight:bold;color:#222;margin-top:2px">${escapeHtml(confidence)}</div>
+      </div>
+      <div>
+        <div style="font-family:'Courier New',monospace;font-size:7pt;color:#aaa;text-transform:uppercase;letter-spacing:0.15em">GENERATED</div>
+        <div style="font-family:'Courier New',monospace;font-size:9pt;font-weight:bold;color:#222;margin-top:2px">${escapeHtml(dateStr)}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 13: CLASSIFICATION & LEGAL NOTICE -->
+<div class="page">
+  <div class="section-number">SECTION 12</div>
+  <div class="section-header">
+    <div class="section-title">Classification &amp; Legal Notice</div>
+    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  </div>
+
+  <div style="border:2px solid #c00000;padding:20px;margin-bottom:32px;background:#fff8f8">
+    <div style="font-family:'Courier New',monospace;font-size:9pt;color:#c00000;letter-spacing:0.2em;text-transform:uppercase;margin-bottom:10px;font-weight:bold">CLASSIFICATION NOTICE</div>
+    <div style="font-size:10.5pt;color:#333;line-height:1.7">
+      This document is classified <strong>${escapeHtml(classification)}</strong> and is intended solely for authorized personnel with a valid need-to-know for the subject matter. Distribution, reproduction, or disclosure of this document outside authorized channels is prohibited.
+    </div>
+  </div>
+
+  <div class="actor-group-label">Document Provenance</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
+    ${[
+      ["Case Designation", escapeHtml(caseTitle)],
+      ["Case Reference", `CASE-${String(caseId).padStart(6, "0")}`],
+      ["Classification Level", escapeHtml(classification)],
+      ["Confidence Rating", escapeHtml(confidence)],
+      ["Report Generated", `${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}`],
+      ["Generating System", "ATLAS-CORE AUTOMATED INTELLIGENCE PLATFORM"],
+      ["Case Status", escapeHtml(caseStatus.toUpperCase())],
+      ["Total Entities", String(entities.length)],
+      ["Total Sources", String(documents.length)],
+      ["Financial Signals", String(flows.length)],
+      ["Timeline Events", String(timeline.length)],
+      ["Entity Relationships", String((s.entityRelationships ?? []).length)],
+    ].map(([label, value]) => `
+      <tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:7px 8px;font-family:'Courier New',monospace;font-size:8pt;color:#888;width:2.5in;letter-spacing:0.08em;text-transform:uppercase">${label}</td>
+        <td style="padding:7px 8px;font-size:10pt;color:#222;font-weight:500">${value}</td>
+      </tr>
+    `).join("")}
+  </table>
+
+  <div class="actor-group-label">Legal Disclaimer</div>
+  <div style="font-size:10pt;color:#555;line-height:1.8;margin-bottom:24px">
+    This report is generated by the ATLAS (Advanced Tracking &amp; Link Analysis System) automated intelligence platform and is provided for investigative and research purposes only. All information contained herein is derived from publicly available sources and automated analysis. No warranty, express or implied, is made regarding the accuracy, completeness, or fitness for any particular purpose of information contained herein.
+  </div>
+  <div style="font-size:10pt;color:#555;line-height:1.8;margin-bottom:24px">
+    Entity mentions, relationship graphs, and financial signal extractions represent automated pattern detection and are not legal findings. All conclusions drawn from this report should be independently verified before use in legal, regulatory, or administrative proceedings.
+  </div>
+  <div style="font-size:10pt;color:#555;line-height:1.8">
+    Recipients are responsible for ensuring compliance with applicable laws regarding the collection, retention, and use of intelligence information. Unauthorized use, reproduction, or distribution of this document may be subject to civil or criminal penalties under applicable law.
+  </div>
+
+  <div style="margin-top:48px;border-top:2px solid #1a1a1a;padding-top:20px;display:flex;justify-content:space-between;align-items:flex-end">
+    <div>
+      <div style="font-family:'Courier New',monospace;font-size:8pt;color:#aaa;letter-spacing:0.15em;text-transform:uppercase">ATLAS-CORE AUTOMATED INTELLIGENCE REPORT</div>
+      <div style="font-family:'Courier New',monospace;font-size:7.5pt;color:#ccc;margin-top:4px">GENERATED ${escapeHtml(dateStr.toUpperCase())} AT ${escapeHtml(timeStr)} · FOR AUTHORIZED USE ONLY</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:'Courier New',monospace;font-size:8pt;color:#888;letter-spacing:0.12em">PAGE 13 OF 13</div>
+      <div style="font-family:'Courier New',monospace;font-size:8pt;color:#c00000;font-weight:bold;letter-spacing:0.15em;margin-top:2px">${escapeHtml(classification)}</div>
     </div>
   </div>
 </div>

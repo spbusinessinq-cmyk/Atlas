@@ -866,10 +866,14 @@ router.post("/web-ingest", async (req, res) => {
  * Creates a new case, fires background pipeline, returns immediately.
  */
 router.post("/cases/seed", async (req, res) => {
-  const { target } = req.body;
+  const { target, sourceUrls, rawNotes } = req.body;
   if (!target?.trim()) return res.status(400).json({ error: "target required" });
 
   const seedTarget = target.trim();
+  const validUrls: string[] = Array.isArray(sourceUrls)
+    ? sourceUrls.map((u: string) => u.trim()).filter((u: string) => /^https?:\/\//i.test(u)).slice(0, 10)
+    : [];
+  const notesText: string = typeof rawNotes === "string" ? rawNotes.trim() : "";
 
   // ── Seed validation ──────────────────────────────────────────────────────
   if (seedTarget.length < 3) {
@@ -907,7 +911,157 @@ router.post("/cases/seed", async (req, res) => {
   runSeedPipeline(theCase.id, seedTarget).catch((err) =>
     console.error("[ATLAS SEED] Pipeline error:", err)
   );
+
+  if (validUrls.length > 0 || notesText) {
+    ingestAnalystInputs(theCase.id, seedTarget, validUrls, notesText).catch((err) =>
+      console.error("[ATLAS SEED] Analyst input ingestion error:", err)
+    );
+  }
 });
+
+/**
+ * Ingest analyst-provided URLs and/or raw notes alongside the seed pipeline.
+ * Runs concurrently with runSeedPipeline — does not block the initial case response.
+ */
+async function ingestAnalystInputs(
+  caseId: number,
+  target: string,
+  urls: string[],
+  notes: string,
+): Promise<void> {
+  // ── Raw notes → document ─────────────────────────────────────────────────
+  if (notes.trim()) {
+    try {
+      const diagPrefix = encodeDiagPrefix(
+        { text: notes, status: "ok", paragraphCount: notes.split("\n").length, charCount: notes.length, selectorUsed: "analyst-input", strategy: "direct" },
+        "analyst://raw-notes",
+      );
+      const rawText = diagPrefix + notes;
+      const docRows = await db
+        .insert(documentsTable)
+        .values({
+          title: `[ANALYST NOTES] ${target}`,
+          filePath: null,
+          source: "Analyst",
+          publishDate: null,
+          caseId,
+          sourceUrl: null,
+          sourceDomain: "analyst-notes",
+          ingestMethod: "text",
+          rawText,
+          previewType: "text",
+        })
+        .returning();
+      const doc = docRows[0];
+      await logEvent("document_added", `Analyst notes ingested for case ${caseId}`, { caseId, docId: doc.id });
+      // Run inline entity extraction on notes
+      try {
+        const textForAnalysis = cleanRawText(rawText);
+        const entities = extractEntities(textForAnalysis);
+        let mc = 0;
+        for (const m of entities) {
+          if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
+          if (!m.admitted) continue;
+          try {
+            const encodedCtx = `[A:r=${m.role}|t=${m.topicRelevance}|z=${m.zone}] ${m.context}`;
+            await db.insert(entityMentionsTable).values({
+              documentId: doc.id, caseId, entityName: m.entityName, entityType: m.entityType,
+              confidence: m.confidence, status: "pending", context: encodedCtx, startPos: m.startPos, endPos: m.endPos,
+            });
+            mc++;
+          } catch { /* skip duplicate */ }
+        }
+        if (mc > 0) await logEvent("analysis_completed", `Analyst notes analysis: ${mc} entities`, { caseId, documentId: doc.id });
+      } catch (e) { console.error("[ATLAS SEED] Notes analysis error:", e); }
+    } catch (err) {
+      console.error("[ATLAS SEED] Failed to ingest analyst notes:", err);
+    }
+  }
+
+  // ── Provided URLs → fetch + ingest ───────────────────────────────────────
+  for (const url of urls) {
+    try {
+      let rawText = url;
+      let previewType = "web-article";
+      let filePath: string | null = null;
+      const hostname = tryHostname(url);
+
+      try {
+        const articleResp = await fetch(url, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/pdf,*/*",
+          },
+          redirect: "follow",
+          signal: AbortSignal.timeout(14000),
+        });
+        const ct = articleResp.headers.get("content-type") || "";
+        if (ct.includes("application/pdf")) {
+          const buffer = await articleResp.arrayBuffer();
+          const uploadDir = process.env.UPLOAD_DIR || "./uploads";
+          if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+          const filename = `${Date.now()}-analyst.pdf`;
+          const absPath = path.resolve(uploadDir, filename);
+          fs.writeFileSync(absPath, Buffer.from(buffer));
+          filePath = `/uploads/${filename}`;
+          previewType = "file";
+          rawText = encodeDiagPrefix({ text: "", status: "ok", paragraphCount: 0, charCount: 0, selectorUsed: "pdf", strategy: "selector" }, url) + url;
+        } else if (ct.includes("text/html") || ct.includes("text/plain")) {
+          const html = await articleResp.text();
+          const extracted = extractArticleText(html, url);
+          if (isWrapperOrJunk(html, url, extracted.text)) {
+            rawText = encodeDiagPrefix({ ...extracted, status: "failed" as const, strategy: "fallback" as const }, url) + `[WRAPPER_BLOCKED]\n${url}`;
+          } else {
+            rawText = encodeDiagPrefix(extracted, url) + extracted.text;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn(`[ATLAS SEED] URL fetch failed for ${url}:`, String(fetchErr).slice(0, 80));
+        rawText = encodeDiagPrefix({ text: url, status: "failed", paragraphCount: 0, charCount: url.length, selectorUsed: "none", strategy: "fallback" }) + `[FETCH_FAILED]\n${url}`;
+      }
+
+      const docRows = await db
+        .insert(documentsTable)
+        .values({
+          title: `[ANALYST SOURCE] ${hostname}`,
+          filePath,
+          source: hostname,
+          publishDate: null,
+          caseId,
+          sourceUrl: url,
+          sourceDomain: hostname,
+          ingestMethod: "web",
+          rawText,
+          previewType,
+        })
+        .returning();
+      const doc = docRows[0];
+      await logEvent("document_added", `Analyst URL ingested: ${url}`, { caseId, docId: doc.id });
+      // Inline entity extraction for analyst URL
+      try {
+        const textForAnalysis = cleanRawText(rawText);
+        const entities = extractEntities(textForAnalysis);
+        let mc = 0;
+        for (const m of entities) {
+          if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
+          if (!m.admitted) continue;
+          try {
+            const encodedCtx = `[A:r=${m.role}|t=${m.topicRelevance}|z=${m.zone}] ${m.context}`;
+            await db.insert(entityMentionsTable).values({
+              documentId: doc.id, caseId, entityName: m.entityName, entityType: m.entityType,
+              confidence: m.confidence, status: "pending", context: encodedCtx, startPos: m.startPos, endPos: m.endPos,
+            });
+            mc++;
+          } catch { /* skip duplicate */ }
+        }
+        if (mc > 0) await logEvent("analysis_completed", `Analyst URL analysis: ${mc} entities from ${url}`, { caseId, documentId: doc.id });
+      } catch (e) { console.error("[ATLAS SEED] URL analysis error:", e); }
+    } catch (err) {
+      console.error("[ATLAS SEED] Failed to ingest analyst URL:", url, err);
+    }
+  }
+}
 
 /**
  * Generate 8–12 investigative query variations based on target mode.

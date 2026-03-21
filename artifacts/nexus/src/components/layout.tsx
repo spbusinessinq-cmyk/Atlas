@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
 import { useAuth } from "@/context/auth-context";
+import { BlackdogStatus } from "@/components/BlackdogStatus";
 
 function AtlasRadar() {
   return (
@@ -141,6 +142,11 @@ export function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
+        </div>
+
+        {/* BLACKDOG status */}
+        <div className="border-t border-[#ffffff06]">
+          <BlackdogStatus collapsed={isCollapsed} />
         </div>
 
         {/* Operator footer + logout */}
