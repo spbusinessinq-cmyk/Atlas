@@ -3110,11 +3110,18 @@ function DefaultInspector({
   const [diagOpen, setDiagOpen] = React.useState(false);
   const [dossierSectionOpen, setDossierSectionOpen] = React.useState(false);
   const [dossierEditMode, setDossierEditMode] = React.useState(false);
+  const [dossierWorkspaceMode, setDossierWorkspaceMode] = React.useState(false);
   const [dossierOverrides, setDossierOverrides] = React.useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`atlas_dossier_overrides_${caseId}`) ?? "{}"); } catch { return {}; }
   });
   const saveDossierOverride = (key: string, value: string) => {
     const next = { ...dossierOverrides, [key]: value };
+    setDossierOverrides(next);
+    try { localStorage.setItem(`atlas_dossier_overrides_${caseId}`, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const resetSectionOverride = (key: string) => {
+    const next = { ...dossierOverrides };
+    delete next[key];
     setDossierOverrides(next);
     try { localStorage.setItem(`atlas_dossier_overrides_${caseId}`, JSON.stringify(next)); } catch { /* ignore */ }
   };
@@ -3129,11 +3136,18 @@ function DefaultInspector({
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
   const triggerExport = (d: Record<string, any>) => {
-    // Merge operator overrides into dossier sections before export
     const baseSections = d.sections ?? {};
     const mergedSections = { ...baseSections };
     if (dossierOverrides.caseSummary) mergedSections.caseSummary = dossierOverrides.caseSummary;
-    console.log("Dossier recompile triggered for case", caseId, "— overrides applied:", Object.keys(dossierOverrides));
+    if (dossierOverrides.powerStructureOverride) mergedSections.powerStructure = dossierOverrides.powerStructureOverride;
+    if (dossierOverrides.whyItMattersOverride) mergedSections.whyItMatters = dossierOverrides.whyItMattersOverride;
+    if (dossierOverrides.connectionsNote) mergedSections.connectionsNote = dossierOverrides.connectionsNote;
+    if (dossierOverrides.financialNote) mergedSections.financialNote = dossierOverrides.financialNote;
+    if (dossierOverrides.anglesOverride) mergedSections.investigativeAngles = dossierOverrides.anglesOverride.split("\n").filter(Boolean).map((a: string) => ({ angle: a }));
+    if (dossierOverrides.gapsOverride) mergedSections.knownGaps = dossierOverrides.gapsOverride.split("\n").filter(Boolean);
+    if (dossierOverrides.actionsOverride) mergedSections.recommendedActions = dossierOverrides.actionsOverride.split("\n").filter(Boolean);
+    if (dossierOverrides.riskOverride) mergedSections.riskFlags = dossierOverrides.riskOverride.split("\n").filter(Boolean);
+    console.log("Dossier export triggered for case", caseId, "— overrides applied:", Object.keys(dossierOverrides));
     openPrintDossier({
       caseId: Number(caseId),
       caseTitle: caseData.title,
@@ -3537,6 +3551,21 @@ function DefaultInspector({
                 <span className="hidden sm:inline">{dossierEditMode ? "EDITING" : "EDIT"}</span>
               </button>
             )}
+            {dossier && (
+              <button
+                onClick={() => { setDossierSectionOpen(true); setDossierWorkspaceMode(true); }}
+                style={{
+                  borderLeft: "1px solid rgba(255,255,255,0.06)",
+                  background: dossierWorkspaceMode ? "rgba(139,92,246,0.15)" : "rgba(0,0,0,0.1)",
+                  color: dossierWorkspaceMode ? "rgba(167,139,250,0.9)" : "rgba(255,255,255,0.18)",
+                }}
+                className="px-2.5 py-2 font-mono text-[8px] uppercase tracking-widest flex items-center gap-1 flex-shrink-0 transition-all hover:opacity-80"
+                title="Expand dossier workspace"
+              >
+                <span style={{ fontSize: "9px" }}>⤢</span>
+                <span className="hidden sm:inline">EXPAND</span>
+              </button>
+            )}
             <button
               onClick={handleGenerateAndExport}
               disabled={dossierLoading}
@@ -3930,6 +3959,458 @@ function DefaultInspector({
         )}
 
       </div>
+
+      {/* ══ ATLAS DOSSIER WORKSPACE OVERLAY (T001 / T002) ══ */}
+      {dossierWorkspaceMode && dossier && (() => {
+        const s = dossier.sections ?? {};
+        const overrideCount = Object.keys(dossierOverrides).length;
+
+        const SectionBadge = ({ oKey }: { oKey: string }) => dossierEditMode ? (
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="font-mono text-[7px] uppercase tracking-wider" style={{ color: dossierOverrides[oKey] ? "rgba(251,191,36,0.75)" : "rgba(255,255,255,0.15)" }}>
+              {dossierOverrides[oKey] ? "EDITED" : "SYSTEM"}
+            </span>
+            {dossierOverrides[oKey] && (
+              <button onClick={() => resetSectionOverride(oKey)} className="font-mono text-[7px] uppercase tracking-wider transition-opacity hover:opacity-100 opacity-60" style={{ color: "rgba(239,68,68,0.7)" }}>
+                RESET
+              </button>
+            )}
+          </div>
+        ) : dossierOverrides[oKey] ? (
+          <span className="font-mono text-[7px] ml-2 uppercase" style={{ color: "rgba(251,191,36,0.55)" }}>EDITED</span>
+        ) : null;
+
+        const wsTextarea = (oKey: string, sysVal: string, ph: string, rows = 4) => (
+          <textarea
+            value={dossierOverrides[oKey] ?? sysVal}
+            onChange={e => saveDossierOverride(oKey, e.target.value)}
+            rows={rows}
+            className="w-full font-mono text-[10px] leading-relaxed resize-y"
+            style={{ background: "rgba(251,191,36,0.03)", border: "1px solid rgba(251,191,36,0.25)", padding: "10px 12px", outline: "none", color: "rgba(212,212,212,0.9)", borderRadius: "2px" }}
+            placeholder={ph}
+          />
+        );
+
+        const wsListTextarea = (oKey: string, sysArr: string[], ph: string) => (
+          <textarea
+            value={dossierOverrides[oKey] ?? sysArr.join("\n")}
+            onChange={e => saveDossierOverride(oKey, e.target.value)}
+            rows={Math.max(3, sysArr.length + 1)}
+            className="w-full font-mono text-[10px] leading-relaxed resize-y"
+            style={{ background: "rgba(251,191,36,0.03)", border: "1px solid rgba(251,191,36,0.25)", padding: "10px 12px", outline: "none", color: "rgba(212,212,212,0.9)", borderRadius: "2px" }}
+            placeholder={ph}
+          />
+        );
+
+        const wsLabel = (label: string, color: string, oKey?: string) => (
+          <div className="flex items-center mb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "6px" }}>
+            <div className="w-0.5 h-4 rounded-full mr-2.5 flex-shrink-0" style={{ background: color }} />
+            <span className="font-mono text-[8px] uppercase tracking-[0.3em]" style={{ color }}>{label}</span>
+            {oKey && <SectionBadge oKey={oKey} />}
+          </div>
+        );
+
+        const dedupeFinancials = (fins: any[]) => {
+          const seen = new Set<string>();
+          return fins.filter(f => {
+            const key = `${f.entityName}|${f.normalizedAmount}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        };
+
+        return (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: "52px",
+              right: 0,
+              bottom: 0,
+              zIndex: 200,
+              background: "#07090e",
+              display: "flex",
+              flexDirection: "column",
+              transition: "opacity 0.25s ease",
+            }}
+          >
+            {/* TOP BAR */}
+            <div
+              className="flex items-center justify-between flex-shrink-0 px-6"
+              style={{
+                background: "#0c0f16",
+                borderBottom: "1px solid rgba(139,92,246,0.25)",
+                height: "48px",
+                boxShadow: "0 1px 12px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-0.5 h-5 rounded-full" style={{ background: "rgba(139,92,246,0.75)" }} />
+                  <span className="font-mono text-[9px] uppercase tracking-[0.3em]" style={{ color: "rgba(167,139,250,0.95)" }}>
+                    ATLAS DOSSIER WORKSPACE
+                  </span>
+                </div>
+                {overrideCount > 0 && (
+                  <span className="font-mono text-[7px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ color: "rgba(251,191,36,0.75)", background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.15)" }}>
+                    {overrideCount} OPERATOR EDIT{overrideCount > 1 ? "S" : ""} ACTIVE
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setDossierEditMode(m => !m)}
+                  className="px-3 py-1.5 font-mono text-[8px] uppercase tracking-widest transition-all"
+                  style={{
+                    background: dossierEditMode ? "rgba(251,191,36,0.1)" : "rgba(255,255,255,0.04)",
+                    color: dossierEditMode ? "rgba(251,191,36,0.9)" : "rgba(255,255,255,0.35)",
+                    border: `1px solid ${dossierEditMode ? "rgba(251,191,36,0.25)" : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: "2px",
+                  }}
+                >
+                  {dossierEditMode ? "✓ DONE EDITING" : "✎ EDIT MODE"}
+                </button>
+                <button
+                  onClick={() => triggerExport(dossier)}
+                  className="px-3 py-1.5 font-mono text-[8px] uppercase tracking-widest transition-all ml-1"
+                  style={{
+                    background: "rgba(139,92,246,0.12)",
+                    color: "rgba(167,139,250,0.9)",
+                    border: "1px solid rgba(139,92,246,0.25)",
+                    borderRadius: "2px",
+                  }}
+                >
+                  ↓ EXPORT PDF
+                </button>
+                <button
+                  onClick={() => setDossierWorkspaceMode(false)}
+                  className="px-3 py-1.5 font-mono text-[8px] uppercase tracking-widest transition-all ml-2"
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    color: "rgba(255,255,255,0.3)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "2px",
+                  }}
+                >
+                  ✕ EXIT EXPANDED VIEW
+                </button>
+              </div>
+            </div>
+
+            {/* EDIT MODE TOOLBAR */}
+            {dossierEditMode && (
+              <div
+                className="flex items-center justify-between flex-shrink-0 px-6 py-2"
+                style={{
+                  background: "rgba(251,191,36,0.04)",
+                  borderBottom: "1px solid rgba(251,191,36,0.12)",
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[8px] uppercase tracking-widest" style={{ color: "rgba(251,191,36,0.75)" }}>
+                    ✎ OPERATOR EDIT MODE
+                  </span>
+                  <span className="font-mono text-[7px]" style={{ color: "rgba(255,255,255,0.2)" }}>
+                    — edits saved locally · applied to PDF export
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDossierEditMode(false)}
+                    className="font-mono text-[7px] uppercase tracking-wider px-2 py-1 transition-opacity hover:opacity-100 opacity-80"
+                    style={{ color: "rgba(251,191,36,0.7)", border: "1px solid rgba(251,191,36,0.18)", borderRadius: "2px" }}
+                  >
+                    SAVE
+                  </button>
+                  {overrideCount > 0 && (
+                    <button
+                      onClick={resetDossierOverrides}
+                      className="font-mono text-[7px] uppercase tracking-wider px-2 py-1 transition-opacity hover:opacity-100 opacity-80"
+                      style={{ color: "rgba(239,68,68,0.7)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "2px" }}
+                    >
+                      ↺ RESET ALL
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SCROLLABLE CONTENT */}
+            <div className="flex-1 overflow-y-auto" style={{ padding: "28px 40px" }}>
+              <div style={{ maxWidth: "900px", margin: "0 auto" }} className="space-y-8">
+
+                {/* EXECUTIVE SUMMARY */}
+                {(s.caseSummary || dossierEditMode) && (
+                  <div>
+                    {wsLabel("EXECUTIVE SUMMARY", "rgba(139,92,246,0.8)", "caseSummary")}
+                    {dossierEditMode ? (
+                      wsTextarea("caseSummary", s.caseSummary ?? "", "Enter executive summary...", 6)
+                    ) : (
+                      <p className="font-mono text-[11px] leading-relaxed" style={{ color: "rgba(200,200,200,0.85)" }}>
+                        {dossierOverrides.caseSummary ?? s.caseSummary}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* INTELLIGENCE TIERS */}
+                {s.keyEntities?.length > 0 && (() => {
+                  const confirmed = s.keyEntities.filter((e: any) => (e.docCount ?? 0) >= 3);
+                  const developing = s.keyEntities.filter((e: any) => (e.docCount ?? 0) > 0 && (e.docCount ?? 0) < 3);
+                  return (
+                    <div>
+                      {wsLabel("INTELLIGENCE TIERS", "rgba(59,130,246,0.7)")}
+                      <div className="grid grid-cols-2 gap-6">
+                        {confirmed.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgba(34,197,94,0.8)" }} />
+                              <span className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(34,197,94,0.65)" }}>CONFIRMED</span>
+                            </div>
+                            {confirmed.map((e: any) => (
+                              <div key={e.id} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                <span className="font-mono text-[10px] uppercase" style={{ color: "rgba(220,220,220,0.9)" }}>{e.name}</span>
+                                <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.2)" }}>{e.docCount}d</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {developing.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgba(251,191,36,0.8)" }} />
+                              <span className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(251,191,36,0.65)" }}>DEVELOPING</span>
+                            </div>
+                            {developing.map((e: any) => (
+                              <div key={e.id} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                <span className="font-mono text-[10px] uppercase" style={{ color: "rgba(150,150,150,0.7)" }}>{e.name}</span>
+                                <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{e.docCount}d</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* CONNECTIONS */}
+                <div>
+                  {wsLabel("CONNECTIONS", "rgba(59,130,246,0.7)", "connectionsNote")}
+                  {s.entityRelationships?.length > 0 && (
+                    <div className="space-y-1.5 mb-3">
+                      {s.entityRelationships.slice(0, 6).map((r: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 font-mono text-[10px]">
+                          <span style={{ color: "rgba(190,190,190,0.9)" }}>{r.entityAName}</span>
+                          <span style={{ color: "rgba(100,100,120,0.7)" }}>→</span>
+                          <span style={{ color: "rgba(190,190,190,0.9)" }}>{r.entityBName}</span>
+                          {r.relationshipType && <span style={{ color: "rgba(255,255,255,0.2)" }} className="text-[8px]">({r.relationshipType})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {dossierEditMode ? (
+                    wsTextarea("connectionsNote", dossierOverrides.connectionsNote ?? "", "Add analyst annotation for connections...", 3)
+                  ) : dossierOverrides.connectionsNote ? (
+                    <p className="font-mono text-[10px] leading-relaxed mt-2 pl-3" style={{ color: "rgba(180,180,180,0.7)", borderLeft: "2px solid rgba(59,130,246,0.2)" }}>
+                      {dossierOverrides.connectionsNote}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* FINANCIAL FLOWS */}
+                <div>
+                  {wsLabel("FINANCIAL FLOWS", "rgba(34,197,94,0.7)", "financialNote")}
+                  {(s.financialSignals?.length ?? 0) > 0 ? (
+                    <div className="space-y-3 mb-3">
+                      {dedupeFinancials(s.financialSignals).slice(0, 6).map((f: any, i: number) => (
+                        <div key={i} className="pl-3" style={{ borderLeft: "2px solid rgba(34,197,94,0.25)" }}>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="font-mono text-[11px] uppercase font-bold" style={{ color: "rgba(220,220,220,0.95)" }}>{f.entityName}</span>
+                            {(f.amountDisplay || f.amountRaw) && (
+                              <span className="font-mono text-[12px] font-bold" style={{ color: "rgba(34,197,94,0.9)" }}>{f.amountDisplay ?? f.amountRaw}</span>
+                            )}
+                          </div>
+                          {f.signalType && (
+                            <div className="font-mono text-[8px] uppercase tracking-wider mt-0.5" style={{ color: "rgba(34,197,94,0.5)" }}>{f.signalType.replace(/_/g, " ")}</div>
+                          )}
+                          {(f.eventSummary || f.programName) && (
+                            <div className="font-mono text-[9px] leading-snug mt-1" style={{ color: "rgba(160,160,160,0.7)" }}>
+                              {f.programName ? `[${f.programName}] ` : ""}{f.eventSummary ?? ""}
+                            </div>
+                          )}
+                          {(f.controlledBy || f.receivedBy) && (
+                            <div className="font-mono text-[8px] mt-1 flex gap-4" style={{ color: "rgba(120,120,120,0.7)" }}>
+                              {f.controlledBy && <span>FROM: {f.controlledBy}</span>}
+                              {f.receivedBy && <span>TO: {f.receivedBy}</span>}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="pl-3 mb-3" style={{ borderLeft: "2px solid rgba(255,255,255,0.06)" }}>
+                      <p className="font-mono text-[10px]" style={{ color: "rgba(120,120,120,0.7)" }}>No confirmed financial flows identified.</p>
+                    </div>
+                  )}
+                  {dossierEditMode ? (
+                    wsTextarea("financialNote", dossierOverrides.financialNote ?? "", "Add analyst notes on financial flows...", 3)
+                  ) : dossierOverrides.financialNote ? (
+                    <p className="font-mono text-[10px] leading-relaxed mt-2 pl-3" style={{ color: "rgba(180,180,180,0.7)", borderLeft: "2px solid rgba(34,197,94,0.2)" }}>
+                      {dossierOverrides.financialNote}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* ACCOUNTABILITY TIMELINE */}
+                {s.timelineSignals?.length > 0 && (
+                  <div>
+                    {wsLabel("ACCOUNTABILITY TIMELINE", "rgba(251,191,36,0.7)")}
+                    <div className="space-y-2">
+                      {s.timelineSignals.slice(0, 12).map((t: any, i: number) => (
+                        <div key={i} className="flex gap-4 font-mono" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "8px" }}>
+                          <span className="text-[9px] flex-shrink-0 tabular-nums" style={{ color: "rgba(160,160,100,0.7)", minWidth: "80px" }}>
+                            {t.date?.slice(0, 10) ?? "UNKNOWN"}
+                          </span>
+                          <span className="text-[10px]" style={{ color: "rgba(200,200,200,0.8)" }}>{t.title}</span>
+                          {t.source && <span className="text-[8px] flex-shrink-0 ml-auto" style={{ color: "rgba(100,100,100,0.6)" }}>{t.source}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* INVESTIGATIVE ANGLES */}
+                {(s.investigativeAngles?.length > 0 || dossierEditMode) && (
+                  <div>
+                    {wsLabel("INVESTIGATIVE ANGLES", "rgba(251,146,60,0.7)", "anglesOverride")}
+                    {dossierEditMode ? (
+                      wsListTextarea("anglesOverride", (s.investigativeAngles ?? []).map((a: any) => a.angle ?? a), "One angle per line...")
+                    ) : (
+                      <div className="space-y-1.5">
+                        {(dossierOverrides.anglesOverride
+                          ? dossierOverrides.anglesOverride.split("\n").filter(Boolean)
+                          : (s.investigativeAngles ?? []).map((a: any) => a.angle ?? a)
+                        ).map((a: string, i: number) => (
+                          <div key={i} className="flex gap-2 font-mono text-[10px]" style={{ color: "rgba(180,180,180,0.8)" }}>
+                            <span style={{ color: "rgba(251,146,60,0.5)" }}>·</span>
+                            <span>{a}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* POWER STRUCTURE */}
+                {(s.powerStructure || dossierEditMode) && (
+                  <div>
+                    {wsLabel("POWER STRUCTURE", "rgba(6,182,212,0.7)", "powerStructureOverride")}
+                    {dossierEditMode ? (
+                      wsTextarea("powerStructureOverride", s.powerStructure ?? "", "Describe power structure...", 4)
+                    ) : (
+                      <p className="font-mono text-[10px] leading-relaxed" style={{ color: "rgba(170,170,170,0.75)" }}>
+                        {dossierOverrides.powerStructureOverride ?? s.powerStructure}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* RISK FLAGS */}
+                {(s.riskFlags?.length > 0 || dossierEditMode) && (
+                  <div>
+                    {wsLabel("RISK / EXPOSURE FLAGS", "rgba(251,146,60,0.8)", "riskOverride")}
+                    {dossierEditMode ? (
+                      wsListTextarea("riskOverride", s.riskFlags ?? [], "One risk flag per line...")
+                    ) : (
+                      <div className="space-y-1.5">
+                        {(dossierOverrides.riskOverride
+                          ? dossierOverrides.riskOverride.split("\n").filter(Boolean)
+                          : s.riskFlags ?? []
+                        ).map((flag: string, i: number) => (
+                          <div key={i} className="flex gap-2 font-mono text-[10px]" style={{ color: "rgba(200,130,60,0.85)" }}>
+                            <span>⚠</span>
+                            <span>{flag}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* WHY IT MATTERS */}
+                {(s.whyItMatters || dossierEditMode) && (
+                  <div>
+                    {wsLabel("WHY THIS MATTERS", "rgba(239,68,68,0.7)", "whyItMattersOverride")}
+                    {dossierEditMode ? (
+                      wsTextarea("whyItMattersOverride", s.whyItMatters ?? "", "Explain public significance...", 4)
+                    ) : (
+                      <p className="font-mono text-[10px] leading-relaxed" style={{ color: "rgba(180,180,180,0.75)" }}>
+                        {dossierOverrides.whyItMattersOverride ?? s.whyItMatters}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* RECOMMENDED ACTIONS */}
+                {(s.recommendedActions?.length > 0 || dossierEditMode) && (
+                  <div>
+                    {wsLabel("RECOMMENDED ACTIONS", "rgba(34,197,94,0.7)", "actionsOverride")}
+                    {dossierEditMode ? (
+                      wsListTextarea("actionsOverride", s.recommendedActions ?? [], "One action per line...")
+                    ) : (
+                      <div className="space-y-1.5">
+                        {(dossierOverrides.actionsOverride
+                          ? dossierOverrides.actionsOverride.split("\n").filter(Boolean)
+                          : s.recommendedActions ?? []
+                        ).map((a: string, i: number) => (
+                          <div key={i} className="flex gap-2 font-mono text-[10px]" style={{ color: "rgba(140,200,120,0.85)" }}>
+                            <span style={{ color: "rgba(34,197,94,0.5)" }}>→</span>
+                            <span>{a}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* INTELLIGENCE GAPS */}
+                {(s.knownGaps?.length > 0 || dossierEditMode) && (
+                  <div>
+                    {wsLabel("INTELLIGENCE GAPS", "rgba(251,191,36,0.7)", "gapsOverride")}
+                    {dossierEditMode ? (
+                      wsListTextarea("gapsOverride", s.knownGaps ?? [], "One gap per line...")
+                    ) : (
+                      <div className="space-y-1.5">
+                        {(dossierOverrides.gapsOverride
+                          ? dossierOverrides.gapsOverride.split("\n").filter(Boolean)
+                          : s.knownGaps ?? []
+                        ).map((g: string, i: number) => (
+                          <div key={i} className="flex gap-2 font-mono text-[10px]" style={{ color: "rgba(180,160,80,0.75)" }}>
+                            <span>·</span>
+                            <span>{g}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* CONFIDENCE NOTE */}
+                {s.confidenceNote && (
+                  <div className="font-mono text-[9px] leading-relaxed px-4 py-3 rounded" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", color: "rgba(140,140,140,0.7)" }}>
+                    <div className="text-[7px] uppercase tracking-[0.3em] mb-1.5" style={{ color: "rgba(200,200,200,0.2)" }}>CONFIDENCE NOTE</div>
+                    {s.confidenceNote}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }

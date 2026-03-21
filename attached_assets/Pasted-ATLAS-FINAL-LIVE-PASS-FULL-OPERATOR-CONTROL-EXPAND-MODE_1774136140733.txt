@@ -1,0 +1,261 @@
+ATLAS FINAL LIVE PASS — FULL OPERATOR CONTROL + EXPAND MODE + DOSSIER AUTHORITY
+
+MISSION
+We are finalizing ATLAS for live deployment.
+
+System is stable.
+BLACKDOG is connected.
+Core intelligence pipeline is functional.
+
+Remaining objective:
+Transform DOSSIER from a side panel into a full intelligence workspace.
+
+This pass upgrades:
+- FULL edit control (all sections)
+- EXPANDED WORKSPACE MODE
+- TRUE timeline alignment
+- CLEAN intelligence outputs
+- FINAL UI authority
+
+Implement → test → verify → return FINAL PASS REPORT
+
+━━━━━━━━━━━━━━━━━━
+T001 — EXPANDABLE DOSSIER WORKSPACE (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Problem:
+Dossier is stuck in a narrow right rail → unusable for real editing.
+
+Fix:
+Add EXPAND MODE.
+
+UI:
+- Button: [EXPAND DOSSIER]
+- When clicked:
+  → dossier becomes FULL WIDTH overlay
+  → covers main canvas (like command mode)
+  → left sidebar remains visible
+  → graph fades behind
+
+- Add exit:
+  [EXIT EXPANDED VIEW]
+
+Behavior:
+- smooth transition (200–300ms)
+- maintain scroll position
+- preserve edit state
+
+━━━━━━━━━━━━━━━━━━
+T002 — FULL SECTION EDIT SYSTEM (NOT JUST EXEC)
+━━━━━━━━━━━━━━━━━━
+
+Upgrade edit mode to ALL sections.
+
+Editable:
+- Executive Summary
+- Connections
+- Financial Flows (notes, not raw numbers)
+- Angles
+- Timeline annotations
+- Intelligence Gaps
+- Recommended Actions
+- Risk / Exposure
+
+Rules:
+- each section becomes editable textarea in EDIT MODE
+- auto-resize (no scroll box garbage)
+- clean intelligence font preserved
+- no layout breaking
+
+Badges:
+- show [EDITED] per section
+- show [SYSTEM] when untouched
+
+Controls:
+- [RESET SECTION]
+- [RESET ALL]
+
+Storage:
+localStorage key:
+atlas_dossier_overrides_{caseId}
+
+━━━━━━━━━━━━━━━━━━
+T003 — TRUE TIMELINE ALIGNMENT (CRITICAL FIX)
+━━━━━━━━━━━━━━━━━━
+
+Clarification:
+Timeline ≠ raw Temporal Trace
+
+Fix:
+Timeline = FILTERED INTELLIGENCE EVENTS ONLY
+
+Update pipeline:
+
+Filter rules:
+ONLY allow:
+- contracts awarded
+- funding disbursements
+- audits
+- investigations
+- hearings
+- lawsuits
+- enforcement actions
+- indictments
+- settlements
+
+BLOCK:
+- TV episodes
+- documentaries
+- historical filler
+- soft references
+
+Limit:
+- max 10–12 events
+- sorted chronologically
+- must include source
+
+Add:
+- short 1-line intelligence annotation per event
+
+━━━━━━━━━━━━━━━━━━
+T004 — EXECUTIVE SUMMARY FINAL AUTHORITY
+━━━━━━━━━━━━━━━━━━
+
+Lock the structure:
+
+Format:
+1. Framing sentence
+2. Actors
+3. Financial signals (NUMERIC ONLY)
+4. Evidence base
+5. Intelligence grade
+
+Rules:
+- no fluff
+- no narrative noise
+- no duplicate entities
+- no fake names ("March Madness", etc.)
+
+If bad data:
+→ omit, don’t hallucinate
+
+━━━━━━━━━━━━━━━━━━
+T005 — ENTITY SANITY HARD FILTER
+━━━━━━━━━━━━━━━━━━
+
+Fix the garbage entities issue permanently.
+
+BLOCK:
+- months (March, April…)
+- phrases starting with prepositions (With, From…)
+- generic nouns (Funding, Program, Episode…)
+- media labels unless tied to action
+
+ALLOW ONLY:
+- real people
+- real organizations
+- real agencies
+
+━━━━━━━━━━━━━━━━━━
+T006 — FINANCIAL SIGNAL CLEAN OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Rules:
+- only show entries with REAL amounts
+- must include:
+  → entity
+  → amount
+  → reason/context
+
+REMOVE:
+- duplicate entries
+- placeholder text
+- non-monetary “signals”
+
+If none exist:
+→ show:
+"No confirmed financial flows identified."
+
+━━━━━━━━━━━━━━━━━━
+T007 — EDIT MODE UX UPGRADE
+━━━━━━━━━━━━━━━━━━
+
+Add top bar when editing:
+
+[ OPERATOR EDIT MODE ]
+[ SAVE ]
+[ RESET ALL ]
+[ EXIT EDIT MODE ]
+
+Add:
+- subtle amber glow
+- clean transitions
+
+━━━━━━━━━━━━━━━━━━
+T008 — PDF EXPORT = FINAL INTEL FORMAT
+━━━━━━━━━━━━━━━━━━
+
+Export must reflect:
+- edited content (if exists)
+- filtered timeline
+- cleaned entities
+- real financial signals
+
+Structure:
+- Title
+- Executive Summary
+- Key Findings
+- Timeline
+- Connections
+- Financial Flows
+- Angles
+- Intelligence Gaps
+
+Ensure:
+- NO overflow
+- NO cut sections
+- clean spacing
+
+━━━━━━━━━━━━━━━━━━
+T009 — FINAL UI POLISH
+━━━━━━━━━━━━━━━━━━
+
+Fix:
+- spacing consistency
+- no duplicate sections
+- no clipped text
+- clean typography
+- consistent section headers
+
+━━━━━━━━━━━━━━━━━━
+FINAL VALIDATION (MANDATORY)
+━━━━━━━━━━━━━━━━━━
+
+Test:
+
+1. Open case
+2. Click EXPAND DOSSIER → full screen works
+3. Enter EDIT MODE → all sections editable
+4. Edit multiple sections → saved
+5. Reset section → works
+6. Timeline shows only real events
+7. Financial flows show real numbers only
+8. No garbage entities appear
+9. Export PDF → clean + correct
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+
+ATLAS DOSSIER now behaves like:
+
+- Intelligence briefing system
+- Operator-controlled document
+- Clean, structured, credible output
+- No noise, no garbage, no confusion
+
+This is the final system before live deployment.
+
+Return:
+"ATLAS FINAL LIVE PASS COMPLETE"
++ short verification summary
