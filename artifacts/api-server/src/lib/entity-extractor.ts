@@ -1541,6 +1541,12 @@ const DOC_QUALITY_DOMAINS = [
 export interface DocRelevanceResult {
   score: number;
   priority: "PRIORITY_A" | "PRIORITY_B" | "LOW_SIGNAL" | "NOISE";
+  tier: "CORE" | "RELEVANT" | "PERIPHERAL" | "OFF_TOPIC" | "CONTAMINATED";
+  anchorScore: number;
+  titleHit: boolean;
+  leadHit: boolean;
+  entityOverlap: number;
+  modeCompatibility: "compatible" | "partial" | "incompatible";
   seedIntent: SeedIntent;
   topicAlignment: "aligned" | "partial" | "mismatched" | "unknown";
   mismatchReason: string;
@@ -1548,16 +1554,94 @@ export interface DocRelevanceResult {
   penalties: string[];
 }
 
+// ── Case Anchor System ─────────────────────────────────────────────────────────
+
+export interface CaseAnchor {
+  rawTarget: string;
+  normalizedTarget: string;
+  targetMode: TargetMode;
+  anchorTokens: string[];
+  strongAnchorTokens: string[];
+  hardNegativeTokens: string[];
+}
+
+const ANCHOR_STOP_WORDS = new Set([
+  "the","and","for","are","but","not","you","all","can","had","her","was","one",
+  "our","out","day","get","has","him","his","how","man","new","now","old","see",
+  "two","way","who","boy","did","its","let","put","say","she","too","use","that",
+  "with","have","this","will","your","from","they","know","want","been","good",
+  "much","some","time","very","when","come","here","just","like","long","make",
+  "many","more","only","over","such","take","than","them","well","were",
+]);
+
+export function buildCaseAnchor(target: string, targetMode: TargetMode): CaseAnchor {
+  const normalized = target.trim().toLowerCase();
+  const rawTokens = normalized
+    .split(/[\s\-_,;:&()]+/)
+    .map(t => t.replace(/['".,!?]/g, "").trim())
+    .filter(t => t.length >= 3 && !ANCHOR_STOP_WORDS.has(t));
+
+  const anchorTokens: string[] = [...new Set(rawTokens)];
+  const strongAnchorTokens: string[] = [...new Set(rawTokens.filter(t => t.length >= 5))];
+
+  const modeExtras: string[] = [];
+  switch (targetMode) {
+    case "person_target":
+      if (rawTokens.length >= 2) {
+        const last = rawTokens[rawTokens.length - 1];
+        if (!strongAnchorTokens.includes(last)) strongAnchorTokens.push(last);
+      }
+      break;
+    case "government_agency_target":
+      modeExtras.push("agency", "department", "federal", "office", "bureau");
+      break;
+    case "funding_target":
+      modeExtras.push("grant", "contract", "funding", "award", "budget", "appropriation");
+      break;
+    case "scandal_target":
+      modeExtras.push("investigation", "fraud", "corruption", "probe", "audit", "misconduct");
+      break;
+    case "organization_target":
+      modeExtras.push("organization", "nonprofit", "foundation", "company");
+      break;
+    case "program_target":
+      modeExtras.push("program", "initiative", "project", "division");
+      break;
+  }
+  for (const e of modeExtras) {
+    if (!anchorTokens.includes(e)) anchorTokens.push(e);
+  }
+
+  const hardNegativeTokens: string[] = [];
+  if (targetMode !== "person_target") {
+    hardNegativeTokens.push("sports", "game", "player", "celebrity", "gossip", "recipe", "lifestyle");
+  }
+  if (targetMode !== "event_target" && targetMode !== "scandal_target") {
+    hardNegativeTokens.push("horoscope", "fiction", "novel", "album", "concert", "tour");
+  }
+
+  return {
+    rawTarget: target.trim(),
+    normalizedTarget: normalized,
+    targetMode,
+    anchorTokens: [...new Set(anchorTokens)],
+    strongAnchorTokens: [...new Set(strongAnchorTokens)],
+    hardNegativeTokens,
+  };
+}
+
 /**
  * Score a document 0–100 for investigative relevance.
  * seedIntent influences topic alignment scoring and hard suppressors.
+ * anchor (optional) adds case-specific anchor token scoring.
  */
 export function computeDocRelevanceScore(
   bodyText: string,
   title: string,
   queryTerms: string[],
   sourceDomain = "",
-  seedIntent: SeedIntent = "general"
+  seedIntent: SeedIntent = "general",
+  anchor?: CaseAnchor
 ): DocRelevanceResult {
   const boosts: string[] = [];
   const penalties: string[] = [];
@@ -1567,6 +1651,67 @@ export function computeDocRelevanceScore(
   const titleL = title.toLowerCase();
   const bodyL = bodyText.toLowerCase();
   const domainL = sourceDomain.toLowerCase();
+
+  // ── Case Anchor scoring ───────────────────────────────────────────────────
+  let anchorScore = 0;
+  let titleHit = false;
+  let leadHit = false;
+  let entityOverlap = 0;
+  let modeCompatibility: DocRelevanceResult["modeCompatibility"] = "partial";
+
+  if (anchor) {
+    const leadText = bodyL.slice(0, 600);
+    const primaryTokens = anchor.anchorTokens.slice(0, 8); // cap to avoid noise
+    const strongTokens = anchor.strongAnchorTokens.slice(0, 6);
+
+    // Title hit: any strong anchor token in title
+    titleHit = strongTokens.length > 0
+      ? strongTokens.some(t => titleL.includes(t))
+      : primaryTokens.some(t => titleL.includes(t));
+
+    // Lead hit: any strong anchor token in first 600 chars
+    leadHit = strongTokens.length > 0
+      ? strongTokens.some(t => leadText.includes(t))
+      : primaryTokens.some(t => leadText.includes(t));
+
+    // Entity overlap: count of anchor tokens found anywhere in body
+    const bodyHits = primaryTokens.filter(t => bodyL.includes(t));
+    entityOverlap = bodyHits.length;
+
+    // anchorScore: 0–100 based on how well this doc matches the anchor
+    const tokenHitRatio = primaryTokens.length > 0 ? entityOverlap / primaryTokens.length : 0;
+    anchorScore = Math.round(
+      (titleHit ? 35 : 0) +
+      (leadHit ? 20 : 0) +
+      tokenHitRatio * 35 +
+      (entityOverlap >= 2 ? 10 : 0)
+    );
+
+    // Mode compatibility
+    if (anchor.hardNegativeTokens.some(t => titleL.includes(t) || leadText.includes(t))) {
+      modeCompatibility = "incompatible";
+    } else if (anchorScore >= 40) {
+      modeCompatibility = "compatible";
+    } else {
+      modeCompatibility = "partial";
+    }
+
+    // Apply anchor score to document score
+    if (titleHit) { score += 18; boosts.push("anchor-title-hit"); }
+    if (leadHit && !titleHit) { score += 10; boosts.push("anchor-lead-hit"); }
+    if (entityOverlap >= 3) { score += 8; boosts.push(`anchor-overlap-${entityOverlap}x`); }
+    else if (entityOverlap >= 1) { score += 3; }
+
+    // Hard negative: anchor mode-incompatible signals in title
+    if (modeCompatibility === "incompatible") {
+      score -= 20; penalties.push("anchor-mode-incompatible");
+    }
+
+    // If zero anchor tokens hit and this isn't a general query, soft penalty
+    if (entityOverlap === 0 && primaryTokens.length >= 2 && anchor.targetMode !== "general") {
+      score -= 12; penalties.push("anchor-no-overlap");
+    }
+  }
 
   // ── Query term coverage ───────────────────────────────────────────────────
   const queryWords = queryTerms.map(w => w.toLowerCase()).filter(w => w.length > 2);
@@ -1708,7 +1853,91 @@ export function computeDocRelevanceScore(
   else if (finalScore >= 18) priority = "LOW_SIGNAL";
   else priority = "NOISE";
 
-  return { score: finalScore, priority, seedIntent, topicAlignment, mismatchReason, boosts, penalties };
+  // ── Tier classification (3.0) ─────────────────────────────────────────────
+  let tier: DocRelevanceResult["tier"];
+  if (topicAlignment === "mismatched" && modeCompatibility !== "compatible") {
+    tier = "OFF_TOPIC";
+  } else if (priority === "NOISE") {
+    tier = "CONTAMINATED";
+  } else if (anchor && anchorScore >= 60 && priority === "PRIORITY_A") {
+    tier = "CORE";
+  } else if (anchor && anchorScore >= 30 && (priority === "PRIORITY_A" || priority === "PRIORITY_B")) {
+    tier = "RELEVANT";
+  } else if (priority === "PRIORITY_A" || priority === "PRIORITY_B") {
+    tier = "RELEVANT";
+  } else if (priority === "LOW_SIGNAL") {
+    tier = "PERIPHERAL";
+  } else {
+    tier = "CONTAMINATED";
+  }
+
+  return {
+    score: finalScore,
+    priority,
+    tier,
+    anchorScore,
+    titleHit,
+    leadHit,
+    entityOverlap,
+    modeCompatibility,
+    seedIntent,
+    topicAlignment,
+    mismatchReason,
+    boosts,
+    penalties,
+  };
+}
+
+// ── Anchor-aware timeline + financial filtering ───────────────────────────────
+
+export interface RawTimelineEvent {
+  eventDate: string;
+  eventType: string;
+  summary: string;
+}
+
+export interface RawFinancialSignal {
+  amountRaw: string;
+  normalizedAmount?: number | null;
+  currency?: string;
+  signalType: string;
+  eventSummary?: string | null;
+  entityName?: string | null;
+}
+
+/**
+ * Filter extracted timeline events using anchor token overlap.
+ * Rejects events with no anchor token in their summary.
+ */
+export function filterTimelineByAnchor(
+  events: RawTimelineEvent[],
+  anchor: CaseAnchor
+): RawTimelineEvent[] {
+  if (anchor.anchorTokens.length === 0) return events;
+  const primaryTokens = anchor.anchorTokens.slice(0, 8);
+  return events.filter(ev => {
+    const text = `${ev.summary} ${ev.eventType}`.toLowerCase();
+    // Accept if any anchor token appears in the event summary
+    return primaryTokens.some(t => text.includes(t));
+  });
+}
+
+/**
+ * Filter extracted financial signals using anchor token overlap.
+ * Rejects signals with no anchor relevance.
+ */
+export function filterFinancialByAnchor(
+  signals: RawFinancialSignal[],
+  anchor: CaseAnchor
+): RawFinancialSignal[] {
+  if (anchor.anchorTokens.length === 0) return signals;
+  const primaryTokens = anchor.anchorTokens.slice(0, 8);
+  return signals.filter(sig => {
+    const text = `${sig.eventSummary ?? ""} ${sig.entityName ?? ""} ${sig.amountRaw}`.toLowerCase();
+    // Accept if any anchor token appears, OR if no entity context (can't filter)
+    if (!sig.eventSummary && !sig.entityName) return true;
+    return primaryTokens.some(t => text.includes(t));
+  });
 }
 
 // ── Entity Name Normalization & Canonicalization ──────────────────────────────

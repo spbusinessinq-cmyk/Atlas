@@ -1,0 +1,431 @@
+ATLAS POWER PASS — PRECISION / SPECIFICITY / AUTO-BUILD RELIABILITY
+
+You are performing a major intelligence hardening pass on ATLAS.
+
+MISSION:
+Make ATLAS highly intelligent, highly specific, and reliable at turning a target into a usable investigation automatically.
+
+CRITICAL RULE:
+Do not add side features. Do not change the product direction. Do not invent new modules.
+Stay on the existing ATLAS structure and improve the actual intelligence quality, promotion reliability, dossier quality, and case specificity.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PRIMARY GOAL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+When I type a target like:
+- donald trump campaign funding
+- jeffrey epstein investigation
+- kroger funding
+- homelessness spending alabama govt
+- a person, org, agency, place, funding trail, scandal, lawsuit, or event
+
+ATLAS must:
+1. classify the target correctly
+2. generate strong search queries
+3. ingest aligned documents
+4. extract only case-relevant entities
+5. extract only case-relevant timeline events
+6. extract only case-relevant financial signals
+7. auto-promote a usable starter graph
+8. compile a real dossier-quality brief
+
+The system should feel like:
+SEARCH → INGEST → FILTER → RANK → PROMOTE → COMPILE
+
+Not:
+SEARCH → random extraction → junk held forever
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T001 — TARGET LOCK / CASE ANCHORING
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Strengthen target locking across the whole pipeline.
+
+Build a case anchor object from the seed target:
+- raw target
+- normalized target
+- target mode
+- key anchor tokens
+- strong alias tokens
+- hard negative tokens if obvious
+
+Examples:
+- “donald trump campaign funding” should anchor around:
+  trump, campaign, funding, PAC, legal bills, donations, FEC, finance, committee
+- “jeffrey epstein investigation” should anchor around:
+  epstein, files, deposition, trafficking, victim, court, release, documents
+- “kroger funding” should anchor around:
+  kroger, grant, subsidy, funding, contract, state, incentives
+- “homelessness spending alabama govt” should anchor around:
+  homelessness, spending, alabama, government, program, budget, audit, shelter
+
+Use this anchor object in:
+- document scoring
+- entity admission
+- timeline admission
+- financial signal admission
+- graph promotion
+- brief compilation
+
+Add fields to DB / run metadata if needed:
+- targetMode
+- targetLabel
+- targetConfidence
+- anchorTokens
+- strongAnchorTokens
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T002 — DOCUMENT RELEVANCE 3.0
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade document scoring so ATLAS sharply distinguishes:
+- CORE
+- RELEVANT
+- PERIPHERAL
+- OFF-TOPIC
+- CONTAMINATED
+
+Use:
+- title match
+- dek / subtitle match
+- lead paragraph match
+- anchor token density
+- target entity mentions
+- target mode compatibility
+- money relevance for funding targets
+- court / audit / filing relevance for scandal/lawsuit targets
+- contamination penalties
+- cross-story contamination penalties
+- nav / boilerplate penalties
+
+Rules:
+- CORE docs should strongly align to target in title or lead
+- RELEVANT docs may align in body but still be usable
+- PERIPHERAL docs can stay visible but should not drive the graph
+- OFF-TOPIC docs should not feed promotion
+- CONTAMINATED docs should be marked and heavily downweighted
+
+Expose cleaner doc metadata in ATLAS-DIAG:
+- tier = 1 / 2 / 3
+- alignment = CORE / RELEVANT / PERIPHERAL / OFF_TOPIC / CONTAMINATED
+- anchorScore
+- contaminationScore
+- titleHit
+- leadHit
+- entityOverlap
+- modeCompatibility
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T003 — ENTITY ADMISSION / PROMOTION FIX
+━━━━━━━━━━━━━━━━━━━━━━━
+
+This is the most important section.
+
+Current problem:
+Cases can have many usable docs but still end with 0 promoted entities or junk held candidates.
+
+Fix the entity pipeline so that:
+- junk gets rejected faster
+- real candidates get ranked better
+- strong aligned candidates get safely promoted
+
+Build a ranked candidate layer between extraction and promotion.
+
+Each candidate should track:
+- name
+- canonical name
+- inferred type
+- mention count
+- doc count
+- title hits
+- lead hits
+- anchor proximity
+- mode relevance
+- role quality
+- contamination exposure
+- doc tier support
+- max confidence
+- average confidence
+- repeated co-mentions
+- target proximity score
+
+Add explicit quality classes:
+- PRIMARY_CANDIDATE
+- SUPPORTING_CANDIDATE
+- HELD_REVIEW
+- REJECTED_NOISE
+
+Promotion rules:
+- if candidate appears in multiple CORE/RELEVANT docs and aligns to anchor, promote
+- if candidate appears in title/lead of a CORE doc with good confidence, promote
+- if case would otherwise have 0 entities, promote best 3–5 aligned candidates safely
+- do not let usable cases die with empty graph unless evidence is truly absent
+
+Hard reject:
+- stitched names
+- navigation residue
+- title fragments
+- article artifact phrases
+- random historical fragments
+- generic words
+- malformed quoted blobs
+- cross-story contamination names
+
+Add visibility for why candidates were:
+- promoted
+- held
+- rejected
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T004 — GRAPH RELIABILITY / STARTER GRAPH GUARANTEE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+ATLAS should almost always produce a usable starter graph when there are aligned usable docs.
+
+Improve graph compiler:
+- build from promoted entities first
+- allow repeated title/lead co-mentions to seed strong edges
+- score edges by repeated aligned evidence
+- do not build edges from peripheral/off-topic docs
+- use confidence-weighted relationship labels
+
+Relationship strength classes:
+- STRONG_LINK
+- VERIFIED_CO_MENTION
+- REPEATED_ASSOCIATION
+- WEAK_REFERENCE
+
+If case has:
+- >= 6 usable docs
+- >= 2 aligned docs
+- >= 3 promotable candidates
+
+then ATLAS should not finish with an empty graph.
+
+Store:
+- autoGraphQuality
+- promotedEntityCount
+- totalRelationshipCount
+- strongRelationshipCount
+- graphFailureReason if empty
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T005 — TIMELINE SANITIZATION
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Current timeline contamination is unacceptable.
+Fix Temporal Trace so only case-relevant events survive.
+
+Every timeline event must be filtered through:
+- target anchor overlap
+- title/lead relevance
+- aligned entity overlap
+- case mode compatibility
+- contamination penalties
+- absurd year / unrelated historical story suppression
+
+Hard reject timeline entries that look like:
+- celebrity news
+- entertainment blurbs
+- unrelated wars unless clearly connected
+- random historical events unrelated to the case
+- boilerplate timestamps
+- nav strings
+
+Timeline should prioritize:
+- filings
+- audits
+- complaints
+- indictments
+- grants
+- contracts
+- freezes
+- payments
+- budget moves
+- investigations
+- hearings
+- official releases
+
+Add timeline metadata:
+- relevanceScore
+- sourceAlignment
+- anchorOverlap
+- eventConfidence
+
+Sort by:
+1. case relevance
+2. event importance
+3. source quality
+4. date
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T006 — FINANCIAL SIGNAL SANITIZATION
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Current money trace still allows junk phrases.
+
+Financial signals must require:
+- amount
+- nearby funding / grant / contract / payment / budget / donation / appropriation / spending context
+- anchor relevance
+- source relevance
+
+Reject if amount is inside:
+- ads
+- entertainment headlines
+- unrelated summaries
+- nav / boilerplate
+- random article fragments
+- unrelated foreign conflict unless directly tied to case target
+
+For each signal store:
+- amount
+- normalized amount
+- label
+- source doc
+- anchor relevance
+- confidence
+- signal type (grant / contract / donation / appropriation / legal expense / freeze / budget / subsidy / payment)
+
+Flow Trace should only show money that matters to the case.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T007 — DOSSIER QUALITY / COMPILER 3.0
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Make compiled dossier output feel like real intelligence output.
+
+Compiled brief/dossier must include:
+- WHAT THIS CASE IS
+- TARGET MODE
+- BUILD QUALITY
+- PRIMARY ACTORS
+- PRIMARY INSTITUTIONS
+- KEY RELATIONSHIPS
+- STRONGEST EVIDENCE
+- TIMELINE SUMMARY
+- MONEY TRACE SUMMARY
+- LIKELY INVESTIGATIVE ANGLES
+- GAPS / WHAT IS STILL MISSING
+- NEXT QUERY PATHS
+- CASE CONFIDENCE
+
+If case is weak, say it honestly.
+If case is strong, say why.
+If graph is provisional, say why.
+If the system recovered from weak build, say that.
+
+Do not output vague filler.
+Do not output generic summary fluff.
+Make dossier read like an analyst note.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T008 — OVERVIEW PANEL = REAL COMMAND CENTER
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Keep current ATLAS structure, but make Overview smarter and cleaner.
+
+Improve:
+- Auto-Build Report
+- Case Brief
+- Entity Registry summary
+- Evidence Vault summary
+- Temporal Trace summary
+- Flow Trace summary
+
+Overview should instantly answer:
+- Is this case strong?
+- What matters most?
+- Who matters most?
+- What money matters?
+- What happened?
+- What should operator do next?
+
+If no entities promoted:
+show explicit reason:
+- overly weak candidates
+- off-topic documents
+- held for review
+- graph compile blocked
+
+If data exists but not compiled:
+show actionable button state clearly.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T009 — DOSSIER CENTER
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add a dedicated DOSSIER section / route / tab if one does not already exist clearly enough.
+
+Goal:
+Dossier should feel like a finished intelligence product, not just a sidebar or hidden generated block.
+
+Requirements:
+- accessible from case nav
+- clear “compiled dossier” view
+- export-friendly layout
+- sectioned intelligence output
+- compact / readable / federal internal system style
+
+Do not overcomplicate.
+Keep it inside ATLAS structure.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T010 — UI POWER / COMMAND PRESENCE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Do not redesign ATLAS into a different product.
+Do not copy Whitewing exactly.
+But make ATLAS feel more powerful, cleaner, sharper, more coordinated.
+
+Keep:
+- left rail
+- central work area
+- right case rail
+- tab system
+
+Improve:
+- stronger visual hierarchy
+- sharper panel depth
+- cleaner section headers
+- less dead gray flatness
+- more glow discipline
+- more command-center feel
+- better focus on primary intel
+
+Use Whitewing inspiration ONLY for:
+- sharpness
+- hierarchy
+- composure
+- confidence
+- high-end internal system feel
+
+NOT for turning ATLAS into a battlefield monitor.
+
+ATLAS should feel like:
+federal investigations / financial intelligence / oversight / corruption / case architecture
+
+━━━━━━━━━━━━━━━━━━━━━━━
+T011 — VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━
+
+After implementation:
+1. run at least 3 real test cases:
+   - person/funding
+   - scandal/investigation
+   - organization/spending
+2. verify:
+   - docs align better
+   - entity promotion no longer collapses to zero on strong cases
+   - timeline junk is heavily reduced
+   - financial junk is heavily reduced
+   - graph builds more reliably
+   - dossier output is more specific
+3. report exactly what changed and where
+
+IMPORTANT:
+Do not stop after partial implementation.
+Work through backend + frontend + pipeline + verification.
+Do not give me abstract recommendations.
+Actually implement.

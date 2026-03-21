@@ -27,6 +27,9 @@ import {
   ChevronRight,
   Search,
   Globe,
+  BookOpen,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -40,6 +43,7 @@ import WebIngestTab from "./case-tabs/web-ingest-tab";
 
 const SECTIONS = [
   { id: "overview", label: "OVERVIEW", icon: LayoutGrid },
+  { id: "dossier", label: "DOSSIER", icon: BookOpen },
   { id: "graph", label: "LINK ANALYSIS", icon: GitBranch },
   { id: "entities", label: "ENTITY REGISTRY", icon: Database },
   { id: "documents", label: "DOCUMENT VAULT", icon: Files },
@@ -656,6 +660,10 @@ function CaseDetailInner({
             />
           )}
 
+          {activeSection === "dossier" && (
+            <DossierCenterTab caseId={caseId} caseTitle={caseData.title} />
+          )}
+
           {activeSection === "entities" && (
             <div className="h-full">
               <EntitiesTab caseId={caseId} entities={entities} />
@@ -793,6 +801,10 @@ interface SeedDiag {
   mainEntityDocSupport: number;
   trustRating: string;
   nextQueries: string[];
+  anchorCoreDocs: number;
+  anchorRelevantDocs: number;
+  strongRelationships: number;
+  graphFailure: string;
 }
 
 const SEED_INTENT_LABELS: Record<string, string> = {
@@ -863,6 +875,10 @@ function parseSeedDiag(desc: string | null | undefined): SeedDiag | null {
     mainEntityDocSupport: n("main_entity_doc_support"),
     trustRating: dec(kv["trust"]) || "UNKNOWN",
     nextQueries: nextQueriesRaw ? nextQueriesRaw.split("||").filter(Boolean) : [],
+    anchorCoreDocs: n("anchor_core_docs"),
+    anchorRelevantDocs: n("anchor_relevant_docs"),
+    strongRelationships: n("strong_relationships"),
+    graphFailure: kv["graph_failure"] || "none",
   };
 }
 
@@ -1409,8 +1425,49 @@ function OverviewPanel({
           </div>
           <div className="p-0">
             {entities.length === 0 ? (
-              <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
-                NO ENTITIES PROMOTED
+              <div className="px-4 py-5 space-y-2">
+                <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest text-center">
+                  NO ENTITIES AUTO-PROMOTED
+                </div>
+                {seedDiag && (
+                  <div className="space-y-1.5 mt-2">
+                    {seedDiag.heldCandidates > 0 && (
+                      <div className="flex items-start gap-1.5">
+                        <AlertTriangle className="w-2.5 h-2.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                        <span className="font-mono text-[8px] text-amber-700/80">
+                          {seedDiag.heldCandidates} candidate{seedDiag.heldCandidates > 1 ? "s" : ""} held — use triage to review
+                        </span>
+                      </div>
+                    )}
+                    {seedDiag.graphFailure === "no_entities_promoted" && seedDiag.detected === 0 && (
+                      <div className="flex items-start gap-1.5">
+                        <AlertTriangle className="w-2.5 h-2.5 text-red-800 flex-shrink-0 mt-0.5" />
+                        <span className="font-mono text-[8px] text-red-800/80">
+                          No entity signals extracted — sources may be paywalled or content-light
+                        </span>
+                      </div>
+                    )}
+                    {seedDiag.graphFailure === "no_entities_promoted" && seedDiag.detected > 0 && (
+                      <div className="flex items-start gap-1.5">
+                        <AlertTriangle className="w-2.5 h-2.5 text-red-800 flex-shrink-0 mt-0.5" />
+                        <span className="font-mono text-[8px] text-red-800/80">
+                          {seedDiag.detected} signals detected, none passed trust threshold — try recovery or add sources manually
+                        </span>
+                      </div>
+                    )}
+                    {(seedDiag.wrapper > 0 || seedDiag.failed > 0) && (
+                      <div className="flex items-start gap-1.5">
+                        <span className="w-2 h-2 text-neutral-700 flex-shrink-0 mt-0.5 font-mono text-[9px]">!</span>
+                        <span className="font-mono text-[8px] text-neutral-700">
+                          {seedDiag.wrapper} paywalled · {seedDiag.failed} failed extractions — ingest quality was low
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center mt-2">
+                      <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">→ run recovery or add sources in web ingest</span>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               entities.filter(e => e.type !== "location").slice(0, 8).map((e) => (
@@ -1610,6 +1667,7 @@ interface CaseBriefData {
   compiledAt: string;
   dataQuality: BriefQuality;
   qualityNote: string;
+  caseConfidence?: number;
   whatThisCaseIs: string;
   primaryActors: string[];
   primaryOrganizations: string[];
@@ -2062,6 +2120,392 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
 
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Dossier Center Tab ───────────────────────────────────────────────────────
+
+function DossierCenterTab({ caseId, caseTitle }: { caseId: number; caseTitle: string }) {
+  const [brief, setBrief] = React.useState<CaseBriefData | null>(null);
+  const [loadState, setLoadState] = React.useState<"loading" | "idle" | "compiling" | "error">("loading");
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoadState("loading");
+    fetch(`/api/cases/${caseId}/brief`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return;
+        if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+        else { setBrief(null); setLoadState("idle"); }
+      })
+      .catch(() => { if (!cancelled) setLoadState("idle"); });
+    return () => { cancelled = true; };
+  }, [caseId]);
+
+  const handleCompile = async () => {
+    setLoadState("compiling");
+    setErrorMsg(null);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/compile`, { method: "POST" });
+      const d = await r.json();
+      if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+      else { setErrorMsg(d.error ?? "Compilation failed"); setLoadState("error"); }
+    } catch (e) { setErrorMsg(String(e)); setLoadState("error"); }
+  };
+
+  const handleCopy = () => {
+    if (!brief) return;
+    const sections: string[] = [
+      `ATLAS DOSSIER — ${caseTitle.toUpperCase()}`,
+      `Compiled: ${new Date(brief.compiledAt).toLocaleString()}`,
+      `Quality: ${brief.dataQuality} | Confidence: ${brief.caseConfidence ?? "—"}%`,
+      ``,
+      `=== CASE SUMMARY ===`,
+      brief.whatThisCaseIs,
+      ``,
+      brief.primaryActors.length > 0 ? `ACTORS: ${brief.primaryActors.join(", ")}` : "",
+      brief.primaryOrganizations.length > 0 ? `INSTITUTIONS: ${brief.primaryOrganizations.join(", ")}` : "",
+      ``,
+      `=== CURRENT STATE ===`,
+      brief.currentState,
+      ``,
+      brief.knownGaps.length > 0 ? `=== INTELLIGENCE GAPS ===\n${brief.knownGaps.map(g => `• ${g}`).join("\n")}` : "",
+      ``,
+      brief.likelyAngles.length > 0 ? `=== INVESTIGATIVE ANGLES ===\n${brief.likelyAngles.map(a => `• ${a}`).join("\n")}` : "",
+      ``,
+      brief.suggestedNextQueries.length > 0 ? `=== SUGGESTED QUERIES ===\n${brief.suggestedNextQueries.map(q => `> ${q}`).join("\n")}` : "",
+    ].filter(Boolean);
+    navigator.clipboard.writeText(sections.join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const qc = brief ? QUALITY_CONFIG[brief.dataQuality] : null;
+  const confidenceColor = !brief?.caseConfidence ? "text-neutral-600"
+    : brief.caseConfidence >= 70 ? "text-green-400"
+    : brief.caseConfidence >= 40 ? "text-amber-400"
+    : "text-red-400";
+
+  if (loadState === "loading") {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest animate-pulse">LOADING DOSSIER...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-auto">
+      <div className="max-w-4xl mx-auto p-6 space-y-4">
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+              <span className="font-mono text-[9px] text-neutral-500 uppercase tracking-[0.2em]">ATLAS INTELLIGENCE DOSSIER</span>
+            </div>
+            <div className="font-mono text-base text-white font-bold tracking-wide leading-tight">{caseTitle}</div>
+            {brief && (
+              <div className="flex items-center gap-3 mt-1">
+                <span className={cn("font-mono text-[9px] border px-1.5 py-0.5 uppercase tracking-widest", qc?.color,
+                  brief.dataQuality === "STRONG" ? "border-green-900/50 bg-green-950/20" :
+                  brief.dataQuality === "MODERATE" ? "border-cyan-900/50 bg-cyan-950/20" :
+                  brief.dataQuality === "WEAK" ? "border-amber-900/50 bg-amber-950/20" :
+                  "border-neutral-800"
+                )}>{brief.dataQuality}</span>
+                {brief.caseConfidence !== undefined && (
+                  <span className={cn("font-mono text-[9px]", confidenceColor)}>
+                    {brief.caseConfidence}% CONFIDENCE
+                  </span>
+                )}
+                <span className="font-mono text-[8px] text-neutral-700">
+                  {new Date(brief.compiledAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            {brief && (
+              <button onClick={handleCopy} className="atlas-btn flex items-center gap-1.5">
+                <Copy className="w-3 h-3" />
+                {copied ? "COPIED" : "COPY"}
+              </button>
+            )}
+            <button
+              onClick={handleCompile}
+              disabled={loadState === "compiling"}
+              className={cn("atlas-btn", loadState === "compiling" ? "text-amber-500 border-amber-900/40 animate-pulse" : "atlas-btn-red")}
+            >
+              {loadState === "compiling" ? "COMPILING..." : brief ? "RECOMPILE" : "COMPILE DOSSIER"}
+            </button>
+          </div>
+        </div>
+
+        {errorMsg && (
+          <div className="font-mono text-[9px] text-red-500 px-3 py-2 border border-red-900/40 bg-red-950/10">
+            ERROR: {errorMsg}
+          </div>
+        )}
+
+        {!brief && loadState === "idle" && (
+          <div className="border border-[#ffffff08] bg-[#0a0c10] rounded p-8 text-center space-y-3">
+            <BookOpen className="w-8 h-8 text-neutral-700 mx-auto" />
+            <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest">
+              No compiled dossier — hit COMPILE DOSSIER to generate the intelligence brief
+            </div>
+            <div className="font-mono text-[8px] text-neutral-700">
+              Requires at least one web ingest session to have completed
+            </div>
+          </div>
+        )}
+
+        {brief && (
+          <div className="space-y-3">
+
+            {/* Quality Banner */}
+            <div className={cn(
+              "border px-4 py-3 font-mono text-[9px] leading-relaxed",
+              brief.dataQuality === "STRONG" ? "border-green-900/40 bg-green-950/10 text-green-400/80" :
+              brief.dataQuality === "MODERATE" ? "border-cyan-900/40 bg-cyan-950/10 text-cyan-400/80" :
+              brief.dataQuality === "WEAK" ? "border-amber-900/40 bg-amber-950/10 text-amber-400/80" :
+              "border-neutral-800 text-neutral-600"
+            )}>
+              {brief.qualityNote}
+            </div>
+
+            {/* Two-column layout for main content */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+
+              {/* LEFT: Summary + State */}
+              <div className="xl:col-span-2 space-y-3">
+
+                {/* Case Summary */}
+                <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                  <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                    <span className="w-1 h-3 bg-red-600 flex-shrink-0" />
+                    <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">CASE SUMMARY</span>
+                  </div>
+                  <div className="px-4 py-3 font-mono text-[11px] text-neutral-200 leading-relaxed">
+                    {brief.whatThisCaseIs}
+                  </div>
+                  {(brief.primaryActors.length > 0 || brief.primaryOrganizations.length > 0) && (
+                    <div className="px-4 pb-3 grid grid-cols-2 gap-3 border-t border-[#ffffff05] pt-3">
+                      {brief.primaryActors.length > 0 && (
+                        <div>
+                          <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mb-1.5">INDIVIDUALS</div>
+                          {brief.primaryActors.map((name, i) => (
+                            <div key={i} className="flex items-center gap-1.5 mb-1">
+                              <span className="w-1 h-1 bg-red-600 rounded-full flex-shrink-0" />
+                              <span className="font-mono text-[10px] text-neutral-300">{name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {brief.primaryOrganizations.length > 0 && (
+                        <div>
+                          <div className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest mb-1.5">INSTITUTIONS</div>
+                          {brief.primaryOrganizations.map((name, i) => (
+                            <div key={i} className="flex items-center gap-1.5 mb-1">
+                              <span className="w-1 h-1 bg-cyan-700 rounded-full flex-shrink-0" />
+                              <span className="font-mono text-[10px] text-neutral-300">{name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Current State */}
+                <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                  <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                    <span className="w-1 h-3 bg-cyan-700 flex-shrink-0" />
+                    <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">CURRENT STATE</span>
+                  </div>
+                  <div className="px-4 py-3 font-mono text-[10px] text-neutral-300 leading-relaxed">
+                    {brief.currentState}
+                  </div>
+                </div>
+
+                {/* Key Evidence */}
+                {brief.keyEvidence.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-amber-700 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">KEY EVIDENCE</span>
+                      <span className="font-mono text-[8px] text-neutral-700">{brief.keyEvidence.length} source{brief.keyEvidence.length > 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="divide-y divide-[#ffffff04]">
+                      {brief.keyEvidence.slice(0, 5).map((doc, i) => (
+                        <div key={doc.id} className="px-4 py-2.5 flex items-start gap-3">
+                          <span className="font-mono text-[9px] text-neutral-700 w-4 flex-shrink-0 mt-0.5">{(i + 1).toString().padStart(2, "0")}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-[10px] text-neutral-200 leading-snug truncate">{doc.title}</div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {doc.source && <span className="font-mono text-[8px] text-neutral-600">{doc.source}</span>}
+                              <span className={cn("font-mono text-[8px] border px-1",
+                                doc.priority === "PRIORITY_A" ? "text-green-500 border-green-900/40" :
+                                doc.priority === "PRIORITY_B" ? "text-cyan-600 border-cyan-900/40" :
+                                "text-neutral-600 border-neutral-800"
+                              )}>{doc.priority === "PRIORITY_A" ? "A" : doc.priority === "PRIORITY_B" ? "B" : "C"}</span>
+                              {doc.hasTimeline && <span className="font-mono text-[8px] text-amber-700">TL</span>}
+                              {doc.hasFinancial && <span className="font-mono text-[8px] text-green-800">$</span>}
+                              <span className="font-mono text-[8px] text-neutral-700">score:{doc.score}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Key Relationships */}
+                {brief.keyRelationships.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-violet-700 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">ENTITY RELATIONSHIPS</span>
+                    </div>
+                    <div className="divide-y divide-[#ffffff04]">
+                      {brief.keyRelationships.slice(0, 6).map((rel, i) => (
+                        <div key={i} className="px-4 py-2 flex items-center gap-2">
+                          <span className="font-mono text-[9px] text-neutral-300 truncate">{rel.entityA}</span>
+                          <span className="font-mono text-[8px] text-neutral-700 flex-shrink-0">—{rel.relationshipType.replace(/_/g, " ")}→</span>
+                          <span className="font-mono text-[9px] text-neutral-300 truncate">{rel.entityB}</span>
+                          <span className="font-mono text-[8px] text-neutral-700 flex-shrink-0 ml-auto">{Math.round(rel.confidence * 100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* RIGHT: Angles + Gaps + Queries + Timeline + Financial */}
+              <div className="space-y-3">
+
+                {/* Investigative Angles */}
+                {brief.likelyAngles.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-red-800 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">LIKELY ANGLES</span>
+                    </div>
+                    <div className="px-4 py-3 space-y-2">
+                      {brief.likelyAngles.map((angle, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="w-1 h-1 bg-red-700 rounded-full flex-shrink-0 mt-1.5" />
+                          <span className="font-mono text-[10px] text-neutral-300 leading-snug">{angle}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Intelligence Gaps */}
+                {brief.knownGaps.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-amber-800 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">INTELLIGENCE GAPS</span>
+                    </div>
+                    <div className="px-4 py-3 space-y-2">
+                      {brief.knownGaps.map((gap, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <AlertTriangle className="w-2.5 h-2.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                          <span className="font-mono text-[10px] text-amber-400/70 leading-snug">{gap}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggested Queries */}
+                {brief.suggestedNextQueries.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-neutral-700 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">NEXT QUERIES</span>
+                    </div>
+                    <div className="px-4 py-3 space-y-2">
+                      {brief.suggestedNextQueries.map((q, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <Search className="w-2.5 h-2.5 text-neutral-600 flex-shrink-0 mt-0.5" />
+                          <span className="font-mono text-[9px] text-neutral-400 leading-snug break-all">{q}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Timeline preview */}
+                {brief.topTimeline.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-blue-900 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">TIMELINE ({brief.topTimeline.length})</span>
+                    </div>
+                    <div className="divide-y divide-[#ffffff04]">
+                      {brief.topTimeline.slice(0, 5).map((ev) => (
+                        <div key={ev.id} className="px-4 py-2">
+                          <div className="font-mono text-[8px] text-neutral-700">{ev.eventDate?.slice(0, 10)}</div>
+                          <div className="font-mono text-[9px] text-neutral-300 leading-snug mt-0.5 truncate">
+                            {ev.title.replace(/^\[[A-Z_]+\]\s*/, "")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Financial preview */}
+                {brief.topFinancial.length > 0 && (
+                  <div className="border border-[#ffffff08] bg-[#0a0c10]">
+                    <div className="px-4 py-2 border-b border-[#ffffff08] flex items-center gap-2">
+                      <span className="w-1 h-3 bg-green-900 flex-shrink-0" />
+                      <span className="font-mono text-[9px] text-neutral-400 uppercase tracking-[0.15em]">FINANCIAL ({brief.topFinancial.length})</span>
+                    </div>
+                    <div className="divide-y divide-[#ffffff04]">
+                      {brief.topFinancial.slice(0, 4).map((sig) => (
+                        <div key={sig.id} className="px-4 py-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-[10px] text-green-400 font-bold">{sig.amountRaw}</span>
+                            <span className="font-mono text-[8px] text-neutral-700">{sig.signalType}</span>
+                          </div>
+                          {sig.entityName && <div className="font-mono text-[8px] text-neutral-500 mt-0.5">{sig.entityName}</div>}
+                          {sig.eventSummary && <div className="font-mono text-[8px] text-neutral-600 mt-0.5 truncate">{sig.eventSummary.slice(0, 80)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="border border-[#ffffff08] bg-[#0a0c10] px-4 py-3">
+                  <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest mb-2">CASE STATISTICS</div>
+                  {[
+                    ["Documents", `${brief.stats.usableDocs} usable / ${brief.stats.totalDocs} total`],
+                    ["Entities", brief.stats.totalEntities.toString()],
+                    ["Timeline", brief.stats.totalTimeline.toString()],
+                    ["Financial", brief.stats.totalFinancial.toString()],
+                    ["Relationships", (brief.stats.totalRelationships ?? 0).toString()],
+                  ].map(([label, val]) => (
+                    <div key={label} className="flex justify-between py-0.5">
+                      <span className="font-mono text-[9px] text-neutral-600">{label}</span>
+                      <span className="font-mono text-[9px] text-neutral-400">{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

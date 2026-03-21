@@ -35,6 +35,10 @@ import {
   type DocumentZone,
   type AdmissionRejectReason,
   type DocContaminationResult,
+  buildCaseAnchor,
+  filterTimelineByAnchor,
+  filterFinancialByAnchor,
+  type CaseAnchor,
 } from "../lib/entity-extractor";
 import { logEvent } from "../lib/log-event";
 
@@ -1061,6 +1065,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   const targetMode = targetClassification.mode;
   const queryTerms = target.trim().split(/\s+/).filter(w => w.length > 2);
 
+  // ── Case Anchor (Power Pass T001) ────────────────────────────────────────
+  const caseAnchor: CaseAnchor = buildCaseAnchor(target, targetMode);
+
   // Store classification in DB
   await db.update(casesTable)
     .set({
@@ -1135,6 +1142,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   let pipelineRejectedTotal = 0;
   const pipelineRejectReasons: Record<string, number> = {};
   const docPriorities = new Map<number, string>(); // docId → priority
+  const docTiers = new Map<number, string>();      // docId → CORE|RELEVANT|PERIPHERAL|OFF_TOPIC|CONTAMINATED
   const promotedEntityNames: string[] = []; // canonical names approved into the graph
   let recoveryTriggered = false;
   let recoveryReason = "";
@@ -1240,13 +1248,14 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       const extractionMode = contaminationResult.restrictToLead ? "lead_only" : "full";
       docContaminationMap.set(doc.id, contaminationResult);
 
-      // ── Relevance scoring (seed intent–aware) ───────────────────────────
+      // ── Relevance scoring (seed intent + anchor aware) ──────────────────
       const relevance = computeDocRelevanceScore(
-        textForAnalysis, result.title, queryTerms, result.sourceDomain, seedIntent
+        textForAnalysis, result.title, queryTerms, result.sourceDomain, seedIntent, caseAnchor
       );
       if (relevance.priority === "PRIORITY_A") priorityADocs++;
       else if (relevance.priority === "PRIORITY_B") priorityBDocs++;
       docPriorities.set(doc.id, relevance.priority);
+      docTiers.set(doc.id, relevance.tier ?? "PERIPHERAL");
 
       // Log topic alignment advisory for mismatched docs
       if (relevance.topicAlignment === "mismatched" && relevance.mismatchReason) {
@@ -1268,7 +1277,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         // Patch the ATLAS-DIAG block with the relevance score even for noise docs
         const noisePatch = rawText.replace(
           /(\[ATLAS-DIAG:[^\]]+)\]/,
-          (_, inner) => `${inner}|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}|contamination=${contaminationResult.score}|extraction_mode=${extractionMode}|analysis_ran=0]`
+          (_, inner) => `${inner}|score=${relevance.score}|priority=${relevance.priority}|tier=${relevance.tier}|alignment=${relevance.topicAlignment}|anchorScore=${relevance.anchorScore}|titleHit=${relevance.titleHit ? 1 : 0}|leadHit=${relevance.leadHit ? 1 : 0}|contamination=${contaminationResult.score}|extraction_mode=${extractionMode}|analysis_ran=0]`
         );
         if (noisePatch !== rawText) {
           await db.update(documentsTable).set({ rawText: noisePatch }).where(eq(documentsTable.id, doc.id));
@@ -1324,10 +1333,11 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         pipelineRejectReasons[r] = (pipelineRejectReasons[r] ?? 0) + n;
       }
 
-      // ── Auto-extract timeline events ─────────────────────────────────────
+      // ── Auto-extract timeline events (anchor-filtered) ───────────────────
       if (relevance.priority !== "NOISE") {
         try {
-          const timelineEvents = extractTimelineEvents(textForAnalysis);
+          const rawTimelineEvents = extractTimelineEvents(textForAnalysis);
+          const timelineEvents = filterTimelineByAnchor(rawTimelineEvents, caseAnchor);
           for (const ev of timelineEvents) {
             try {
               await db.insert(timelineEntriesTable).values({
@@ -1346,10 +1356,11 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         }
       }
 
-      // ── Auto-extract financial signals ────────────────────────────────────
+      // ── Auto-extract financial signals (anchor-filtered) ─────────────────
       if (relevance.priority !== "NOISE") {
         try {
-          const signals = extractFinancialSignals(textForAnalysis);
+          const rawSignals = extractFinancialSignals(textForAnalysis);
+          const signals = filterFinancialByAnchor(rawSignals, caseAnchor);
           for (const sig of signals) {
             try {
               await db.insert(financialSignalsTable).values({
@@ -1378,7 +1389,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       // ── Patch rawText to add entity count, analysis_ran, relevance score, alignment, rejected, contamination ──
       const updatedRawText = rawText.replace(
         /(\[ATLAS-DIAG:[^\]]+)\]/,
-        (_, inner) => `${inner}|entities=${entityCountForDoc}|rejected=${rejectedByFirewall}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}|contamination=${contaminationResult.score}|extraction_mode=${extractionMode}]`
+        (_, inner) => `${inner}|entities=${entityCountForDoc}|rejected=${rejectedByFirewall}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|tier=${relevance.tier}|alignment=${relevance.topicAlignment}|anchorScore=${relevance.anchorScore}|titleHit=${relevance.titleHit ? 1 : 0}|leadHit=${relevance.leadHit ? 1 : 0}|contamination=${contaminationResult.score}|extraction_mode=${extractionMode}]`
       );
       if (updatedRawText !== rawText) {
         await db.update(documentsTable)
@@ -1436,6 +1447,8 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     titleDekLeadHit: boolean;      // strictly title, dek, or lead (for hard-gate)
     qualityDocHit: boolean;        // appears in a PRIORITY_A or PRIORITY_B doc
     priorityADocHit: boolean;      // appears in at least one PRIORITY_A doc
+    coreTierDocHit: boolean;       // appears in at least one CORE-tier doc (anchor-based)
+    relevantTierDocHit: boolean;   // appears in at least one RELEVANT-tier doc (anchor-based)
     tailOnlyCount: number;         // mentions only from tail zone
     topicHighCount: number;
     topicMediumCount: number;
@@ -1484,6 +1497,8 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         titleDekLeadHit: isTitleDekLead,
         qualityDocHit: false,
         priorityADocHit: false,
+        coreTierDocHit: false,
+        relevantTierDocHit: false,
         tailOnlyCount: 0,
         topicHighCount: 0,
         topicMediumCount: 0,
@@ -1502,6 +1517,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       const docPri = docPriorities.get(m.documentId);
       if (docPri === "PRIORITY_A" || docPri === "PRIORITY_B") entry.qualityDocHit = true;
       if (docPri === "PRIORITY_A") entry.priorityADocHit = true;
+      const docTier = docTiers.get(m.documentId);
+      if (docTier === "CORE") entry.coreTierDocHit = true;
+      if (docTier === "RELEVANT") entry.relevantTierDocHit = true;
       // Track if all mentions are in high-contamination docs
       const docContam = docContaminationMap.get(m.documentId);
       if (prevSize === 0) entry.contamDocOnly = docContam?.score === "high";
@@ -1547,6 +1565,10 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     if (entry.agencyBonus) trust += 0.06;
     if (entry.priorityADocHit) trust += 0.06;
     else if (entry.qualityDocHit) trust += 0.03;
+
+    // Anchor proximity bonus: entity seen in CORE or RELEVANT anchor-scored doc
+    if (entry.coreTierDocHit) trust += 0.12;
+    else if (entry.relevantTierDocHit) trust += 0.06;
 
     // Topic signals
     if (entry.topicHighCount >= 2) trust += 0.09;
@@ -1779,6 +1801,50 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
+  // ── Supplemental promote: anchor-proximity boost for thin graphs ─────────
+  // If promoted count is <2 and there are ≥2 CORE/RELEVANT docs, loosen threshold
+  // for candidates that were seen in those anchor-aligned docs
+  const coreTierDocCount = Array.from(docTiers.values()).filter(t => t === "CORE").length;
+  const relevantTierDocCount = Array.from(docTiers.values()).filter(t => t === "RELEVANT").length;
+  const anchorAlignedDocs = coreTierDocCount + relevantTierDocCount;
+
+  if (approvedEntityIds.size < 2 && anchorAlignedDocs >= 2) {
+    const anchorCandidates = Array.from(entityMap.entries())
+      .filter(([key, e]) => {
+        if (approvedEntityIds.has(key)) return false;
+        if (WRAPPER_ENTITY_BLOCKLIST.has(e.displayName)) return false;
+        if (e.contamDocOnly) return false;
+        if (e.bestTopic === "OFF_TOPIC") return false;
+        const anchorDoc = e.coreTierDocHit || e.relevantTierDocHit;
+        if (!anchorDoc) return false;
+        const trust = computeTrustScore(e);
+        return trust >= 0.50 && isRoleBearing(e);
+      })
+      .map(([key, entry]) => ({
+        key, entry,
+        score: computeTrustScore(entry)
+          + (entry.coreTierDocHit ? 0.20 : 0.08)
+          + (entry.titleDekLeadHit ? 0.10 : 0)
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    let supplementalCount = 0;
+    const needed = 2 - approvedEntityIds.size;
+    for (const { key, entry } of anchorCandidates) {
+      if (supplementalCount >= needed) break;
+      await approveEntity(key, entry, "T2_CANDIDATE");
+      supplementalCount++;
+    }
+
+    if (supplementalCount > 0) {
+      await logEvent(
+        "entity_anchor_supplemental",
+        `Anchor-proximity supplemental: promoted ${supplementalCount} entity(ies) via ${anchorAlignedDocs} anchor-aligned docs (${coreTierDocCount} CORE, ${relevantTierDocCount} RELEVANT)`,
+        { caseId }
+      );
+    }
+  }
+
   // ── Fallback: if zero entities auto-approved, promote top quality candidates ──
   if (approvedEntityIds.size === 0 && validDocsIngested > 0) {
     const PREFERRED_TYPES = ["organization", "government_agency", "facility", "program", "location"];
@@ -1957,8 +2023,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         const contaminationResult = computeDocContaminationScore(textForAnalysis, cleanResult.boilerplateRatio);
         docContaminationMap.set(doc.id, contaminationResult);
 
-        const relevance = computeDocRelevanceScore(textForAnalysis, result.title, queryTerms, result.sourceDomain, seedIntent);
+        const relevance = computeDocRelevanceScore(textForAnalysis, result.title, queryTerms, result.sourceDomain, seedIntent, caseAnchor);
         docPriorities.set(doc.id, relevance.priority);
+        docTiers.set(doc.id, relevance.tier ?? "PERIPHERAL");
         if (relevance.priority === "PRIORITY_A") priorityADocs++;
         else if (relevance.priority === "PRIORITY_B") priorityBDocs++;
 
@@ -1999,9 +2066,10 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           pipelineRejectReasons[r] = (pipelineRejectReasons[r] ?? 0) + n;
         }
 
-        // ── Auto-extract timeline events (recovery pass) ──────────────────
+        // ── Auto-extract timeline events (recovery pass, anchor-filtered) ──
         try {
-          const timelineEvents = extractTimelineEvents(textForAnalysis);
+          const rawTimelineEvents = extractTimelineEvents(textForAnalysis);
+          const timelineEvents = filterTimelineByAnchor(rawTimelineEvents, caseAnchor);
           for (const ev of timelineEvents) {
             try {
               await db.insert(timelineEntriesTable).values({
@@ -2015,9 +2083,10 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           }
         } catch { /* don't crash pipeline */ }
 
-        // ── Auto-extract financial signals (recovery pass) ────────────────
+        // ── Auto-extract financial signals (recovery pass, anchor-filtered) ─
         try {
-          const signals = extractFinancialSignals(textForAnalysis);
+          const rawSignals = extractFinancialSignals(textForAnalysis);
+          const signals = filterFinancialByAnchor(rawSignals, caseAnchor);
           for (const sig of signals) {
             try {
               await db.insert(financialSignalsTable).values({
@@ -2037,7 +2106,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
 
         const updatedRawText = rawText.replace(
           /(\[ATLAS-DIAG:[^\]]+)\]/,
-          (_, inner) => `${inner}|entities=${entityCountForDoc}|rejected=${rejectedByFirewall}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|alignment=${relevance.topicAlignment}|contamination=${contaminationResult.score}|extraction_mode=${contaminationResult.restrictToLead ? "lead_only" : "full"}|recovery=1]`
+          (_, inner) => `${inner}|entities=${entityCountForDoc}|rejected=${rejectedByFirewall}|analysis_ran=1|score=${relevance.score}|priority=${relevance.priority}|tier=${relevance.tier}|alignment=${relevance.topicAlignment}|anchorScore=${relevance.anchorScore}|titleHit=${relevance.titleHit ? 1 : 0}|leadHit=${relevance.leadHit ? 1 : 0}|contamination=${contaminationResult.score}|extraction_mode=${contaminationResult.restrictToLead ? "lead_only" : "full"}|recovery=1]`
         );
         if (updatedRawText !== rawText) {
           await db.update(documentsTable).set({ rawText: updatedRawText }).where(eq(documentsTable.id, doc.id));
@@ -2083,6 +2152,8 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
             titleDekLeadHit: isTitleDekLead,
             qualityDocHit: false,
             priorityADocHit: false,
+            coreTierDocHit: false,
+            relevantTierDocHit: false,
             tailOnlyCount: 0,
             topicHighCount: 0,
             topicMediumCount: 0,
@@ -2097,6 +2168,9 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           const docPri = docPriorities.get(m.documentId);
           if (docPri === "PRIORITY_A" || docPri === "PRIORITY_B") entry.qualityDocHit = true;
           if (docPri === "PRIORITY_A") entry.priorityADocHit = true;
+          const docTierR = docTiers.get(m.documentId);
+          if (docTierR === "CORE") entry.coreTierDocHit = true;
+          if (docTierR === "RELEVANT") entry.relevantTierDocHit = true;
           const docContam = docContaminationMap.get(m.documentId);
           if (docContam?.score !== "high") entry.contamDocOnly = false;
         }
@@ -2153,8 +2227,12 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
 
   // ── Graph seeding: quality-filtered edges ────────────────────────────────
 
+  let graphFailureReason: string | null = null;
+  let strongRelationshipCount = 0;
+
   if (approvedEntityIds.size >= 2) {
-    // Only create edges between entities from PRIORITY_A or PRIORITY_B docs
+    // Prefer CORE/RELEVANT anchor-tier docs; fall back to PRIORITY_A/B if no tier docs exist
+    const hasAnchorTierDocs = Array.from(docTiers.values()).some(t => t === "CORE" || t === "RELEVANT");
     const qualityDocEntityKeys = new Map<number, string[]>();
     const pairDocCount = new Map<string, number>();   // how many docs each pair co-occurs in
     const pairHasTitle = new Map<string, boolean>();  // co-occurs in title/lead of any doc
@@ -2163,7 +2241,11 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       if (!approvedEntityIds.has(key)) continue;
       for (const docId of entry.docIds) {
         const docPri = docPriorities.get(docId);
-        if (docPri !== "PRIORITY_A" && docPri !== "PRIORITY_B") continue;
+        const docTier = docTiers.get(docId);
+        const passAnchor = hasAnchorTierDocs
+          ? (docTier === "CORE" || docTier === "RELEVANT")
+          : (docPri === "PRIORITY_A" || docPri === "PRIORITY_B");
+        if (!passAnchor) continue;
         if (!qualityDocEntityKeys.has(docId)) qualityDocEntityKeys.set(docId, []);
         qualityDocEntityKeys.get(docId)!.push(key);
       }
@@ -2222,13 +2304,22 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       }
     }
 
+    strongRelationshipCount = Array.from(pairDocCount.values()).filter(c => c >= 2).length;
+
     if (createdPairs.size > 0) {
       await logEvent(
         "graph_updated",
-        `Graph seeded with ${createdPairs.size} edge${createdPairs.size !== 1 ? "s" : ""} (quality-filtered) between ${approvedEntityIds.size} auto-approved entities`,
+        `Graph seeded with ${createdPairs.size} edge${createdPairs.size !== 1 ? "s" : ""} (quality-filtered, ${strongRelationshipCount} strong) between ${approvedEntityIds.size} entities`,
         { caseId }
       );
+    } else if (approvedEntityIds.size >= 2) {
+      graphFailureReason = "no_shared_quality_docs";
+      await logEvent("graph_no_edges", "Graph empty: entities don't co-appear in anchor-tier docs", { caseId });
     }
+  } else if (approvedEntityIds.size === 1) {
+    graphFailureReason = "single_entity_only";
+  } else if (approvedEntityIds.size === 0) {
+    graphFailureReason = "no_entities_promoted";
   }
 
   // ── Case summary with machine-readable seed diagnostics ──────────────────
@@ -2404,6 +2495,10 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     `build_status=${buildStatus}`,
     `auto_build_quality=${autoBuildQuality}`,
     `trust=${encodeURIComponent(trustRating)}`,
+    `anchor_core_docs=${coreTierDocCount}`,
+    `anchor_relevant_docs=${relevantTierDocCount}`,
+    `strong_relationships=${strongRelationshipCount}`,
+    `graph_failure=${graphFailureReason ?? "none"}`,
     `next_queries=${encodeURIComponent(nextQueryLines.join("||"))}`,
   ].join("|");
 

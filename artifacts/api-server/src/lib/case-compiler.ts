@@ -74,6 +74,7 @@ export interface CaseBrief {
   dataQuality: "STRONG" | "MODERATE" | "WEAK" | "EMPTY";
   qualityNote: string;
   autoGraphQuality: string | null;
+  caseConfidence: number;
 
   whatThisCaseIs: string;
   primaryActors: string[];
@@ -115,7 +116,7 @@ function parseAtlasDiag(rawText: string | null): Record<string, string> {
     const idx = part.indexOf("=");
     if (idx > 0) result[part.slice(0, idx)] = part.slice(idx + 1);
   }
-  return {};
+  return result;
 }
 
 function parseDiagSafe(rawText: string | null): Record<string, string> {
@@ -460,11 +461,12 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
 
   const persons = primaryEntities.filter(e => e.type === "person").map(e => e.name);
   const orgs = primaryEntities.filter(e => e.type !== "person").map(e => e.name);
+  const targetMode = (caseRow as any).targetMode as string | null ?? null;
 
-  const whatThisCaseIs = buildWhatThisCaseIs(caseRow.title, seedIntent, primaryEntities, topTimeline, topFinancial);
-  const currentState = buildCurrentState(dataQuality, keyEvidence, topTimeline, topFinancial);
-  const knownGaps = buildKnownGaps(usableCount, primaryEntities, topTimeline, topFinancial);
-  const suggestedNextQueries = buildSuggestedQueries(caseRow.title, primaryEntities, seedIntent);
+  const whatThisCaseIs = buildWhatThisCaseIs(caseRow.title, seedIntent, primaryEntities, topTimeline, topFinancial, targetMode, keyEvidence);
+  const currentState = buildCurrentState(dataQuality, keyEvidence, topTimeline, topFinancial, primaryEntities);
+  const knownGaps = buildKnownGaps(usableCount, primaryEntities, topTimeline, topFinancial, targetMode ?? null);
+  const suggestedNextQueries = buildSuggestedQueries(caseRow.title, primaryEntities, seedIntent, targetMode ?? null);
 
   // ── Key Relationships (T004 Dossier 2.0) ─────────────────────────────────
   const entityIdToName = new Map<number, string>();
@@ -484,7 +486,6 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     }));
 
   // ── Likely Investigative Angles (T004 Dossier 2.0) ───────────────────────
-  const targetMode = (caseRow as any).targetMode as string | null ?? null;
   const likelyAngles = buildLikelyAngles(
     targetMode,
     seedIntent,
@@ -493,6 +494,13 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     topFinancial,
     keyEvidence
   );
+
+  // ── Case confidence score ────────────────────────────────────────────────
+  let caseConfidence = 0;
+  if (dataQuality === "STRONG") caseConfidence = 80 + Math.min(20, primaryEntities.length * 4 + Math.min(topTimeline.length, 3) * 2);
+  else if (dataQuality === "MODERATE") caseConfidence = 45 + Math.min(30, primaryEntities.length * 6 + Math.min(topTimeline.length, 2) * 3);
+  else if (dataQuality === "WEAK") caseConfidence = 15 + Math.min(25, primaryEntities.length * 5 + usableCount * 2);
+  caseConfidence = Math.min(99, Math.round(caseConfidence));
 
   return {
     caseId,
@@ -504,6 +512,7 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     dataQuality,
     qualityNote,
     autoGraphQuality: (caseRow as any).autoGraphQuality as string | null ?? null,
+    caseConfidence,
     whatThisCaseIs,
     primaryActors: persons,
     primaryOrganizations: orgs,
@@ -536,34 +545,74 @@ function buildWhatThisCaseIs(
   intent: string | undefined,
   entities: RankedEntity[],
   timeline: RankedTimelineEvent[],
-  financial: RankedFinancialSignal[]
+  financial: RankedFinancialSignal[],
+  targetMode?: string | null,
+  docs?: RankedDocument[]
 ): string {
   const parts: string[] = [];
-  parts.push(`Case subject: "${title}".`);
 
-  if (intent && intent !== "general") {
-    parts.push(`Classified as ${intent.toUpperCase()} intelligence.`);
-  }
+  // Mode-specific lead sentence
+  const modeLabel: Record<string, string> = {
+    person_target: "Individual investigation",
+    organization_target: "Organizational investigation",
+    government_agency_target: "Government agency investigation",
+    place_target: "Location-based investigation",
+    program_target: "Program/initiative investigation",
+    funding_target: "Funding and contracts investigation",
+    event_target: "Event/incident investigation",
+    scandal_target: "Misconduct/scandal investigation",
+    topic_investigation: "Multi-topic investigation",
+    general: "Open investigation",
+  };
+  const lead = targetMode && modeLabel[targetMode] ? modeLabel[targetMode] : "Investigation";
+  parts.push(`${lead}: "${title}".`);
 
   const persons = entities.filter(e => e.type === "person").slice(0, 3).map(e => e.name);
-  const orgs = entities.filter(e => e.type !== "person").slice(0, 2).map(e => e.name);
+  const orgs = entities.filter(e => e.type !== "person" && e.type !== "location").slice(0, 3).map(e => e.name);
 
-  if (persons.length > 0) {
-    parts.push(`Key individuals identified: ${persons.join(", ")}.`);
-  }
-  if (orgs.length > 0) {
-    parts.push(`Linked organizations: ${orgs.join(", ")}.`);
-  }
-  if (timeline.length > 0) {
-    parts.push(`${timeline.length} date-anchored events extracted.`);
+  if (persons.length > 0 && orgs.length > 0) {
+    parts.push(`Key actors: ${persons.join(", ")}. Linked institutions: ${orgs.join(", ")}.`);
+  } else if (persons.length > 0) {
+    parts.push(`Key individuals: ${persons.join(", ")}.`);
+  } else if (orgs.length > 0) {
+    parts.push(`Key institutions: ${orgs.join(", ")}.`);
   } else {
-    parts.push("No date-anchored events found.");
+    parts.push("No named actors confirmed — entity extraction returned no promoted records.");
   }
+
+  // Financial signal with specifics
   if (financial.length > 0) {
     const topAmt = financial[0];
-    parts.push(`Financial activity detected — largest signal: ${topAmt.amountRaw} (${topAmt.signalType}).`);
+    const context = topAmt.eventSummary ? ` (${topAmt.eventSummary.slice(0, 80)})` : "";
+    parts.push(`Financial exposure: ${topAmt.amountRaw} — ${topAmt.signalType}${context}.`);
+    if (financial.length > 1) parts.push(`${financial.length - 1} additional financial signal${financial.length > 2 ? "s" : ""} detected.`);
+  }
+
+  // Timeline anchor
+  if (timeline.length >= 3) {
+    const dates = timeline
+      .map(t => t.eventDate?.slice(0, 7))
+      .filter(Boolean)
+      .sort();
+    const earliest = dates[0];
+    const latest = dates[dates.length - 1];
+    if (earliest && latest && earliest !== latest) {
+      parts.push(`${timeline.length} date-anchored events span ${earliest} to ${latest}.`);
+    } else {
+      parts.push(`${timeline.length} date-anchored events extracted.`);
+    }
+  } else if (timeline.length > 0) {
+    parts.push(`${timeline.length} date-anchored event${timeline.length > 1 ? "s" : ""} found.`);
   } else {
-    parts.push("No financial signals detected.");
+    parts.push("No temporal events confirmed.");
+  }
+
+  // Document quality signal
+  const coreDocs = docs?.filter(d => d.priority === "PRIORITY_A").length ?? 0;
+  if (coreDocs >= 3) {
+    parts.push(`Strong source base: ${coreDocs} priority-A documents support core findings.`);
+  } else if (coreDocs >= 1) {
+    parts.push(`${coreDocs} priority-A source${coreDocs > 1 ? "s" : ""} anchor the findings.`);
   }
 
   return parts.join(" ");
@@ -573,24 +622,55 @@ function buildCurrentState(
   quality: CaseBrief["dataQuality"],
   docs: RankedDocument[],
   timeline: RankedTimelineEvent[],
-  financial: RankedFinancialSignal[]
+  financial: RankedFinancialSignal[],
+  entities?: RankedEntity[]
 ): string {
-  if (quality === "EMPTY") return "No usable intelligence. Case file is empty.";
+  if (quality === "EMPTY") return "Case file is empty — no usable intelligence collected yet. Run a web ingest session targeting the subject to begin evidence gathering.";
 
   const parts: string[] = [];
+
+  // Top document with specific detail
   if (docs.length > 0) {
     const top = docs[0];
-    parts.push(`Highest-scoring source: "${top.title}" (score: ${top.score}, ${top.alignment}).`);
-  }
-  if (timeline.length > 0) {
-    const latest = [...timeline].sort((a, b) => (b.eventDate > a.eventDate ? 1 : -1))[0];
-    if (latest) parts.push(`Most recent event: ${latest.title.replace(/^\[[A-Z_]+\]\s*/, "")}.`);
-  }
-  if (financial.length > 0) {
-    parts.push(`Largest financial exposure: ${financial[0].amountRaw} (${financial[0].signalType}).`);
+    const sourceNote = top.source ? ` (via ${top.source})` : "";
+    const breakdownNote = top.scoreBreakdown ? ` [${top.scoreBreakdown}]` : "";
+    parts.push(`Highest-value source: "${top.title}"${sourceNote}${breakdownNote}.`);
   }
 
-  if (parts.length === 0) return "Evidence gathered. No dominant signal identified.";
+  // Latest confirmed event
+  if (timeline.length > 0) {
+    const sorted = [...timeline].sort((a, b) => (b.eventDate > a.eventDate ? 1 : -1));
+    const latest = sorted[0];
+    if (latest) {
+      const cleanTitle = latest.title.replace(/^\[[A-Z_]+\]\s*/, "");
+      const dateStr = latest.eventDate ? ` [${latest.eventDate.slice(0, 10)}]` : "";
+      parts.push(`Most recent confirmed event: ${cleanTitle}${dateStr}.`);
+    }
+    if (sorted.length >= 3) {
+      const earliest = sorted[sorted.length - 1];
+      const span = earliest?.eventDate?.slice(0, 10);
+      if (span) parts.push(`Temporal record extends back to ${span}.`);
+    }
+  }
+
+  // Financial state
+  if (financial.length > 0) {
+    const top = financial[0];
+    const entity = top.entityName ? ` linked to ${top.entityName}` : "";
+    parts.push(`Largest financial signal: ${top.amountRaw}${entity} (${top.signalType}).`);
+  }
+
+  // Entity state
+  const promotedEntities = entities?.filter(e => e.isPrimary) ?? [];
+  if (promotedEntities.length === 0 && quality !== "EMPTY") {
+    parts.push("No entities cleared for promotion — manual review or re-ingest recommended.");
+  }
+
+  if (quality === "WEAK" && docs.length < 3) {
+    parts.push("Evidence base is thin — additional source ingestion required for reliable analysis.");
+  }
+
+  if (parts.length === 0) return "Evidence gathered. No dominant signal identified in current data set.";
   return parts.join(" ");
 }
 
@@ -598,17 +678,58 @@ function buildKnownGaps(
   usableDocs: number,
   entities: RankedEntity[],
   timeline: RankedTimelineEvent[],
-  financial: RankedFinancialSignal[]
+  financial: RankedFinancialSignal[],
+  targetMode: string | null
 ): string[] {
   const gaps: string[] = [];
-  if (usableDocs < 3) gaps.push("Insufficient document coverage — fewer than 3 usable sources.");
-  if (entities.length === 0) gaps.push("No entities promoted — entity admission threshold not met.");
-  else if (entities.filter(e => e.docSupport >= 2).length === 0) {
-    gaps.push("All entities single-document only — cross-document confirmation absent.");
+
+  // Document coverage
+  if (usableDocs === 0) {
+    gaps.push("No usable documents — run a targeted web ingest session to begin.");
+  } else if (usableDocs < 3) {
+    gaps.push(`Thin document base (${usableDocs} usable) — ingest additional sources for reliability.`);
   }
-  if (timeline.length === 0) gaps.push("No date-anchored events found — temporal trace unavailable.");
-  else if (timeline.length < 3) gaps.push("Timeline sparse — fewer than 3 events found.");
-  if (financial.length === 0) gaps.push("No financial signals detected — money flow unknown.");
+
+  // Entity coverage
+  if (entities.length === 0) {
+    gaps.push("No entities promoted — all candidates failed admission thresholds. Try more specific queries or check ingest logs.");
+  } else {
+    const multiDoc = entities.filter(e => e.docSupport >= 2);
+    const singleDoc = entities.filter(e => e.docSupport === 1);
+    if (multiDoc.length === 0 && entities.length > 0) {
+      gaps.push(`${entities.length} entity record${entities.length > 1 ? "s" : ""} — all single-document only. Cross-source confirmation missing.`);
+    }
+    if (singleDoc.length > 0 && multiDoc.length === 0) {
+      gaps.push("No high-confidence entity found across multiple sources — consider expanding query set.");
+    }
+  }
+
+  // Temporal coverage
+  if (timeline.length === 0) {
+    gaps.push("No date-anchored events — temporal reconstruction not possible from current sources.");
+  } else if (timeline.length < 3) {
+    gaps.push(`Sparse timeline (${timeline.length} event${timeline.length > 1 ? "s" : ""}) — insufficient for pattern analysis.`);
+  }
+
+  // Financial coverage
+  if (financial.length === 0) {
+    if (targetMode === "funding_target" || targetMode === "scandal_target") {
+      gaps.push("No financial signals — critical gap for this investigation type. Search for specific contract or payment records.");
+    } else {
+      gaps.push("No financial signals detected — money flow undocumented.");
+    }
+  } else if (financial.length < 2) {
+    gaps.push("Only one financial signal — broader money trail not yet established.");
+  }
+
+  // Mode-specific gaps
+  if (targetMode === "person_target" && entities.filter(e => e.type === "person").length === 0) {
+    gaps.push("Target individual not confirmed in entity records — name may need normalization or disambiguation.");
+  }
+  if (targetMode === "organization_target" && entities.filter(e => e.type === "organization" || e.type === "government_agency").length === 0) {
+    gaps.push("Target organization not confirmed — consider adding official name variants to search queries.");
+  }
+
   return gaps;
 }
 
@@ -677,28 +798,82 @@ function buildLikelyAngles(
 function buildSuggestedQueries(
   title: string,
   entities: RankedEntity[],
-  intent: string | undefined
+  intent: string | undefined,
+  targetMode: string | null
 ): string[] {
   const queries: string[] = [];
   const topPersons = entities.filter(e => e.type === "person").slice(0, 2);
-  const topOrgs = entities.filter(e => e.type !== "person").slice(0, 2);
+  const topOrgs = entities.filter(e => e.type !== "person" && e.type !== "location").slice(0, 2);
 
-  for (const p of topPersons) {
-    queries.push(`"${p.name}" lawsuit OR investigation OR indictment`);
-    if (intent === "financial_crime" || intent === "corruption") {
-      queries.push(`"${p.name}" campaign finance OR donations OR funding`);
-    }
-  }
-  for (const o of topOrgs) {
-    queries.push(`"${o.name}" contract OR grant OR award`);
+  // Mode-specific primary queries
+  switch (targetMode) {
+    case "person_target":
+      for (const p of topPersons) {
+        queries.push(`"${p.name}" investigation OR indictment OR lawsuit OR audit`);
+        queries.push(`"${p.name}" contract OR funding OR grant OR payment`);
+      }
+      for (const o of topOrgs) {
+        queries.push(`"${o.name}" "${topPersons[0]?.name ?? title}" records OR contract`);
+      }
+      break;
+
+    case "funding_target":
+    case "government_agency_target":
+      for (const o of topOrgs) {
+        queries.push(`"${o.name}" contract award OR procurement OR grant OR spending`);
+        queries.push(`"${o.name}" inspector general OR audit report OR oversight`);
+      }
+      for (const p of topPersons) {
+        queries.push(`"${p.name}" "conflict of interest" OR award OR contract`);
+      }
+      break;
+
+    case "scandal_target":
+      for (const p of topPersons) {
+        queries.push(`"${p.name}" charges OR indicted OR convicted OR plea OR court filing`);
+        queries.push(`"${p.name}" whistleblower OR complaint OR affidavit`);
+      }
+      for (const o of topOrgs) {
+        queries.push(`"${o.name}" misconduct OR investigation OR subpoena OR settlement`);
+      }
+      break;
+
+    case "organization_target":
+      for (const o of topOrgs) {
+        queries.push(`"${o.name}" contract OR grant OR lobbying OR disclosure`);
+        queries.push(`"${o.name}" audit OR lawsuit OR regulatory action`);
+      }
+      for (const p of topPersons) {
+        queries.push(`"${p.name}" "${o?.name ?? ""}" board OR salary OR conflict`);
+      }
+      break;
+
+    default:
+      for (const p of topPersons) {
+        queries.push(`"${p.name}" investigation OR lawsuit OR indictment`);
+      }
+      for (const o of topOrgs) {
+        queries.push(`"${o.name}" contract OR grant OR award OR audit`);
+      }
+      break;
   }
 
-  const titleWords = title.toLowerCase().split(/\s+/).filter(w => w.length > 4);
-  if (titleWords.length > 0) {
-    queries.push(`${titleWords.slice(0, 3).join(" ")} audit OR inspector general`);
+  // Universal fallback: title keywords + investigative terms
+  const titleWords = title
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 4 && !["about", "these", "their", "there", "which", "where"].includes(w));
+  if (titleWords.length >= 2 && queries.length < 5) {
+    queries.push(`${titleWords.slice(0, 3).join(" ")} audit OR "inspector general" OR oversight`);
+  }
+  if (intent === "crime_corruption" && queries.length < 5) {
+    queries.push(`${titleWords.slice(0, 2).join(" ")} bribery OR kickback OR embezzlement OR fraud`);
+  }
+  if (intent === "finance_funding" && queries.length < 5) {
+    queries.push(`${titleWords.slice(0, 2).join(" ")} "no-bid contract" OR "sole source" OR procurement fraud`);
   }
 
-  return queries.slice(0, 5);
+  return [...new Set(queries)].slice(0, 6);
 }
 
 // ── Persist compiled brief ────────────────────────────────────────────────────
