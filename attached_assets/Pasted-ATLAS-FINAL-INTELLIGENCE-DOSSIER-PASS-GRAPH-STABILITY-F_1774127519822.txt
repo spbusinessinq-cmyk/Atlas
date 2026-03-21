@@ -1,0 +1,494 @@
+ATLAS FINAL INTELLIGENCE + DOSSIER PASS + GRAPH STABILITY FIX — PRODUCTION LOCK
+
+MISSION
+This is the final production pass before deployment.
+
+Do not summarize first.
+Implement → verify → return ship report.
+
+Fix all remaining production blockers in ONE pass:
+- BLACKDOG visibility + reliability
+- weak extraction, especially financial intelligence
+- weak entity relevance and weak relationships
+- non-numeric flow trace noise
+- PDF dossier design + writing quality
+- junk ingest (sports / irrelevant content)
+- blank/failed graph render
+- graph state / computedNodes failures
+- missing fallback behavior when graph data is empty or invalid
+
+Then upgrade ATLAS into a true operator-grade intelligence system:
+- precise money tracking
+- strong entity relationships
+- structured investigative output
+- operator-grade dossier generation
+- resilient graph rendering with zero blank-screen failure
+
+━━━━━━━━━━━━━━━━━━
+T001 — BLACKDOG HEADER STATUS (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+BLACKDOG must be visible in the HEADER — not just sidebar.
+
+Add to top right header:
+[● BLACKDOG SECURE]
+
+Behavior:
+- green = connected
+- amber = reachable but degraded
+- red = unreachable
+- gray = not configured
+
+Implementation:
+- use same VITE_BLACKDOG_URL
+- ping every 15–30s
+- show tooltip:
+  - CONNECTED
+  - DEGRADED
+  - UNREACHABLE
+  - NOT CONFIGURED
+
+Remove duplicate/confusing placements.
+Keep ONE clean system indicator in the header.
+Optional secondary sidebar readout is allowed only if fully consistent and visually subordinate.
+
+━━━━━━━━━━━━━━━━━━
+T002 — HARD FILTER JUNK INGEST
+━━━━━━━━━━━━━━━━━━
+
+Stop pulling irrelevant content.
+
+Block or heavily suppress:
+- sports
+- entertainment
+- celebrity gossip
+- lifestyle fluff
+- product reviews
+- generic SEO pages
+- listicles
+- low-value tourism / fan content
+- TV episode recap content
+- content farms
+
+Add classifier before ingest:
+IF content is not primarily about:
+- government
+- finance
+- infrastructure
+- contracts
+- audits
+- policy
+- legal
+- oversight
+- institutions
+- budgets
+- procurement
+- public administration
+- enforcement / accountability
+THEN reject or heavily down-rank before it ever affects extraction.
+
+This must clean the pipeline at the source.
+
+━━━━━━━━━━━━━━━━━━
+T003 — FINANCIAL EXTRACTION (MAJOR UPGRADE)
+━━━━━━━━━━━━━━━━━━
+
+This is the biggest gap.
+
+ATLAS must aggressively extract ALL financial intelligence signals from valid documents.
+
+Detect:
+- dollar amounts
+- USD references
+- million / billion / thousand
+- budgets
+- appropriations
+- allocations
+- line items
+- grants
+- contracts
+- change orders
+- expenditures
+- reimbursements
+- transfers
+- pass-through funding
+- program funding
+- discrepancies
+- overruns
+- underspend
+- missing funds
+- audit flags
+- settlement amounts
+- award amounts
+- “up to”, “not to exceed”, “request”, “approved”, “adopted”, “appropriated”, “spent”, “paid”, “awarded”, “allocated”
+
+Normalize:
+- $5M → 5000000
+- $1.2 billion → 1200000000
+- 250 thousand dollars → 250000
+
+Attach to every extracted financial signal:
+- source document id
+- source title
+- source domain
+- entity involved
+- destination entity if present
+- program name if present
+- event date if present
+- confidence score
+- signal type
+
+Group:
+- by entity
+- by program
+- by source document
+- by flow direction
+- by fiscal year if available
+
+Deduplicate near-identical financial signals across repeated articles.
+
+━━━━━━━━━━━━━━━━━━
+T004 — FLOW TRACE FIX (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Flow Trace must ONLY show real financial signals.
+
+REMOVE:
+- non-numeric entries
+- vague references
+- empty placeholder records
+- text-only “appropriation” language with no usable amount unless explicitly marked as contextual-only and excluded from numeric flow view
+
+Default view:
+- validated numeric flows only
+
+Each flow card must show:
+- source → destination
+- amount formatted
+- signal type
+- confidence
+- supporting document count
+- program name if present
+- date if present
+
+Add controls:
+- sort by largest amount
+- sort by confidence
+- filter by entity
+- filter by program
+- filter by confidence tier
+
+If no numeric financial flows exist:
+show explicit fallback:
+“NO VALIDATED NUMERIC FLOWS DETECTED”
+and explain what is missing.
+
+━━━━━━━━━━━━━━━━━━
+T005 — ENTITY EXTRACTION UPGRADE
+━━━━━━━━━━━━━━━━━━
+
+Entities are currently weak.
+
+Improve extraction so entities are tied directly to case intent and investigative value.
+
+Prioritize:
+- agencies
+- departments
+- contractors
+- vendors
+- officials
+- programs
+- funds
+- authorities
+- boards
+- departments
+- oversight bodies
+- cities / counties / offices only when contextually central
+
+Down-rank or reject:
+- generic mentions
+- one-off weak names
+- vague geography with no case relevance
+- entertainment names
+- celebrity references
+- orphaned nouns
+- snippet fragments
+- titles without actors
+- junk nouns from broken parsing
+
+Promotion rule:
+Entity must have either:
+- at least 2 supporting signals
+OR
+- one strong financial linkage
+OR
+- one high-confidence oversight / legal linkage
+
+Enhance relationships:
+entity ↔ entity must include:
+- relationship type
+- evidence count
+- confidence score
+- top supporting documents
+- money connected if any
+
+━━━━━━━━━━━━━━━━━━
+T006 — INVESTIGATIVE INTELLIGENCE ENGINE
+━━━━━━━━━━━━━━━━━━
+
+Upgrade findings into real intelligence.
+
+Build structured outputs:
+
+KEY FINDINGS
+- strongest conclusions only
+
+FINANCIAL RED FLAGS
+- mismatched amounts
+- unexplained flows
+- repeated allocations
+- contract clustering
+- audit failures
+- weak oversight
+- missing recipient clarity
+
+POWER NODES
+- entities controlling the most money or most relationships
+
+OVERSIGHT FAILURES
+- where accountability breaks
+- who should have reviewed but didn’t
+- what audit / reporting gap exists
+
+RECOMMENDED ACTIONS
+- exact next analyst actions
+- what document to get
+- what query to run
+- what relationship to verify
+
+Each entry MUST include:
+- what happened
+- why it matters
+- supporting evidence count
+- linked entities
+
+No fluff. No vague filler.
+
+━━━━━━━━━━━━━━━━━━
+T007 — DOSSIER WRITING ENGINE (MAJOR)
+━━━━━━━━━━━━━━━━━━
+
+Rewrite dossier output completely.
+
+Style:
+- clean
+- structured
+- serious
+- no fluff
+- no repetition
+- concise intelligence language
+
+Tone:
+- internal intelligence briefing
+- not blog content
+- not SEO content
+- not generic AI prose
+
+Sections:
+1. Executive Summary
+2. Case Context
+3. Key Findings
+4. Financial Analysis
+5. Entity Network Summary
+6. Risk & Exposure
+7. Recommended Actions
+
+Rules:
+- short, tight paragraphs
+- no filler language
+- no “this suggests” spam
+- direct statements
+- mention strongest confirmed dollar figure early when relevant
+- distinguish confirmed vs inferred vs missing
+
+━━━━━━━━━━━━━━━━━━
+T008 — PDF DESIGN OVERHAUL
+━━━━━━━━━━━━━━━━━━
+
+Match the operator packet style.
+
+Design target:
+- black header bars
+- red accents
+- clean section dividers
+- consistent spacing
+- structured tables
+- bold section titles
+- professional white report pages
+- visual hierarchy
+- better typography
+- no weak empty whitespace blocks
+- no raw dump formatting
+
+Add:
+- header: RSR INTELLIGENCE NETWORK
+- footer: CONTROLLED DISTRIBUTION
+- clean cover page
+- strong section headers
+- confidence band
+- document metadata band
+- compact intelligence tables
+
+Pages:
+- cover
+- clearly separated sections
+- no clutter
+- no plain text dump
+- must read like an internal system report
+
+PDF must visually feel closer to the operator packet example:
+- stronger layout rhythm
+- cleaner table rules
+- better use of accent bars
+- better cover composition
+- better section callouts
+- tighter summary blocks
+
+━━━━━━━━━━━━━━━━━━
+T009 — GRAPH + FINANCIAL LINK INTEGRATION
+━━━━━━━━━━━━━━━━━━
+
+Graph must reflect financial reality.
+
+Add:
+- edge weight based on money flow
+- thicker lines for larger flows
+- visually distinguish confirmed vs inferred edges
+- high-value nodes highlighted
+- relation type labels cleaned up
+
+Node click must show:
+- total money connected
+- number of documents
+- top relationships
+- relationship confidence
+- linked programs if present
+
+Do not allow garbage entities onto the graph.
+
+━━━━━━━━━━━━━━━━━━
+T010 — SAFE GRAPH FALLBACK (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Blank canvas is unacceptable.
+
+If nodes.length === 0 OR graph cannot safely render:
+show a designed fallback panel instead of blank screen.
+
+Fallback must display:
+- NO GRAPH DATA AVAILABLE
+- entity count
+- document count
+- extraction status
+- likely reason:
+  - no promoted entities
+  - all entities filtered out
+  - graph data not returned
+  - render failed safely
+
+Never leave the operator with an empty gray render area.
+
+━━━━━━━━━━━━━━━━━━
+T011 — GRAPH DEBUG + FAILURE LOGGING
+━━━━━━━━━━━━━━━━━━
+
+Before graph render, log:
+- caseId
+- rawEntities length
+- filteredEntities length
+- nodes length
+- edges length
+- graph source state
+- computedNodes resolution result
+
+If nodes === 0:
+log explicit reason:
+- filtered_out
+- no_case_data
+- mapping_failed
+- runtime_guard_triggered
+- validation_rejected_all
+
+Make graph failures diagnosable immediately.
+
+━━━━━━━━━━━━━━━━━━
+T012 — VALIDATION SOFT MODE
+━━━━━━━━━━━━━━━━━━
+
+Your stricter validation is good, but do not let it silently nuke the graph.
+
+Change entity/node validation from hard-fail only to:
+- reject true garbage
+- preserve salvageable entities via safe fallback normalization
+
+If entity is partially malformed but usable:
+- coerce safe label
+- preserve type if known
+- mark low confidence instead of dropping entire render tree
+
+Only hard reject:
+- empty labels
+- numeric-only junk
+- URL fragments
+- raw broken HTML
+- obvious parser residue
+- duplicate meaningless tokens
+
+Do NOT allow validation to create zero-output silent graph failure.
+
+━━━━━━━━━━━━━━━━━━
+T013 — COMPUTED NODES GUARD
+━━━━━━━━━━━━━━━━━━
+
+If computedNodes / graph memoization / mapping fails:
+- catch the failure
+- return empty-safe graph state
+- render fallback UI
+- log exact failure
+
+No silent canvas mount with no content.
+
+━━━━━━━━━━━━━━━━━━
+T014 — FINAL SYSTEM VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Run full test:
+
+1. ingest LA homeless funding audit
+2. verify:
+   - ALL major dollar amounts extracted
+   - flows appear correctly
+   - entities tied to money
+   - no sports / entertainment junk
+   - findings are sharp
+   - PDF looks like operator packet
+   - BLACKDOG shows in header and works
+   - graph never renders blank
+   - if graph has zero nodes, fallback state appears
+   - logging clearly explains why
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return:
+- what was fixed
+- what was upgraded
+- proof of working extraction
+- proof of BLACKDOG status
+- confirmation of PDF redesign
+- proof graph blank-screen failure is solved
+- any remaining issues
+
+No vague language.
+Only confirmed working features.

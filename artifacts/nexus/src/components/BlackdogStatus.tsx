@@ -3,7 +3,7 @@ import { ShieldCheck } from "lucide-react";
 
 type BlackdogState = "online" | "degraded" | "offline" | "unconfigured" | "checking";
 
-const PING_INTERVAL_MS = 30_000;
+const PING_INTERVAL_MS = 20_000;
 const PING_TIMEOUT_MS = 6_000;
 
 function getEndpointUrl(): string | null {
@@ -27,34 +27,19 @@ function statusLabel(state: BlackdogState): string {
     case "online":       return "CONNECTED";
     case "degraded":     return "DEGRADED";
     case "offline":      return "UNREACHABLE";
-    case "checking":     return "CHECKING...";
-    case "unconfigured": return "URL NOT CONFIGURED";
+    case "checking":     return "CHECKING";
+    case "unconfigured": return "NOT CONFIGURED";
   }
 }
 
-function statusSubline(state: BlackdogState, latencyMs: number | null): string {
-  switch (state) {
-    case "online":       return latencyMs !== null ? `${latencyMs}ms response` : "BLACKDOG connected";
-    case "degraded":     return latencyMs !== null ? `${latencyMs}ms — high latency` : "Service degraded";
-    case "offline":      return "BLACKDOG unreachable";
-    case "checking":     return "Contacting BLACKDOG...";
-    case "unconfigured": return "Set VITE_BLACKDOG_URL to enable";
-  }
-}
-
-export function BlackdogStatus({ collapsed = false }: { collapsed?: boolean }) {
+function usePing() {
   const [state, setState] = useState<BlackdogState>("checking");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
-
   const endpointUrl = getEndpointUrl();
 
   const ping = useCallback(async () => {
-    if (!endpointUrl) {
-      setState("unconfigured");
-      return;
-    }
-
+    if (!endpointUrl) { setState("unconfigured"); return; }
     setState("checking");
     const t0 = performance.now();
     try {
@@ -65,13 +50,9 @@ export function BlackdogStatus({ collapsed = false }: { collapsed?: boolean }) {
       const ms = Math.round(performance.now() - t0);
       setLatencyMs(ms);
       setLastCheck(new Date());
-      if (resp.ok) {
-        setState(ms > 3000 ? "degraded" : "online");
-      } else if (resp.status >= 500) {
-        setState("degraded");
-      } else {
-        setState("online");
-      }
+      if (resp.ok) setState(ms > 3000 ? "degraded" : "online");
+      else if (resp.status >= 500) setState("degraded");
+      else setState("online");
     } catch {
       setLatencyMs(null);
       setLastCheck(new Date());
@@ -80,23 +61,55 @@ export function BlackdogStatus({ collapsed = false }: { collapsed?: boolean }) {
   }, [endpointUrl]);
 
   useEffect(() => {
-    if (!endpointUrl) {
-      setState("unconfigured");
-      return;
-    }
+    if (!endpointUrl) { setState("unconfigured"); return; }
     ping();
     const interval = setInterval(ping, PING_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [ping, endpointUrl]);
 
+  return { state, latencyMs, lastCheck, ping };
+}
+
+// ── Header chip — goes in top-right header bar ────────────────────────────────
+export function BlackdogHeaderChip() {
+  const { state, latencyMs, ping } = usePing();
   const color = statusColor(state);
+  const label = statusLabel(state);
+  const tooltipText = `BLACKDOG — ${label}${latencyMs !== null ? ` · ${latencyMs}ms` : ""}`;
+
+  return (
+    <button
+      onClick={ping}
+      title={tooltipText}
+      className="flex items-center gap-1.5 px-2 py-0.5 border border-[#ffffff06] bg-[#020406] hover:bg-[#040810] transition-colors"
+      style={{ borderColor: `${color}18` }}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${state === "online" ? "animate-pulse" : state === "checking" ? "animate-ping" : ""}`}
+        style={{ background: color, boxShadow: `0 0 5px ${color}60` }}
+      />
+      <span className="font-mono text-[8px] uppercase tracking-widest hidden sm:block" style={{ color: color === "#374151" ? "#4b5563" : color }}>
+        BLACKDOG
+      </span>
+      <span className="font-mono text-[7px] text-neutral-700 hidden md:block">
+        {label}
+      </span>
+    </button>
+  );
+}
+
+// ── Sidebar full readout ──────────────────────────────────────────────────────
+export function BlackdogStatus({ collapsed = false }: { collapsed?: boolean }) {
+  const { state, latencyMs, lastCheck, ping } = usePing();
+  const color = statusColor(state);
+  const label = statusLabel(state);
 
   if (collapsed) {
     return (
       <button
         onClick={ping}
         className="flex items-center justify-center w-full py-1.5 group relative"
-        title={`Protected by BLACKDOG — ${statusLabel(state)}${latencyMs !== null ? ` (${latencyMs}ms)` : ""}`}
+        title={`Protected by BLACKDOG — ${label}${latencyMs !== null ? ` (${latencyMs}ms)` : ""}`}
       >
         <span
           className={`w-2 h-2 rounded-full flex-shrink-0 ${state === "online" ? "animate-pulse" : ""}`}
@@ -124,7 +137,7 @@ export function BlackdogStatus({ collapsed = false }: { collapsed?: boolean }) {
           </span>
         </div>
         <div className="font-mono text-[6px] text-neutral-700 mt-0.5 flex items-center gap-1">
-          <span>{statusLabel(state)}</span>
+          <span>{label}</span>
           {lastCheck && state !== "unconfigured" && (
             <span className="text-neutral-800">· {lastCheck.toLocaleTimeString()}</span>
           )}

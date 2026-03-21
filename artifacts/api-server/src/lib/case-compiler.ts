@@ -1141,7 +1141,34 @@ function buildFinancialRedFlags(
   const inferredCount = allFinancial.filter(f => f.inferredSignal).length;
   if (inferredCount >= 2) flags.push(`${inferredCount} financial signals are cross-document inferences, not direct quotations — verify primary source documents.`);
 
-  return flags.filter(Boolean).slice(0, 5);
+  // Audit flag / questioned costs
+  const auditFlags = allFinancial.filter(f => f.signalType === "AUDIT_FLAG");
+  if (auditFlags.length > 0) {
+    const totalQuestioned = auditFlags.reduce((a, f) => a + (f.normalizedAmount ?? 0), 0);
+    const amtStr = totalQuestioned > 0 ? ` (${totalQuestioned >= 1_000_000 ? `$${(totalQuestioned / 1_000_000).toFixed(1)}M` : `$${totalQuestioned.toLocaleString()}`} in questioned costs)` : "";
+    flags.push(`${auditFlags.length} audit finding${auditFlags.length > 1 ? "s" : ""} detected${amtStr} — inspector general or oversight body has flagged irregular expenditures.`);
+  }
+
+  // Cost overruns / change orders
+  const overruns = allFinancial.filter(f => f.signalType === "COST_OVERRUN");
+  if (overruns.length > 0) {
+    const totalOverrun = overruns.reduce((a, f) => a + (f.normalizedAmount ?? 0), 0);
+    const amtStr = totalOverrun > 0 ? ` totaling ${totalOverrun >= 1_000_000 ? `$${(totalOverrun / 1_000_000).toFixed(1)}M` : `$${totalOverrun.toLocaleString()}`}` : "";
+    flags.push(`${overruns.length} cost overrun or change order${overruns.length > 1 ? "s" : ""} detected${amtStr} — contract scope may have been deliberately understated.`);
+  }
+
+  // Fragmented payments to same entity (structured to avoid scrutiny)
+  const byEntityCount = new Map<string, number>();
+  for (const f of allFinancial) {
+    const recv = f.receivedBy ?? f.entityName;
+    if (recv && (f.normalizedAmount ?? 0) > 0) byEntityCount.set(recv, (byEntityCount.get(recv) ?? 0) + 1);
+  }
+  const fragmented = [...byEntityCount.entries()].filter(([, count]) => count >= 3);
+  if (fragmented.length > 0) {
+    flags.push(`${fragmented[0][0]} appears in ${fragmented[0][1]} separate financial signals — possible structured or fragmented payment pattern.`);
+  }
+
+  return flags.filter(Boolean).slice(0, 7);
 }
 
 function buildPowerNodes(

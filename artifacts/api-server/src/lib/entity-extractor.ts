@@ -351,7 +351,8 @@ const ROLE_PATTERNS: { pattern: RegExp; role: EntityRole; confidence: number }[]
   { pattern: /\b(?:filing|indictment|complaint|affidavit|subpoena|warrant|exhibit|report|audit\s+report|grand\s+jury)\b/i, role: "DOCUMENT_FILING", confidence: 0.83 },
   { pattern: /\b(?:victim|witness|survivor|plaintiff|complainant|accuser|relator)\b/i, role: "VICTIM_WITNESS", confidence: 0.82 },
   { pattern: /\b(?:defendant|suspect|accused|charged|indicted|convicted)\b/i, role: "DEFENDANT", confidence: 0.82 },
-  { pattern: /\b(?:secretary|minister|commissioner|administrator|mayor|governor|senator|representative|superintendent|director\s+of)\b/i, role: "OFFICIAL", confidence: 0.76 },
+  { pattern: /\b(?:inspector\s+general|ig\s+report|special\s+agent\s+in\s+charge|comptroller|auditor\s+general|contracting\s+officer|procurement\s+officer|chief\s+financial\s+officer|cfo|chief\s+compliance\s+officer)\b/i, role: "OFFICIAL", confidence: 0.88 },
+  { pattern: /\b(?:secretary|minister|commissioner|administrator|mayor|governor|senator|representative|superintendent|director\s+of|deputy\s+secretary|undersecretary|assistant\s+secretary|deputy\s+director|chief\s+of\s+staff)\b/i, role: "OFFICIAL", confidence: 0.82 },
 ];
 
 function classifyEntityRole(name: string, context: string, entityType: string): { role: EntityRole; roleConfidence: number } {
@@ -1625,7 +1626,7 @@ export interface ExtractedFinancialSignal {
   financialConfidence: number;
 }
 
-const MONEY_PATTERN = /(?:(USD|US\$|\$|£|€|GBP|EUR)\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMKT])\b|(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMK])\b(?:\s*(?:USD|US dollars?|dollars?))?|(USD|US\$|\$|£|€)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?))/gi;
+const MONEY_PATTERN = /(?:(USD|US\$|\$|£|€|GBP|EUR)\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMKT])\b|(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(billion|million|thousand|trillion|bn|mn|tr|[BMK])\b(?:\s*(?:USD|US dollars?|dollars?))?|(USD|US\$|\$|£|€)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?)|(USD|US\$|\$|£|€)\s*(\d{3,9}(?:\.\d+)?))/gi;
 
 const FINANCIAL_PROXIMITY_PATTERN = /\b(funding|grant|budget|investment|contract|appropriation|allocation|spending|award(?:ed)?|program\s+fund|invest(?:ed|ment)|financed?|subsidized?|reimburse|settlement|procurement|invoice|payout|disburse|obligated?|encumbered?)\b/i;
 
@@ -1634,16 +1635,18 @@ const FINANCIAL_AD_COPY_PATTERN = /\b(sale|discount|off|coupon|promo|deal\s+of\s
 const FINANCIAL_SPORTS_PATTERN = /\b(signing\s+bonus|contract\s+extension\s+for|salary\s+cap\s+hit|years?\s+deal|year\s+contract|nfl|nba|mlb|nhl|mls)\b/i;
 
 const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
-  { regex: /\b(?:fraud|embezzl|kickback|brib(?:e|ery)|misappropriat|stolen|diverted|siphoned|laundered)\b/i, type: "FRAUD_MISUSE" },
-  { regex: /\b(?:contract(?:ed?|s)?|sole.source|no.bid|procurement|awarded?\s+contract|rfp|rfq)\b/i, type: "CONTRACT" },
-  { regex: /\b(?:grant(?:ed?|s)?|subgrant|cooperative\s+agreement)\b/i, type: "GRANT" },
-  { regex: /\b(?:appropriat(?:ed?|ion|ions)?|budget(?:ed?)?|allocated?|allocation|congressional|legislative)\b/i, type: "APPROPRIATION" },
-  { regex: /\b(?:cut|reduc(?:ed?|tion)|eliminated?|rescission|clawback|withh(?:eld?|olding)|frozen|freeze|pulled)\b/i, type: "CUT_REALLOCATION" },
-  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?|reimburse|disburs(?:ed?|ement)|expenditure|spent|expended)\b/i, type: "EXPENDITURE" },
-  { regex: /\b(?:fund(?:ed?|ing|s)?|financed?|award(?:ed?|s)?|invest(?:ed?|ment|ing)|subsidized?)\b/i, type: "PROGRAM_FUNDING" },
+  { regex: /\b(?:fraud|embezzl|kickback|brib(?:e|ery)|misappropriat|stolen|diverted|siphoned|laundered|phantom|fictitious|overbill|ghost\s+employee)\b/i, type: "FRAUD_MISUSE" },
+  { regex: /\b(?:change\s+order|cost\s+overrun|over.budget|cost.overage|budget\s+overrun|change\s+directive)\b/i, type: "COST_OVERRUN" },
+  { regex: /\b(?:audit\s+finding|ig\s+report|oig|inspector\s+general|questioned\s+cost|disallow(?:ed?|ance)|unallowable|unsupported\s+cost|audit\s+exception)\b/i, type: "AUDIT_FLAG" },
+  { regex: /\b(?:contract(?:ed?|s)?|sole.source|no.bid|procurement|awarded?\s+contract|rfp|rfq|task\s+order|indefinite\s+delivery|idiq)\b/i, type: "CONTRACT" },
+  { regex: /\b(?:grant(?:ed?|s)?|subgrant|cooperative\s+agreement|assistance\s+agreement|subaward)\b/i, type: "GRANT" },
+  { regex: /\b(?:appropriat(?:ed?|ion|ions)?|budget(?:ed?)?|allocated?|allocation|congressional|legislative|omnibus|continuing\s+resolution)\b/i, type: "APPROPRIATION" },
+  { regex: /\b(?:cut|reduc(?:ed?|tion)|eliminated?|rescission|clawback|withh(?:eld?|olding)|frozen|freeze|pulled|recission|sequester)\b/i, type: "CUT_REALLOCATION" },
+  { regex: /\b(?:paid?|payment(?:s)?|pay(?:ing|s)?|reimburse|disburs(?:ed?|ement)|expenditure|spent|expended|invoice|invoiced?|billable)\b/i, type: "EXPENDITURE" },
+  { regex: /\b(?:fund(?:ed?|ing|s)?|financed?|award(?:ed?|s)?|invest(?:ed?|ment|ing)|subsidized?|capitalized?)\b/i, type: "PROGRAM_FUNDING" },
 ];
 
-const FUNDING_HARD_GATE = /\b(funded?|grant(?:ed?)?|contract(?:ed?)?|appropriated?|allocated?|awarded?|paid?|payment|budget|procurement|reimburse|disburse|spending|expenditure|invest(?:ment|ed)|subsidized?|sole.source|no.bid)\b/i;
+const FUNDING_HARD_GATE = /\b(funded?|grant(?:ed?)?|contract(?:ed?)?|appropriated?|allocated?|awarded?|paid?|payment|budget|procurement|reimburse|disburse|spending|expenditure|invest(?:ment|ed)|subsidized?|sole.source|no.bid|change\s+order|cost\s+overrun|audit\s+finding|questioned\s+cost|disallow|oig|inspector\s+general|task\s+order|invoice|invoiced?|capitalized?|encumbered?|obligated?)\b/i;
 
 const CONTROL_VERB_PATTERN = /\b(?:controlled?\s+by|overseen?\s+by|managed?\s+by|administered?\s+by|directed?\s+by|authorized?\s+by|approved?\s+by|led?\s+by|operated?\s+by)\b/i;
 const RECEIVE_VERB_PATTERN = /\b(?:received?\s+by|awarded?\s+to|paid?\s+to|granted?\s+to|contracted?\s+(?:to|with)|given\s+to|allocated?\s+to|disbursed?\s+to|transferred?\s+to)\b/i;
@@ -1782,8 +1785,8 @@ export function extractFinancialSignals(text: string, anchorTokens: string[] = [
       if (!amountRaw || amountRaw.length < 2) continue;
 
       const { amount, currency, display } = normalizeAmount(amountRaw);
-      // Require at least $10,000 minimum to avoid trivial mentions
-      if (amount === null || amount < 10_000) continue;
+      // Require at least $1,000 minimum to capture line items, change orders, and small contract amounts
+      if (amount === null || amount < 1_000) continue;
 
       const dedupKey = display;
       if (seen.has(dedupKey)) continue;
@@ -1821,7 +1824,7 @@ export function extractFinancialSignals(text: string, anchorTokens: string[] = [
         programName,
         financialConfidence,
       });
-      if (signals.length >= 20) return signals;
+      if (signals.length >= 30) return signals;
     }
   }
 

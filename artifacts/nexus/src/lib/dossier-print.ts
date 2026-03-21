@@ -117,247 +117,428 @@ export function openPrintDossier(params: PrintDossierParams): void {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: Georgia, 'Times New Roman', serif;
-      font-size: 11pt;
-      color: #1a1a1a;
+      font-size: 10.5pt;
+      color: #111;
       background: #fff;
-      line-height: 1.5;
+      line-height: 1.55;
     }
+
+    /* ─── Page shell ─────────────────────────────────────────────────────── */
     .page {
       width: 100%;
       min-height: 100vh;
-      padding: 1.4in 1.1in;
+      padding: 0.9in 1.05in 1in;
       page-break-after: always;
       position: relative;
     }
     .page:last-child { page-break-after: auto; }
 
-    /* Cover page */
+    /* ─── Cover page ─────────────────────────────────────────────────────── */
     .cover {
+      min-height: 100vh;
+      padding: 0;
+      page-break-after: always;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      min-height: 100vh;
-      padding: 1.4in 1.1in;
+      position: relative;
     }
-    .cover-top { border-bottom: 2px solid #1a1a1a; padding-bottom: 20px; margin-bottom: 40px; }
-    .atlas-logo {
+    .cover-classification-top {
+      background: #9a0000;
+      color: #fff;
       font-family: 'Courier New', monospace;
-      font-size: 9pt;
+      font-size: 7.5pt;
       letter-spacing: 0.35em;
-      color: #666;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 8px 0;
+      font-weight: 700;
+    }
+    .cover-body {
+      flex: 1;
+      padding: 0.7in 1.1in 0.5in;
+      display: flex;
+      flex-direction: column;
+    }
+    .cover-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #111;
+      padding-bottom: 14px;
+      margin-bottom: 0.55in;
+    }
+    .atlas-wordmark {
+      font-family: 'Courier New', monospace;
+      font-size: 8pt;
+      letter-spacing: 0.4em;
+      color: #333;
       text-transform: uppercase;
     }
-    .atlas-logo span { color: #c00; font-weight: bold; }
-    .cover-title {
-      font-size: 28pt;
-      font-weight: bold;
-      letter-spacing: -0.02em;
-      color: #111;
-      line-height: 1.15;
-      margin: 60px 0 30px;
-      max-width: 5.5in;
+    .atlas-wordmark strong { color: #9a0000; }
+    .cover-case-stamp {
+      font-family: 'Courier New', monospace;
+      font-size: 7.5pt;
+      letter-spacing: 0.2em;
+      color: #888;
+      text-align: right;
     }
+    .cover-title {
+      font-size: 30pt;
+      font-weight: bold;
+      letter-spacing: -0.025em;
+      color: #0a0a0a;
+      line-height: 1.1;
+      margin-bottom: 0.35in;
+      max-width: 5.6in;
+    }
+    .cover-rule { border: none; border-top: 1px solid #ccc; margin: 0 0 0.3in; }
     .cover-meta {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px 40px;
-      border-top: 1px solid #e0e0e0;
-      padding-top: 24px;
-      margin-top: 40px;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px 36px;
     }
-    .meta-item { }
+    .meta-item {}
     .meta-label {
       font-family: 'Courier New', monospace;
-      font-size: 7pt;
-      letter-spacing: 0.2em;
+      font-size: 6.5pt;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
-      color: #888;
+      color: #999;
       margin-bottom: 3px;
     }
     .meta-value {
-      font-size: 11pt;
-      font-weight: 600;
-      color: #222;
-    }
-    .classification-band {
-      display: inline-block;
-      background: #c00;
-      color: #fff;
-      font-family: 'Courier New', monospace;
-      font-size: 8pt;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      padding: 5px 14px;
-      margin-bottom: 16px;
-    }
-    .cover-footer {
-      border-top: 1px solid #e0e0e0;
-      padding-top: 16px;
-      font-family: 'Courier New', monospace;
-      font-size: 7.5pt;
-      color: #aaa;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-    }
-
-    /* Section pages */
-    .section-header {
-      border-bottom: 2px solid #1a1a1a;
-      margin-bottom: 28px;
-      padding-bottom: 10px;
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-    }
-    .section-number {
-      font-family: 'Courier New', monospace;
-      font-size: 8pt;
-      color: #999;
-      letter-spacing: 0.2em;
-      margin-bottom: 4px;
-    }
-    .section-title {
-      font-size: 18pt;
-      font-weight: bold;
-      letter-spacing: -0.01em;
+      font-size: 10.5pt;
+      font-weight: 700;
       color: #111;
     }
-    .section-case-ref {
+    .cover-summary-block {
+      margin-top: 0.35in;
+      padding: 16px 20px;
+      background: #f7f7f7;
+      border-left: 4px solid #9a0000;
+    }
+    .cover-summary-label {
+      font-family: 'Courier New', monospace;
+      font-size: 6.5pt;
+      letter-spacing: 0.22em;
+      color: #9a0000;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .cover-summary-text {
+      font-size: 10.5pt;
+      color: #222;
+      line-height: 1.65;
+    }
+    .cover-stat-strip {
+      display: flex;
+      gap: 28px;
+      margin-top: 0.3in;
+      padding-top: 14px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .cover-stat { text-align: center; }
+    .cover-stat-num {
+      font-family: 'Courier New', monospace;
+      font-size: 20pt;
+      font-weight: 700;
+      color: #111;
+      line-height: 1;
+    }
+    .cover-stat-label {
+      font-family: 'Courier New', monospace;
+      font-size: 6.5pt;
+      letter-spacing: 0.18em;
+      color: #888;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .confidence-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .confidence-bar {
+      width: 90px;
+      height: 3px;
+      background: #ddd;
+    }
+    .confidence-bar-fill { height: 100%; background: #9a0000; }
+    .confidence-label { font-family: 'Courier New', monospace; font-size: 7.5pt; color: #888; }
+    .cover-footer-bar {
+      background: #111;
+      color: #888;
+      font-family: 'Courier New', monospace;
+      font-size: 6.5pt;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 10px 0;
+    }
+    .cover-classification-bottom {
+      background: #9a0000;
+      color: #fff;
       font-family: 'Courier New', monospace;
       font-size: 7.5pt;
-      color: #aaa;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 8px 0;
+      font-weight: 700;
     }
 
-    /* Content blocks */
-    .summary-text {
-      font-size: 11.5pt;
-      line-height: 1.7;
-      color: #222;
-      max-width: 5.5in;
-      margin-bottom: 24px;
+    /* ─── Section page header bar ────────────────────────────────────────── */
+    .page-header-bar {
+      display: flex;
+      align-items: stretch;
+      margin: -0.9in -1.05in 0.38in;
+      background: #111;
     }
-    .key-finding {
-      border-left: 3px solid #c00;
-      padding: 12px 16px;
-      background: #fafafa;
-      margin: 24px 0;
+    .page-header-left {
+      flex: 1;
+      padding: 10px 1.05in;
     }
-    .key-finding-label {
+    .page-section-num {
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      letter-spacing: 0.28em;
+      color: #9a0000;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .page-section-title {
+      font-family: Georgia, serif;
+      font-size: 15pt;
+      font-weight: bold;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .page-header-right {
+      padding: 10px 1.05in 10px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      border-left: 1px solid #333;
+    }
+    .page-case-ref {
       font-family: 'Courier New', monospace;
       font-size: 7pt;
       letter-spacing: 0.2em;
-      color: #c00;
+      color: #666;
       text-transform: uppercase;
-      margin-bottom: 6px;
     }
-    .key-finding-text { font-size: 11pt; font-weight: 600; color: #111; }
 
-    /* Actor tables */
+    /* ─── Content blocks ─────────────────────────────────────────────────── */
+    .summary-text {
+      font-size: 11pt;
+      line-height: 1.72;
+      color: #1a1a1a;
+      margin-bottom: 22px;
+      max-width: 5.6in;
+    }
+    .key-finding {
+      border-left: 4px solid #9a0000;
+      padding: 11px 16px;
+      background: #fdf5f5;
+      margin: 20px 0;
+    }
+    .key-finding-label {
+      font-family: 'Courier New', monospace;
+      font-size: 6.5pt;
+      letter-spacing: 0.22em;
+      color: #9a0000;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .key-finding-text { font-size: 10.5pt; font-weight: 600; color: #111; line-height: 1.55; }
+
+    /* ─── Actor / entity rows ─────────────────────────────────────────────── */
     .actor-group-label {
       font-family: 'Courier New', monospace;
-      font-size: 7.5pt;
-      letter-spacing: 0.2em;
+      font-size: 7pt;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
-      color: #888;
-      margin: 24px 0 10px;
-      border-bottom: 1px solid #e8e8e8;
+      color: #777;
+      margin: 22px 0 8px;
+      border-bottom: 1px solid #e0e0e0;
       padding-bottom: 5px;
     }
     .actor-row {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      padding: 7px 0;
-      border-bottom: 1px solid #f0f0f0;
+      padding: 6px 0;
+      border-bottom: 1px solid #f2f2f2;
     }
-    .actor-name { font-weight: 600; font-size: 11pt; color: #111; }
-    .actor-meta { font-family: 'Courier New', monospace; font-size: 8pt; color: #999; }
+    .actor-name { font-weight: 700; font-size: 10.5pt; color: #111; }
+    .actor-meta { font-family: 'Courier New', monospace; font-size: 7.5pt; color: #999; }
 
-    /* Findings */
+    /* ─── Findings list ──────────────────────────────────────────────────── */
     .finding-item {
-      padding: 10px 0;
+      padding: 9px 0;
       border-bottom: 1px solid #f0f0f0;
       display: flex;
       gap: 12px;
+      align-items: baseline;
     }
-    .finding-bullet { color: #c00; font-size: 14pt; line-height: 1.2; flex-shrink: 0; }
-    .finding-text { font-size: 11pt; line-height: 1.5; }
-
-    /* Financial flows */
-    .flow-row {
-      padding: 12px;
-      border: 1px solid #e8e8e8;
-      margin-bottom: 10px;
-      background: #fafafa;
-    }
-    .flow-entity { font-weight: 600; font-size: 11pt; }
-    .flow-arrow { color: #c00; font-size: 11pt; margin: 0 8px; }
-    .flow-context { font-size: 9.5pt; color: #555; margin-top: 5px; line-height: 1.4; }
-    .flow-meta {
+    .finding-num {
       font-family: 'Courier New', monospace;
-      font-size: 7.5pt;
-      color: #999;
-      margin-top: 5px;
-      letter-spacing: 0.1em;
+      font-size: 8pt;
+      color: #9a0000;
+      font-weight: 700;
+      flex-shrink: 0;
+      min-width: 22px;
     }
+    .finding-bullet { color: #9a0000; font-size: 13pt; line-height: 1.2; flex-shrink: 0; }
+    .finding-text { font-size: 10.5pt; line-height: 1.55; color: #222; }
 
-    /* Evidence / sources */
-    .evidence-row {
-      padding: 10px 0;
+    /* ─── Financial flows table ──────────────────────────────────────────── */
+    .flows-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin-top: 4px;
+    }
+    .flows-table thead tr {
+      background: #111;
+    }
+    .flows-table th {
+      font-family: 'Courier New', monospace;
+      font-size: 6.5pt;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #bbb;
+      padding: 7px 10px;
+      text-align: left;
+      font-weight: 600;
+    }
+    .flows-table th.amt-col { text-align: right; color: #e07070; }
+    .flows-table th.conf-col { text-align: right; }
+    .flows-table td {
+      padding: 8px 10px;
+      vertical-align: top;
       border-bottom: 1px solid #f0f0f0;
     }
-    .evidence-title { font-weight: 600; font-size: 10.5pt; color: #111; margin-bottom: 3px; }
-    .evidence-source { font-family: 'Courier New', monospace; font-size: 8pt; color: #888; }
+    .flows-table tr:nth-child(even) td { background: #fafafa; }
+    .flow-type-badge {
+      font-family: 'Courier New', monospace;
+      font-size: 6.5pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #888;
+      display: block;
+      margin-top: 2px;
+    }
+    .flow-amount {
+      font-family: 'Courier New', monospace;
+      font-weight: 700;
+      font-size: 11pt;
+      color: #9a0000;
+      white-space: nowrap;
+    }
+    .flow-context-cell {
+      font-size: 8.5pt;
+      color: #555;
+      line-height: 1.45;
+    }
+    .flow-actors {
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      color: #888;
+      margin-top: 3px;
+      letter-spacing: 0.06em;
+    }
+    .flow-conf-cell {
+      font-family: 'Courier New', monospace;
+      font-size: 8pt;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .conf-high { color: #1a7a3a; }
+    .conf-mid  { color: #8a6200; }
+    .conf-low  { color: #9a4000; }
 
-    /* Timeline */
+    /* ─── Evidence / sources ─────────────────────────────────────────────── */
+    .evidence-row {
+      padding: 9px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .evidence-rank {
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      color: #ccc;
+      margin-right: 6px;
+    }
+    .evidence-title { font-weight: 700; font-size: 10pt; color: #111; margin-bottom: 3px; }
+    .evidence-source { font-family: 'Courier New', monospace; font-size: 7.5pt; color: #888; }
+    .evidence-tier {
+      display: inline-block;
+      font-family: 'Courier New', monospace;
+      font-size: 6pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 1px 5px;
+      border: 1px solid #e0e0e0;
+      color: #999;
+      margin-left: 6px;
+    }
+
+    /* ─── Timeline ───────────────────────────────────────────────────────── */
     .timeline-row {
       display: flex;
-      gap: 24px;
-      padding: 9px 0;
+      gap: 20px;
+      padding: 8px 0;
       border-bottom: 1px solid #f0f0f0;
       align-items: baseline;
     }
-    .timeline-date { font-family: 'Courier New', monospace; font-size: 9pt; color: #c00; flex-shrink: 0; min-width: 1in; }
-    .timeline-event { font-size: 10.5pt; color: #222; }
+    .timeline-date {
+      font-family: 'Courier New', monospace;
+      font-size: 8.5pt;
+      color: #9a0000;
+      flex-shrink: 0;
+      min-width: 1in;
+      font-weight: 700;
+    }
+    .timeline-event { font-size: 10pt; color: #222; line-height: 1.5; }
 
-    /* Gaps */
+    /* ─── Intelligence gaps ──────────────────────────────────────────────── */
     .gap-row {
-      padding: 9px 0 9px 16px;
-      border-left: 3px solid #e0e0e0;
+      padding: 9px 0 9px 14px;
+      border-left: 3px solid #d0d0d0;
       margin-bottom: 8px;
-      font-size: 10.5pt;
+      font-size: 10pt;
       color: #444;
+      line-height: 1.5;
+    }
+    .gap-row::before {
+      content: "IRQ ";
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      color: #aaa;
+      letter-spacing: 0.12em;
     }
 
-    /* Confidence indicator */
-    .confidence-row {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .confidence-bar {
-      width: 80px;
-      height: 4px;
-      background: #e8e8e8;
-      position: relative;
-    }
-    .confidence-bar-fill { height: 100%; background: #c00; }
-    .confidence-label { font-family: 'Courier New', monospace; font-size: 8pt; color: #555; }
+    /* ─── Flow arrow ─────────────────────────────────────────────────────── */
+    .flow-arrow { color: #9a0000; margin: 0 6px; font-size: 11pt; }
 
+    /* ─── Empty state ────────────────────────────────────────────────────── */
     .empty-note {
       font-family: 'Courier New', monospace;
-      font-size: 9pt;
+      font-size: 8.5pt;
       color: #bbb;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.12em;
       padding: 20px 0;
       text-transform: uppercase;
     }
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .page { padding: 0.9in 1in; }
+      .page { padding: 0.75in 0.9in 0.85in; }
+      .page-header-bar { margin: -0.75in -0.9in 0.35in; }
     }
   `;
 
@@ -377,12 +558,17 @@ export function openPrintDossier(params: PrintDossierParams): void {
 
 <!-- PAGE 1: COVER -->
 <div class="cover">
-  <div>
-    <div class="cover-top">
-      <div class="atlas-logo"><span>ATLAS</span> / RSR INVESTIGATIVE INTELLIGENCE</div>
+  <div class="cover-classification-top">${escapeHtml(classification)}</div>
+  <div class="cover-body">
+    <div class="cover-header-bar">
+      <div class="atlas-wordmark"><strong>ATLAS</strong> &nbsp;/&nbsp; RSR INVESTIGATIVE INTELLIGENCE SYSTEM</div>
+      <div class="cover-case-stamp">
+        CASE-${String(caseId).padStart(6, "0")}<br>
+        ${escapeHtml(dateStr.toUpperCase())} &nbsp;${escapeHtml(timeStr)}
+      </div>
     </div>
-    <div class="classification-band">${escapeHtml(classification)}</div>
     <div class="cover-title">${escapeHtml(caseTitle)}</div>
+    <hr class="cover-rule">
     <div class="cover-meta">
       <div class="meta-item">
         <div class="meta-label">Case Reference</div>
@@ -397,30 +583,66 @@ export function openPrintDossier(params: PrintDossierParams): void {
         <div class="meta-value">${escapeHtml(dateStr)}</div>
       </div>
       <div class="meta-item">
-        <div class="meta-label">Generated At</div>
-        <div class="meta-value">${escapeHtml(timeStr)}</div>
-      </div>
-      <div class="meta-item" style="grid-column: span 2">
         <div class="meta-label">Intelligence Confidence</div>
-        <div class="meta-value" style="font-size:10pt">${escapeHtml(confidence)}</div>
+        <div class="meta-value" style="font-size:9.5pt">${escapeHtml(confidence)}</div>
         <div class="confidence-row">
           <div class="confidence-bar"><div class="confidence-bar-fill" style="width:${confidenceBarWidth}%"></div></div>
           <span class="confidence-label">${confidenceBarWidth}%</span>
         </div>
       </div>
+      <div class="meta-item">
+        <div class="meta-label">Entities Confirmed</div>
+        <div class="meta-value">${entities.length}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Source Documents</div>
+        <div class="meta-value">${documents.length}</div>
+      </div>
+    </div>
+    ${s.caseSummary ? `
+    <div class="cover-summary-block">
+      <div class="cover-summary-label">Executive Summary</div>
+      <div class="cover-summary-text">${escapeHtml(s.caseSummary.length > 350 ? s.caseSummary.slice(0, 347) + "…" : s.caseSummary)}</div>
+    </div>` : ""}
+    <div class="cover-stat-strip">
+      <div class="cover-stat">
+        <div class="cover-stat-num">${persons.length}</div>
+        <div class="cover-stat-label">Individuals</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">${orgs.length}</div>
+        <div class="cover-stat-label">Organizations</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">${timeline.length}</div>
+        <div class="cover-stat-label">Timeline Events</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">${flows.filter(f => (f.normalizedAmount ?? 0) > 0).length}</div>
+        <div class="cover-stat-label">Financial Signals</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">${(s.entityRelationships ?? []).length}</div>
+        <div class="cover-stat-label">Relationships</div>
+      </div>
     </div>
   </div>
-  <div class="cover-footer">
-    ATLAS-CORE AUTOMATED INTELLIGENCE REPORT &nbsp;·&nbsp; RSR // ATLAS PLATFORM &nbsp;·&nbsp; FOR AUTHORIZED USE ONLY
+  <div class="cover-footer-bar">
+    ATLAS-CORE &nbsp;·&nbsp; AUTOMATED INTELLIGENCE REPORT &nbsp;·&nbsp; RSR PLATFORM &nbsp;·&nbsp; FOR AUTHORIZED USE ONLY
   </div>
+  <div class="cover-classification-bottom">${escapeHtml(classification)}</div>
 </div>
 
 <!-- PAGE 2: EXECUTIVE SUMMARY -->
 <div class="page">
-  <div class="section-number">SECTION 01</div>
-  <div class="section-header">
-    <div class="section-title">Executive Summary</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 01</div>
+      <div class="page-section-title">Executive Summary</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   ${s.caseSummary ? `
     <div class="summary-text">${escapeHtml(s.caseSummary)}</div>
@@ -454,10 +676,14 @@ export function openPrintDossier(params: PrintDossierParams): void {
 
 <!-- PAGE 3: PRIMARY ACTORS -->
 <div class="page">
-  <div class="section-number">SECTION 02</div>
-  <div class="section-header">
-    <div class="section-title">Primary Actors</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 02</div>
+      <div class="page-section-title">Primary Actors</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   ${persons.length > 0 ? `
     <div class="actor-group-label">Individuals</div>
@@ -501,10 +727,14 @@ export function openPrintDossier(params: PrintDossierParams): void {
 
 <!-- PAGE 4: KEY FINDINGS + WHY THIS MATTERS -->
 <div class="page">
-  <div class="section-number">SECTION 03</div>
-  <div class="section-header">
-    <div class="section-title">Key Findings</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 03</div>
+      <div class="page-section-title">Key Findings</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   ${angles.length > 0 ? `
     <div class="actor-group-label">Investigative Angles</div>
@@ -559,44 +789,72 @@ export function openPrintDossier(params: PrintDossierParams): void {
 
 <!-- PAGE 5: FINANCIAL FLOWS -->
 <div class="page">
-  <div class="section-number">SECTION 04</div>
-  <div class="section-header">
-    <div class="section-title">Financial Flows</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 04</div>
+      <div class="page-section-title">Financial Flows</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
-  ${flows.length > 0 ? flows.map(f => {
-    const displayAmt = f.amountDisplay ?? f.amountRaw ?? f.amount ?? null;
-    const summary = f.eventSummary ?? f.context ?? null;
-    const sigType = f.signalType ? f.signalType.replace(/_/g, " ") : null;
-    return `
-    <div class="flow-row">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
-        <span class="flow-entity">${escapeHtml(f.entityName)}</span>
-        ${displayAmt ? `<span style="font-family:'Courier New',monospace;font-weight:700;color:#b00000;font-size:11pt">${escapeHtml(displayAmt)}</span>` : ""}
-      </div>
-      ${sigType ? `<div style="font-family:'Courier New',monospace;font-size:7.5pt;color:#888;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px">${escapeHtml(sigType)}</div>` : ""}
-      ${f.programName ? `<div style="font-size:9.5pt;color:#555;margin-top:3px">[${escapeHtml(f.programName)}]</div>` : ""}
-      ${summary ? `<div class="flow-context">${escapeHtml(summary.slice(0, 200))}</div>` : ""}
-      ${(f.controlledBy || f.receivedBy) ? `<div style="font-family:'Courier New',monospace;font-size:7.5pt;color:#999;margin-top:3px;letter-spacing:0.08em">${f.controlledBy ? `FROM: ${escapeHtml(f.controlledBy)}` : ""}${f.controlledBy && f.receivedBy ? " &nbsp;→&nbsp; " : ""}${f.receivedBy ? `TO: ${escapeHtml(f.receivedBy)}` : ""}</div>` : ""}
-      ${f.confidence !== undefined && f.confidence !== null ? `<div class="flow-meta">CONFIDENCE: ${Math.round((f.confidence ?? 0) * 100)}%${f.inferred ? " · INFERRED SIGNAL" : ""}</div>` : ""}
-    </div>`;
-  }).join("") : `<div class="empty-note">No financial signals detected. Ingest documents containing budgets, contracts, or funding agreements.</div>`}
+  ${flows.length > 0 ? `
+  <table class="flows-table">
+    <thead>
+      <tr>
+        <th style="width:22%">ENTITY / PROGRAM</th>
+        <th style="width:36%">SIGNAL CONTEXT</th>
+        <th class="amt-col" style="width:14%">AMOUNT</th>
+        <th style="width:14%">TYPE</th>
+        <th class="conf-col" style="width:14%">CONF</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${flows.map((f) => {
+        const displayAmt = f.amountDisplay ?? f.amountRaw ?? f.amount ?? null;
+        const summary = f.eventSummary ?? f.context ?? null;
+        const sigType = f.signalType ? f.signalType.replace(/^NON_NUMERIC_/, "").replace(/_/g, " ") : "—";
+        const conf = f.confidence ?? null;
+        const confPct = conf !== null ? Math.round(conf * 100) : null;
+        const confClass = confPct === null ? "" : confPct >= 75 ? "conf-high" : confPct >= 50 ? "conf-mid" : "conf-low";
+        const hasAmt = displayAmt && displayAmt !== "NON-NUMERIC";
+        return `
+      <tr>
+        <td>
+          <strong style="font-size:9.5pt;color:#111">${escapeHtml(f.entityName ?? "—")}</strong>
+          ${f.programName ? `<span class="flow-type-badge">${escapeHtml(f.programName.length > 30 ? f.programName.slice(0, 28) + "…" : f.programName)}</span>` : ""}
+          ${(f.controlledBy || f.receivedBy) ? `<div class="flow-actors">${f.controlledBy ? `FROM: ${escapeHtml(f.controlledBy)}` : ""}${f.controlledBy && f.receivedBy ? " → " : ""}${f.receivedBy ? `TO: ${escapeHtml(f.receivedBy)}` : ""}</div>` : ""}
+        </td>
+        <td class="flow-context-cell">${summary ? escapeHtml(summary.slice(0, 160)) + (summary.length > 160 ? "…" : "") : "<em style='color:#bbb'>No summary</em>"}</td>
+        <td style="text-align:right">${hasAmt && displayAmt ? `<span class="flow-amount">${escapeHtml(displayAmt)}</span>` : `<span style="color:#ccc;font-family:'Courier New',monospace;font-size:8pt">—</span>`}</td>
+        <td><span class="flow-type-badge" style="font-size:7pt">${escapeHtml(sigType.toUpperCase())}</span>${f.inferred ? `<span style="font-family:'Courier New',monospace;font-size:6pt;color:#aaa;display:block;margin-top:2px">INFERRED</span>` : ""}</td>
+        <td class="flow-conf-cell ${confClass}">${confPct !== null ? confPct + "%" : "—"}</td>
+      </tr>`;
+      }).join("")}
+    </tbody>
+  </table>` : `<div class="empty-note">No financial signals detected. Ingest documents containing budgets, contracts, or funding agreements.</div>`}
 </div>
 
 <!-- PAGE 6: EVIDENCE -->
 <div class="page">
-  <div class="section-number">SECTION 05</div>
-  <div class="section-header">
-    <div class="section-title">Source Evidence</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 05</div>
+      <div class="page-section-title">Source Evidence</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   ${topDocs.length > 0 ? topDocs.map((d, i) => `
     <div class="evidence-row">
-      <div class="evidence-title">${escapeHtml(d.title)}</div>
+      <div class="evidence-title">
+        <span class="evidence-rank">${String(i + 1).padStart(2, "0")}.</span>${escapeHtml(d.title)}
+        ${d.tier ? `<span class="evidence-tier">${escapeHtml(d.tier)}</span>` : ""}
+      </div>
       <div class="evidence-source">
         ${d.source ? escapeHtml(d.source) + " &nbsp;·&nbsp; " : ""}
-        ${d.signalScore !== null && d.signalScore !== undefined ? `Signal: ${Math.round((d.signalScore ?? 0) * 100)}%` : ""}
-        &nbsp;·&nbsp; Doc ${i + 1} of ${topDocs.length}
+        ${d.signalScore !== null && d.signalScore !== undefined ? `Signal Score: ${Math.round((d.signalScore ?? 0) * 100)}%` : ""}
       </div>
     </div>
   `).join("") : `<div class="empty-note">No source documents ingested.</div>`}
@@ -604,10 +862,14 @@ export function openPrintDossier(params: PrintDossierParams): void {
 
 <!-- PAGE 7: TIMELINE -->
 <div class="page">
-  <div class="section-number">SECTION 06</div>
-  <div class="section-header">
-    <div class="section-title">Timeline</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 06</div>
+      <div class="page-section-title">Timeline</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   ${timeline.length > 0 ? timeline.map(t => `
     <div class="timeline-row">
@@ -620,10 +882,14 @@ export function openPrintDossier(params: PrintDossierParams): void {
 <!-- KEY FINDINGS PAGE (T005/T006) -->
 ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 || (s.powerNodes ?? []).length > 0 || (s.oversightFailures ?? []).length > 0) ? `
 <div class="page">
-  <div class="section-number">SECTION 07-A</div>
-  <div class="section-header">
-    <div class="section-title">Investigative Intelligence</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 07-A</div>
+      <div class="page-section-title">Investigative Intelligence</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
 
   ${(s.keyFindings ?? []).length > 0 ? `
@@ -668,10 +934,14 @@ ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 ||
 
 <!-- PAGE 8: POWER STRUCTURE + RISK FLAGS -->
 <div class="page">
-  <div class="section-number">SECTION 07</div>
-  <div class="section-header">
-    <div class="section-title">Power Structure &amp; Risk</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 07</div>
+      <div class="page-section-title">Power Structure &amp; Risk</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
 
   ${s.powerStructure ? `
@@ -701,10 +971,14 @@ ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 ||
 
 <!-- PAGE 9: INTELLIGENCE GAPS -->
 <div class="page">
-  <div class="section-number">SECTION 08</div>
-  <div class="section-header">
-    <div class="section-title">Intelligence Gaps</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 08</div>
+      <div class="page-section-title">Intelligence Gaps</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   <div style="margin-bottom:20px;font-size:10.5pt;color:#555">
     The following areas require additional sourcing or verification before conclusions can be drawn.
@@ -716,10 +990,14 @@ ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 ||
 
 <!-- PAGE 10: ENTITY NETWORK MAP (text-based) -->
 <div class="page">
-  <div class="section-number">SECTION 09</div>
-  <div class="section-header">
-    <div class="section-title">Entity Network Map</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 09</div>
+      <div class="page-section-title">Entity Network Map</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   <div style="margin-bottom:20px;font-size:10.5pt;color:#555">
     Confirmed entity relationships extracted from ingested source material. Confidence ratings reflect evidence chain strength.
@@ -770,10 +1048,14 @@ ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 ||
 
 <!-- PAGE 11: SOURCE CREDIBILITY ASSESSMENT -->
 <div class="page">
-  <div class="section-number">SECTION 10</div>
-  <div class="section-header">
-    <div class="section-title">Source Credibility Assessment</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 10</div>
+      <div class="page-section-title">Source Credibility Assessment</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   <div style="margin-bottom:20px;font-size:10.5pt;color:#555">
     Signal quality scores for ingested source documents. Higher scores indicate greater relevance, verifiability, and corroboration.
@@ -831,10 +1113,14 @@ ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 ||
 
 <!-- PAGE 12: RECOMMENDED ACTIONS & NEXT STEPS -->
 <div class="page">
-  <div class="section-number">SECTION 11</div>
-  <div class="section-header">
-    <div class="section-title">Recommended Actions &amp; Next Steps</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 11</div>
+      <div class="page-section-title">Recommended Actions &amp; Next Steps</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
   ${(s.recommendedActions ?? []).length > 0 ? `
   <div class="actor-group-label">Analyst Recommended Actions</div>
@@ -879,10 +1165,14 @@ ${((s.keyFindings ?? []).length > 0 || (s.financialRedFlags ?? []).length > 0 ||
 
 <!-- PAGE 13: CLASSIFICATION & LEGAL NOTICE -->
 <div class="page">
-  <div class="section-number">SECTION 12</div>
-  <div class="section-header">
-    <div class="section-title">Classification &amp; Legal Notice</div>
-    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  <div class="page-header-bar">
+    <div class="page-header-left">
+      <div class="page-section-num">SECTION 12</div>
+      <div class="page-section-title">Classification &amp; Legal Notice</div>
+    </div>
+    <div class="page-header-right">
+      <div class="page-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+    </div>
   </div>
 
   <div style="border:2px solid #c00000;padding:20px;margin-bottom:32px;background:#fff8f8">

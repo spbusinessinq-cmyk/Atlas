@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
 import { useAuth } from "@/context/auth-context";
-import { BlackdogStatus } from "@/components/BlackdogStatus";
+import { BlackdogStatus, BlackdogHeaderChip } from "@/components/BlackdogStatus";
 
 function AtlasRadar() {
   return (
@@ -230,6 +230,8 @@ export function Layout({ children }: LayoutProps) {
               />
               <Search className="w-3 h-3 absolute right-0 top-1/2 -translate-y-1/2 text-neutral-800 group-focus-within:text-cyan-600 transition-colors" />
             </div>
+            <span className="w-px h-3 bg-[#ffffff08]" />
+            <BlackdogHeaderChip />
             <span className="w-px h-3 bg-[#ffffff08]" />
             <button className="text-neutral-700 hover:text-white transition-colors">
               <Bell className="w-3 h-3" />

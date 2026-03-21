@@ -404,6 +404,16 @@ interface GraphCanvasProps {
   documentCount?: number;
   showSuggested?: boolean;
   onToggleSuggested?: (v: boolean) => void;
+  financialSignals?: Array<{
+    entityName?: string | null;
+    controlledBy?: string | null;
+    receivedBy?: string | null;
+    amountDisplay?: string | null;
+    normalizedAmount?: number | null;
+    signalType?: string | null;
+    financialConfidence?: number | null;
+  }>;
+  showFinancialLinks?: boolean;
 }
 
 const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: number; label: string; dashed?: boolean }> = {
@@ -449,6 +459,8 @@ export default function GraphCanvas({
   documentCount = 0,
   showSuggested = true,
   onToggleSuggested,
+  financialSignals = [],
+  showFinancialLinks = true,
 }: GraphCanvasProps) {
   const posStorageKey = `atlas-graph-pos-${entities[0]?.caseId ?? caseId ?? "default"}`;
   const rfRef = useRef<{ fitView: (opts?: object) => void; fitBounds?: (bounds: object, opts?: object) => void } | null>(null);
@@ -463,6 +475,7 @@ export default function GraphCanvas({
 
   const [hideIsolated, setHideIsolated] = useState(false);
   const [hideLowDegree, setHideLowDegree] = useState(false);
+  const [showFinancialLinksLocal, setShowFinancialLinksLocal] = useState(showFinancialLinks);
   const [isolatedEntityId, setIsolatedEntityId] = useState<number | null>(null);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addMode, setAddMode] = useState<"entity" | "relationship">("entity");
@@ -522,37 +535,70 @@ export default function GraphCanvas({
     queryClient.invalidateQueries({ queryKey: ["/api/entities"] });
   }, [caseId, entities, queryClient]);
 
-  // Compute "source of truth" nodes from entity list + saved positions
+  // Compute "source of truth" nodes from entity list + saved positions (T011/T013 — guarded)
   const computedNodes = useMemo(() => {
-    const radius = 260;
-    const center = { x: 420, y: 300 };
-    return visibleEntities.map((entity, i) => {
-      const angle = (i / visibleEntities.length) * 2 * Math.PI;
-      const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
-      const isSelected = entity.id === selectedEntityId;
-      const defaultPos = {
-        x: center.x + radius * Math.cos(angle),
-        y: center.y + radius * Math.sin(angle),
-      };
-      const pos = nodePositions[entity.id.toString()] || defaultPos;
-      return {
-        id: entity.id.toString(),
-        type: "atlas",
-        data: {
-          label: entity.name,
-          type: entity.type,
-          color,
-          isSelected,
-          onSelect: () => onEntitySelect(entity.id),
-          onRemove: () => handleNodeRemove(entity.id),
-          onDeleteGlobal: () => handleNodeDeleteGlobal(entity.id),
-          onIsolate: () => setIsolatedEntityId(prev => prev === entity.id ? null : entity.id),
-          onFocus: () => rfRef.current?.fitView({ padding: 0.5, duration: 400 }),
-        },
-        position: pos,
-      };
-    });
-  }, [visibleEntities, selectedEntityId, nodePositions, onEntitySelect, handleNodeRemove, handleNodeDeleteGlobal]);
+    try {
+      const radius = 260;
+      const center = { x: 420, y: 300 };
+      const result = visibleEntities
+        .filter(entity => {
+          // T012 — soft mode: preserve borderline but skip truly empty/broken entries
+          if (!entity.name || entity.name.trim().length === 0) return false;
+          if (/^[\d\s\$£€,%\.\/\-\+]+$/.test(entity.name.trim())) return false;
+          return true;
+        })
+        .map((entity, i, arr) => {
+          const angle = (i / Math.max(arr.length, 1)) * 2 * Math.PI;
+          const rawLabel = entity.name?.trim() ?? "UNKNOWN";
+          // T012 — coerce safe label if name is long/malformed
+          const safeLabel = rawLabel.length > 50 ? rawLabel.slice(0, 47) + "…" : rawLabel;
+          const color = TYPE_COLORS[entity.type] || TYPE_COLORS.other;
+          const isSelected = entity.id === selectedEntityId;
+          const defaultPos = {
+            x: center.x + radius * Math.cos(angle),
+            y: center.y + radius * Math.sin(angle),
+          };
+          const pos = nodePositions[entity.id.toString()] || defaultPos;
+          return {
+            id: entity.id.toString(),
+            type: "atlas",
+            data: {
+              label: safeLabel,
+              type: entity.type || "unknown",
+              color,
+              isSelected,
+              onSelect: () => onEntitySelect(entity.id),
+              onRemove: () => handleNodeRemove(entity.id),
+              onDeleteGlobal: () => handleNodeDeleteGlobal(entity.id),
+              onIsolate: () => setIsolatedEntityId(prev => prev === entity.id ? null : entity.id),
+              onFocus: () => rfRef.current?.fitView({ padding: 0.5, duration: 400 }),
+            },
+            position: pos,
+          };
+        });
+
+      // T011 — graph state diagnostic log
+      console.debug("[ATLAS GRAPH]", {
+        caseId: caseId || entities[0]?.caseId,
+        rawEntities: entities.length,
+        visibleEntities: visibleEntities.length,
+        computedNodes: result.length,
+        edges: relationships.length,
+        filterState: { hideIsolated, hideLowDegree, isolatedEntityId },
+        resolveStatus: result.length === 0 && visibleEntities.length > 0
+          ? "VALIDATION_FILTERED_ALL"
+          : result.length === 0
+          ? "NO_VISIBLE_ENTITIES"
+          : "OK",
+      });
+
+      return result;
+    } catch (err) {
+      // T013 — computed nodes guard: catch any mapping failure, return safe empty state
+      console.error("[ATLAS GRAPH] computedNodes mapping failed:", err);
+      return [];
+    }
+  }, [visibleEntities, selectedEntityId, nodePositions, onEntitySelect, handleNodeRemove, handleNodeDeleteGlobal, caseId, entities, relationships, hideIsolated, hideLowDegree, isolatedEntityId]);
 
   // useNodesState/useEdgesState give ReactFlow internal control over drag positions
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(computedNodes);
@@ -579,6 +625,23 @@ export default function GraphCanvas({
   }, [posStorageKey]);
 
   const computedEdges = useMemo(() => {
+    // Build name→id lookup for financial link matching
+    const nameToId = new Map<string, string>();
+    for (const e of entities) {
+      if (e.name) nameToId.set(e.name.toLowerCase().trim(), e.id.toString());
+    }
+
+    function matchEntityId(name: string | null | undefined): string | null {
+      if (!name) return null;
+      const key = name.toLowerCase().trim();
+      if (nameToId.has(key)) return nameToId.get(key)!;
+      // Partial match: any entity name that starts with the given name or vice versa
+      for (const [ename, eid] of nameToId.entries()) {
+        if (ename.startsWith(key) || key.startsWith(ename)) return eid;
+      }
+      return null;
+    }
+
     const confirmed = relationships.map((rel) => {
       const isSelected = rel.id === selectedRelId;
       return {
@@ -648,8 +711,58 @@ export default function GraphCanvas({
         };
       });
 
-    return [...confirmed, ...suggested];
-  }, [relationships, selectedRelId, suggestedEdges, showSuggested]);
+    // Financial link edges — green dashed arrows between actors in financial signals
+    const financialLinks: typeof confirmed = [];
+    if (showFinancialLinksLocal && financialSignals.length > 0) {
+      const existingPairs = new Set([
+        ...relationships.map(r => `${Math.min(r.entityAId, r.entityBId)}-${Math.max(r.entityAId, r.entityBId)}`),
+        ...suggested.map(se => `${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`),
+      ]);
+      const finPairs = new Set<string>();
+
+      for (const sig of financialSignals) {
+        const srcName = sig.controlledBy ?? sig.entityName;
+        const tgtName = sig.receivedBy ?? null;
+        const srcId = matchEntityId(srcName);
+        const tgtId = matchEntityId(tgtName);
+        if (!srcId || !tgtId || srcId === tgtId) continue;
+        const numA = parseInt(srcId), numB = parseInt(tgtId);
+        const pairKey = `${Math.min(numA, numB)}-${Math.max(numA, numB)}`;
+        if (existingPairs.has(pairKey) || finPairs.has(pairKey)) continue;
+        finPairs.add(pairKey);
+        const amt = sig.amountDisplay && sig.amountDisplay !== "NON-NUMERIC" ? sig.amountDisplay : null;
+        financialLinks.push({
+          id: `fin-${pairKey}`,
+          source: srcId,
+          target: tgtId,
+          label: amt ? `$ ${amt}` : "FINANCIAL",
+          animated: false,
+          data: { suggested: false },
+          style: {
+            stroke: "#22c55e",
+            strokeWidth: 1.5,
+            strokeDasharray: "4 5",
+            opacity: 0.55,
+          },
+          labelStyle: {
+            fill: "#22c55e",
+            fontFamily: "monospace",
+            fontSize: 7,
+            opacity: 0.85,
+          },
+          labelBgStyle: { fill: "#000", fillOpacity: 0.88 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#22c55e",
+            width: 10,
+            height: 10,
+          },
+        });
+      }
+    }
+
+    return [...confirmed, ...suggested, ...financialLinks];
+  }, [relationships, selectedRelId, suggestedEdges, showSuggested, financialSignals, showFinancialLinksLocal, entities]);
 
   // Sync computed edges into ReactFlow state
   useEffect(() => {
@@ -708,6 +821,37 @@ export default function GraphCanvas({
             Ingest source documents and promote entities to build the network map.
           </div>
           <div className="atlas-empty-badge">→ OPEN WEB INGEST TO BEGIN</div>
+        </div>
+      </div>
+    );
+  }
+
+  // T010 — safe fallback: entities exist but computedNodes is zero (filter/guard eliminated all)
+  if (rfNodes.length === 0 && visibleEntities.length === 0 && entities.length > 0) {
+    const reason = hideIsolated
+      ? "ISOLATED NODES HIDDEN — ALL ENTITIES FILTERED"
+      : hideLowDegree
+      ? "LOW-DEGREE FILTER ACTIVE — ALL ENTITIES HIDDEN"
+      : isolatedEntityId !== null
+      ? "ISOLATION MODE — NO CONNECTED NODES FOUND"
+      : "GRAPH FILTER ACTIVE — NO MATCHING NODES";
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-[#000]">
+        <div className="atlas-empty-state max-w-sm">
+          <GitBranch className="atlas-empty-icon w-10 h-10" />
+          <div className="atlas-empty-title">NO GRAPH DATA VISIBLE</div>
+          <div className="atlas-empty-sub">{reason}</div>
+          <div className="space-y-1 mt-3 font-mono text-[8px] text-neutral-700 uppercase text-left w-full">
+            <div>ENTITIES IN REGISTRY: <span className="text-neutral-500">{entities.length}</span></div>
+            <div>DOCUMENTS INGESTED: <span className="text-neutral-500">{documentCount}</span></div>
+            <div>CONFIRMED EDGES: <span className="text-neutral-500">{relationships.length}</span></div>
+          </div>
+          <button
+            onClick={() => { setHideIsolated(false); setHideLowDegree(false); setIsolatedEntityId(null); }}
+            className="mt-4 px-3 py-1.5 border border-red-900/40 font-mono text-[8px] uppercase tracking-widest text-red-500 hover:bg-red-900/10 transition-colors"
+          >
+            CLEAR ALL FILTERS
+          </button>
         </div>
       </div>
     );
@@ -784,6 +928,26 @@ export default function GraphCanvas({
 
       {/* Layout controls overlay */}
       <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1">
+        {financialSignals.length > 0 && (
+          <button
+            onClick={() => setShowFinancialLinksLocal(v => !v)}
+            title={showFinancialLinksLocal ? "Hide financial flow links" : "Show financial flow links"}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.25rem",
+              padding: "0.2rem 0.5rem",
+              background: showFinancialLinksLocal ? "rgba(34,197,94,0.06)" : "rgba(2,4,10,0.9)",
+              border: showFinancialLinksLocal ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(255,255,255,0.07)",
+              color: showFinancialLinksLocal ? "rgba(34,197,94,0.85)" : "rgba(255,255,255,0.3)",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+              textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+              transition: "all 0.12s",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+            }}
+          >
+            {showFinancialLinksLocal ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+            {showFinancialLinksLocal ? "$ FLOWS ✓" : "$ FLOWS"}
+          </button>
+        )}
         {suggestedEdges.length > 0 && (
           <button
             onClick={() => onToggleSuggested ? onToggleSuggested(!showSuggested) : undefined}

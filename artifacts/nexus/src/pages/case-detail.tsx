@@ -668,6 +668,7 @@ function CaseDetailInner({
                 documentCount={documents.length}
                 showSuggested={showSuggested}
                 onToggleSuggested={onToggleSuggested}
+                financialSignals={financialSignals}
               />
             </div>
           )}
@@ -2758,6 +2759,10 @@ function DossierCenterTab({ caseId, caseTitle }: { caseId: number; caseTitle: st
 // ─── Flow Trace Panel ────────────────────────────────────────────────────────
 
 function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlow[]; financialSignals: any[] }) {
+  const [numericOnly, setNumericOnly] = React.useState(true);
+  const [sortBy, setSortBy] = React.useState<"amount" | "confidence">("amount");
+  const [entityFilter, setEntityFilter] = React.useState("");
+
   const SIGNAL_COLOR: Record<string, string> = {
     fraud_misuse: "text-red-400",
     contract: "text-purple-400",
@@ -2786,8 +2791,6 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
     program_funding: "border-green-900/20",
   };
 
-  const hasData = financialSignals.length > 0 || moneyFlows.length > 0;
-
   function confColor(conf: number | null): string {
     if (conf === null) return "text-neutral-700";
     if (conf >= 0.85) return "text-green-500";
@@ -2795,16 +2798,80 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
     return "text-orange-500";
   }
 
+  const numericSignals = financialSignals.filter((sig: any) =>
+    sig.normalizedAmount !== null &&
+    sig.normalizedAmount > 0 &&
+    !sig.signalType?.startsWith("NON_NUMERIC") &&
+    sig.amountDisplay !== "NON-NUMERIC"
+  );
+
+  const displaySignals = React.useMemo(() => {
+    let sigs = numericOnly ? numericSignals : financialSignals;
+    if (entityFilter.trim()) {
+      const q = entityFilter.toLowerCase();
+      sigs = sigs.filter((s: any) =>
+        (s.entityName ?? "").toLowerCase().includes(q) ||
+        (s.controlledBy ?? "").toLowerCase().includes(q) ||
+        (s.receivedBy ?? "").toLowerCase().includes(q) ||
+        (s.programName ?? "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "amount") {
+      sigs = [...sigs].sort((a: any, b: any) => (b.normalizedAmount ?? 0) - (a.normalizedAmount ?? 0));
+    } else {
+      sigs = [...sigs].sort((a: any, b: any) => (b.financialConfidence ?? 0) - (a.financialConfidence ?? 0));
+    }
+    return sigs;
+  }, [numericOnly, numericSignals, financialSignals, entityFilter, sortBy]);
+
+  const hasData = financialSignals.length > 0 || moneyFlows.length > 0;
+
   return (
     <div className="nexus-panel rounded-none h-full flex flex-col">
       <div className="nexus-header-strip flex items-center justify-between">
         <span className="nexus-label">FLOW TRACE</span>
-        {financialSignals.length > 0 && (
-          <span className="font-mono text-[9px] text-green-500 pr-3">
-            {financialSignals.length} VERIFIED SIGNAL{financialSignals.length !== 1 ? "S" : ""}
+        <div className="flex items-center gap-2 pr-2">
+          <span className="font-mono text-[8px] text-neutral-700">
+            {numericOnly ? numericSignals.length : financialSignals.length} SIGNALS
           </span>
-        )}
+        </div>
       </div>
+
+      {/* Control bar */}
+      {hasData && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#ffffff06] bg-[#020406] flex-wrap">
+          <button
+            onClick={() => setNumericOnly(v => !v)}
+            className={cn("font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border transition-colors",
+              numericOnly ? "border-green-800/50 text-green-500 bg-green-500/5" : "border-[#ffffff08] text-neutral-600 hover:text-neutral-400"
+            )}
+          >
+            {numericOnly ? "NUMERIC ✓" : "ALL SIGNALS"}
+          </button>
+          <button
+            onClick={() => setSortBy(v => v === "amount" ? "confidence" : "amount")}
+            className="font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border border-[#ffffff08] text-neutral-600 hover:text-neutral-400 transition-colors"
+          >
+            SORT: {sortBy === "amount" ? "AMOUNT ↓" : "CONF ↓"}
+          </button>
+          <input
+            type="text"
+            value={entityFilter}
+            onChange={e => setEntityFilter(e.target.value)}
+            placeholder="FILTER ENTITY..."
+            className="bg-transparent border border-[#ffffff08] font-mono text-[7px] text-neutral-400 placeholder:text-neutral-800 px-2 py-0.5 focus:outline-none focus:border-neutral-700 w-28"
+          />
+          {(entityFilter || !numericOnly) && (
+            <button
+              onClick={() => { setEntityFilter(""); setNumericOnly(true); }}
+              className="font-mono text-[7px] uppercase tracking-widest text-neutral-700 hover:text-red-500 transition-colors"
+            >
+              ✕ CLEAR
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {!hasData ? (
           <div className="py-12 text-center space-y-2">
@@ -2816,15 +2883,38 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
               INGEST DOCUMENTS REFERENCING BUDGETS, CONTRACTS, GRANTS OR APPROPRIATIONS TO AUTO-DETECT SIGNALS
             </div>
           </div>
+        ) : displaySignals.length === 0 && numericOnly ? (
+          <div className="py-12 text-center space-y-2">
+            <TrendingUp className="w-6 h-6 text-neutral-800 mx-auto mb-3" />
+            <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
+              NO VALIDATED NUMERIC FLOWS DETECTED
+            </div>
+            <div className="font-mono text-[9px] text-neutral-800 uppercase mt-1 max-w-[260px] mx-auto leading-relaxed">
+              {financialSignals.length > 0
+                ? `${financialSignals.length} NON-NUMERIC SIGNAL${financialSignals.length !== 1 ? "S" : ""} FOUND — TOGGLE "ALL SIGNALS" TO VIEW`
+                : "INGEST DOCUMENTS WITH EXPLICIT DOLLAR AMOUNTS, CONTRACT VALUES OR BUDGET LINE ITEMS"}
+            </div>
+            <button
+              onClick={() => setNumericOnly(false)}
+              className="mt-2 font-mono text-[8px] uppercase tracking-widest px-3 py-1 border border-[#ffffff08] text-neutral-600 hover:text-neutral-300 transition-colors"
+            >
+              SHOW ALL SIGNALS
+            </button>
+          </div>
+        ) : displaySignals.length === 0 ? (
+          <div className="py-10 text-center font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
+            NO SIGNALS MATCH CURRENT FILTER
+          </div>
         ) : (
           <>
-            {financialSignals.length > 0 && (
+            {displaySignals.length > 0 && (
               <div>
                 <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest mb-2">
-                  AUTO-DETECTED FINANCIAL SIGNALS
+                  {numericOnly ? "VALIDATED NUMERIC FLOWS" : "ALL DETECTED FINANCIAL SIGNALS"}
+                  {entityFilter && ` — FILTERED: "${entityFilter}"`}
                 </div>
                 <div className="space-y-2">
-                  {financialSignals.map((sig: any) => {
+                  {displaySignals.map((sig: any, sigIdx: number) => {
                     const typeKey = (sig.signalType || "").toLowerCase();
                     const borderClass = SIGNAL_BORDER[typeKey] ?? "border-[#ffffff0d]";
                     const conf: number | null = sig.financialConfidence ?? null;
@@ -2838,7 +2928,7 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
                       "text-amber-700 border-amber-900/40";
                     return (
                     <div
-                      key={sig.id}
+                      key={sig.id ?? sigIdx}
                       className={`p-3 border ${isNonNumeric ? "border-amber-900/20 bg-amber-950/5" : borderClass + " bg-[#0a0e14]"} space-y-2`}
                     >
                       {/* Header: type badge + strength badge + amount */}
