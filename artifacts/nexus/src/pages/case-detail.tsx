@@ -2854,6 +2854,7 @@ function DefaultInspector({
   const [dossier, setDossier] = React.useState<null | Record<string, any>>(null);
   const [dossierLoading, setDossierLoading] = React.useState(false);
   const [dossierExpanded, setDossierExpanded] = React.useState(false);
+  const [exportToast, setExportToast] = React.useState(false);
   const [statusOpen, setStatusOpen] = React.useState(false);
   const [triageOpen, setTriageOpen] = React.useState(false);
   const [qualityOpen, setQualityOpen] = React.useState(false);
@@ -2861,6 +2862,36 @@ function DefaultInspector({
   const [dossierSectionOpen, setDossierSectionOpen] = React.useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+
+  const triggerExport = (d: Record<string, any>) => {
+    openPrintDossier({
+      caseId: Number(caseId),
+      caseTitle: caseData.title,
+      caseStatus: caseData.status,
+      autoBuildQuality: parseSeedDiag(caseData.description)?.autoBuildQuality ?? null,
+      entities: entities.map(e => ({ name: e.name, type: e.type, docCount: (e as any).docCount ?? 0 })),
+      documents,
+      dossierSections: d.sections ?? {},
+    });
+    setExportToast(true);
+    setTimeout(() => setExportToast(false), 3500);
+  };
+
+  const handleGenerateAndExport = async () => {
+    if (dossier) {
+      triggerExport(dossier);
+      return;
+    }
+    setDossierLoading(true);
+    setDossierSectionOpen(true);
+    try {
+      const r = await fetch(`/api/cases/${caseId}/dossier`);
+      const d = await r.json();
+      setDossier(d);
+      setDossierExpanded(true);
+      triggerExport(d);
+    } catch { /* silent */ } finally { setDossierLoading(false); }
+  };
 
   const bulkReject = async (type: string) => {
     setCtrlWorking(true); setCtrlMsg(null);
@@ -3142,67 +3173,72 @@ function DefaultInspector({
           </div>
         )}
 
-        {/* ══ SECTION 4: QUALITY CONTROLS ══ */}
-        <div>
-          <button
-            onClick={() => setQualityOpen(o => !o)}
-            className={cn("atlas-collapse-btn", qualityOpen && "open")}
-          >
-            <span>QUALITY CONTROLS</span>
-            <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{qualityOpen ? "▲" : "▼"}</span>
-          </button>
-          {qualityOpen && (
-            <div className="px-2 pb-2 space-y-1">
-              {ctrlMsg && !triageOpen && (
-                <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1 mb-1">{ctrlMsg}</div>
-              )}
-              <button disabled={ctrlWorking} onClick={() => bulkReject("low-confidence")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                <span className="text-[10px]">✕</span> REJECT LOW-CONFIDENCE MENTIONS
-              </button>
-              <button disabled={ctrlWorking} onClick={() => bulkReject("single-word-person")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                <span className="text-[10px]">✕</span> REJECT SINGLE-WORD PERSONS
-              </button>
-              <button disabled={ctrlWorking} onClick={purgeFailedDocs}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-600 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                <span className="text-[10px]">⊗</span> PURGE FAILED DOCUMENTS
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* ══ SECTION 5: ATLAS DOSSIER ══ */}
-        <div>
-          <button
-            onClick={() => setDossierSectionOpen(o => !o)}
-            className={cn("atlas-collapse-btn", dossierSectionOpen && "open")}
-            style={dossierSectionOpen ? { color: "rgba(139,92,246,0.55)" } : {}}
-          >
-            <span style={{ color: dossierSectionOpen ? "rgba(139,92,246,0.65)" : undefined }}>ATLAS DOSSIER</span>
-            <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{dossierSectionOpen ? "▲" : "▼"}</span>
-          </button>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+          {/* Header row — ALWAYS visible with export button */}
+          <div className="flex items-stretch" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <button
+              onClick={() => setDossierSectionOpen(o => !o)}
+              className="flex-1 flex items-center justify-between px-3 py-2 font-mono text-[8px] uppercase tracking-widest transition-colors"
+              style={{ color: dossierSectionOpen ? "rgba(139,92,246,0.65)" : "rgba(255,255,255,0.2)" }}
+            >
+              <div className="flex items-center gap-1.5">
+                <div className="w-0.5 h-3 rounded-full" style={{ background: dossier ? "rgba(139,92,246,0.6)" : "rgba(255,255,255,0.1)" }} />
+                <span>ATLAS DOSSIER</span>
+              </div>
+              <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.12)" }}>{dossierSectionOpen ? "▲" : "▼"}</span>
+            </button>
+            <button
+              onClick={handleGenerateAndExport}
+              disabled={dossierLoading}
+              style={{
+                borderLeft: "1px solid rgba(255,255,255,0.06)",
+                background: dossier
+                  ? "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(109,40,217,0.08))"
+                  : "rgba(0,0,0,0.2)",
+                color: dossier ? "rgba(167,139,250,0.9)" : "rgba(139,92,246,0.55)",
+                boxShadow: dossier ? "0 0 8px rgba(139,92,246,0.15)" : "none",
+              }}
+              className="px-3 py-2 font-mono text-[8px] uppercase tracking-widest flex items-center gap-1.5 flex-shrink-0 transition-all hover:opacity-80 disabled:opacity-40"
+            >
+              {dossierLoading ? (
+                <span className="font-mono text-[7px]">GENERATING...</span>
+              ) : dossier ? (
+                <>
+                  <span style={{ fontSize: "10px" }}>↓</span>
+                  <span>EXPORT PDF</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: "10px" }}>⊕</span>
+                  <span>GENERATE &amp; EXPORT</span>
+                </>
+              )}
+            </button>
+          </div>
+          {/* Toast feedback */}
+          {exportToast && (
+            <div
+              className="px-3 py-2 font-mono text-[8px] atlas-fade-in"
+              style={{
+                background: "rgba(139,92,246,0.08)",
+                borderBottom: "1px solid rgba(139,92,246,0.15)",
+                color: "rgba(167,139,250,0.8)",
+              }}
+            >
+              ✓ Dossier ready — export window opened
+            </div>
+          )}
           {dossierSectionOpen && (
             <div className="px-2.5 pb-2.5 space-y-2">
               {!dossier ? (
-                <button
-                  disabled={dossierLoading}
-                  onClick={async () => {
-                    setDossierLoading(true);
-                    try {
-                      const r = await fetch(`/api/cases/${caseId}/dossier`);
-                      const d = await r.json();
-                      setDossier(d);
-                      setDossierExpanded(true);
-                    } catch { /* silent */ } finally { setDossierLoading(false); }
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-violet-900/40 text-violet-700 hover:text-violet-400 hover:border-violet-700/50 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
-                >
-                  {dossierLoading ? "GENERATING..." : "⊕ GENERATE DOSSIER"}
-                </button>
+                <div className="py-3 font-mono text-[8px] text-neutral-700 text-center">
+                  Click GENERATE &amp; EXPORT to build and export the dossier.
+                </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between pt-2">
                     <span className="font-mono text-[8px] text-violet-700 uppercase tracking-widest">DOSSIER READY</span>
                     <div className="flex items-center gap-2">
                       <button
@@ -3219,26 +3255,6 @@ function DefaultInspector({
                       </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => openPrintDossier({
-                      caseId: Number(caseId),
-                      caseTitle: caseData.title,
-                      caseStatus: caseData.status,
-                      autoBuildQuality: sd?.autoBuildQuality ?? null,
-                      entities: entities.map(e => ({ name: e.name, type: e.type, docCount: (e as any).docCount ?? 0 })),
-                      documents,
-                      dossierSections: dossier.sections ?? {},
-                    })}
-                    style={{
-                      background: "linear-gradient(135deg, rgba(139,92,246,0.12), rgba(109,40,217,0.06))",
-                      borderColor: "rgba(139,92,246,0.35)",
-                      boxShadow: "inset 0 1px 0 rgba(139,92,246,0.1)",
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 border font-mono text-[9px] text-violet-400 hover:text-violet-300 uppercase tracking-widest transition-all hover:border-violet-500/55 hover:bg-violet-900/20"
-                  >
-                    <span style={{ fontSize: "11px" }}>↓</span>
-                    EXPORT PDF
-                  </button>
                   {dossierExpanded && (() => {
                     const s = dossier.sections ?? {};
                     return (
@@ -3317,20 +3333,26 @@ function DefaultInspector({
                         )}
 
                         {/* FINANCIAL — T004: entity + context + confidence */}
-                        {s.financialSignals?.length > 0 && (
-                          <div className="space-y-1">
-                            <div className="text-[7px] text-green-700 uppercase tracking-[0.2em]">FINANCIAL FLOWS</div>
-                            {s.financialSignals.slice(0, 3).map((f: any, i: number) => (
+                        <div className="space-y-1">
+                          <div className="text-[7px] text-green-700 uppercase tracking-[0.2em]">FINANCIAL FLOWS</div>
+                          {(s.financialSignals?.length ?? 0) > 0 ? (
+                            s.financialSignals.slice(0, 4).map((f: any, i: number) => (
                               <div key={i} style={{ borderLeft: "2px solid rgba(34,197,94,0.2)", paddingLeft: "6px" }}>
                                 <div className="text-neutral-300 text-[8.5px] font-bold">{f.entityName}</div>
-                                <div className="text-neutral-600 text-[7.5px] leading-snug mt-0.5 line-clamp-2">{f.context.slice(0, 80)}</div>
+                                <div className="text-neutral-600 text-[7.5px] leading-snug mt-0.5 line-clamp-2">{f.context.slice(0, 90)}</div>
                                 {f.confidence !== undefined && (
                                   <div className="text-[7px] text-neutral-800 mt-0.5">CONF: {Math.round((f.confidence ?? 0) * 100)}%</div>
                                 )}
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            ))
+                          ) : (
+                            <div style={{ borderLeft: "2px solid rgba(255,255,255,0.06)", paddingLeft: "6px" }} className="space-y-1">
+                              <div className="text-[7.5px] text-neutral-700">No financial flows detected.</div>
+                              <div className="text-[7px] text-neutral-800">Expected: contracts, grants, appropriations, budgets.</div>
+                              <div className="text-[7px] text-neutral-800 mt-0.5">Ingest: budget reports · contract disclosures · audit findings</div>
+                            </div>
+                          )}
+                        </div>
 
                         {/* ANGLES */}
                         {s.investigativeAngles?.length > 0 && (

@@ -472,7 +472,7 @@ export function openPrintDossier(params: PrintDossierParams): void {
   ` : ""}
 </div>
 
-<!-- PAGE 4: KEY FINDINGS -->
+<!-- PAGE 4: KEY FINDINGS + WHY THIS MATTERS -->
 <div class="page">
   <div class="section-number">SECTION 03</div>
   <div class="section-header">
@@ -488,8 +488,35 @@ export function openPrintDossier(params: PrintDossierParams): void {
       </div>
     `).join("")}
   ` : `<div class="empty-note">Generate dossier to synthesize findings.</div>`}
+
+  <!-- WHY THIS MATTERS callout -->
+  <div style="margin-top:36px">
+    <div class="actor-group-label">Why This Matters</div>
+    <div class="key-finding">
+      <div class="key-finding-label">Intelligence Significance</div>
+      <div class="key-finding-text" style="font-weight:400;font-size:10.5pt;line-height:1.65">
+        ${(() => {
+          const parts: string[] = [];
+          if (angles.length > 0) {
+            parts.push(escapeHtml(angles[0].angle));
+          }
+          if (flows.length > 0) {
+            parts.push(`Financial signals involving ${escapeHtml(flows[0].entityName)} indicate potential resource flows warranting further investigation.`);
+          }
+          if (persons.length > 0 && orgs.length > 0) {
+            parts.push(`${persons.length} individual${persons.length !== 1 ? "s" : ""} and ${orgs.length} organization${orgs.length !== 1 ? "s" : ""} have been confirmed across ${documents.length} source${documents.length !== 1 ? "s" : ""}.`);
+          }
+          if (parts.length === 0) {
+            parts.push(`This case involves ${entities.length} confirmed ${entities.length === 1 ? "entity" : "entities"} across ${documents.length} source document${documents.length !== 1 ? "s" : ""}. Further sourcing is required to establish significance.`);
+          }
+          return parts.slice(0, 2).join(" ");
+        })()}
+      </div>
+    </div>
+  </div>
+
   ${(s.nextQueries ?? []).length > 0 ? `
-    <div class="actor-group-label" style="margin-top:32px">Recommended Queries for Expansion</div>
+    <div class="actor-group-label" style="margin-top:24px">Recommended Queries for Expansion</div>
     ${(s.nextQueries ?? []).map(q => `
       <div class="finding-item">
         <span class="finding-bullet" style="color:#888">→</span>

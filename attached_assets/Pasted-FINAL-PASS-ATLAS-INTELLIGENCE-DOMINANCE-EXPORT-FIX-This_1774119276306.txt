@@ -1,0 +1,245 @@
+FINAL PASS — ATLAS INTELLIGENCE DOMINANCE + EXPORT FIX
+
+This is the final system pass before launch.
+
+Goal:
+ATLAS must feel like a finished intelligence system that does the work automatically, presents clear conclusions, and allows one-click export to a professional dossier.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T001 — FULL AUTO MODE (REMOVE PIPELINE)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Remove visible pipeline steps:
+
+- ingest → analyze → approve → map
+
+System runs automatically.
+
+Operator only sees:
+
+“System processed 83 signals → 6 require review”
+
+No manual workflow required.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T002 — MONEY FLOW CLARITY (CORE FEATURE)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Transform all financial signals into clear flows:
+
+[Source] → [Recipient] → [Amount] → [Purpose]
+
+Rules:
+
+- If amount missing → “Amount: Not disclosed”
+- If weak → “Low-confidence signal”
+- Cluster duplicates → “Supported by X sources”
+
+This must be the clearest, most readable section in the system.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T003 — AUTO ENTITY PROMOTION
+━━━━━━━━━━━━━━━━━━━━━━
+
+Automatically promote entities when:
+
+- ≥2 strong signals
+- OR appears in financial flow
+
+Only edge cases go to review.
+
+Remove large pending queues.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T004 — SMART EMPTY STATES
+━━━━━━━━━━━━━━━━━━━━━━
+
+Replace empty messages with intelligence guidance.
+
+Example:
+
+Instead of:
+“No financial signals detected”
+
+Show:
+
+“No financial flows detected.
+Expected: contracts, grants, appropriations.
+
+Try:
+- budget reports
+- contract disclosures
+- audit findings”
+
+━━━━━━━━━━━━━━━━━━━━━━
+T005 — INTELLIGENCE CONFIDENCE LAYER
+━━━━━━━━━━━━━━━━━━━━━━
+
+Add visible classification everywhere:
+
+- STRONG (green)
+- DEVELOPING (amber)
+- WEAK (gray)
+
+Apply to:
+
+- case header
+- entities
+- financial flows
+
+━━━━━━━━━━━━━━━━━━━━━━
+T006 — WHY THIS MATTERS
+━━━━━━━━━━━━━━━━━━━━━━
+
+Add a short section in dossier:
+
+WHY THIS MATTERS:
+
+Explain in 1–2 lines:
+- why signals matter
+- real-world implication
+
+Convert data → intelligence.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T007 — COLLAPSE NOISE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Default:
+
+- triage hidden
+- diagnostics hidden
+- bulk actions hidden
+
+Only show:
+
+- summary
+- evidence
+- flows
+- next action
+
+━━━━━━━━━━━━━━━━━━━━━━
+T008 — SINGLE PRIMARY ACTION
+━━━━━━━━━━━━━━━━━━━━━━
+
+At all times show ONE action:
+
+- “Review flagged items”
+OR
+- “Generate Dossier”
+
+Never both.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T009 — FLOW TRACE UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade flow trace:
+
+- group by entity
+- cluster related flows
+- show connection strength
+
+Make it feel like real financial mapping.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T010 — EXPORT BUTTON (CRITICAL FIX)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Add a visible export button in DOSSIER view.
+
+Location:
+Top-right of dossier header (same row as title)
+
+Button:
+
+[ EXPORT PDF ]
+
+Style:
+- white text
+- subtle border
+- slight glow on hover
+- elevated
+
+━━━━━━━━━━━━━━━━━━━━━━
+T011 — EXPORT ALWAYS AVAILABLE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Button must ALWAYS be visible.
+
+Do NOT hide based on:
+- entity count
+- dossier completeness
+- signal strength
+
+━━━━━━━━━━━━━━━━━━━━━━
+T012 — EXPORT LOGIC
+━━━━━━━━━━━━━━━━━━━━━━
+
+On click:
+
+- call dossier-print.ts
+- open new window
+- trigger print dialog
+
+Example:
+
+window.open('/print/dossier/[caseId]')
+window.print()
+
+━━━━━━━━━━━━━━━━━━━━━━
+T013 — GENERATE + EXPORT STATE
+━━━━━━━━━━━━━━━━━━━━━━
+
+If dossier not built:
+
+Button shows:
+
+[ GENERATE & EXPORT ]
+
+Click:
+- builds dossier
+- then opens print view
+
+━━━━━━━━━━━━━━━━━━━━━━
+T014 — EXPORT FEEDBACK
+━━━━━━━━━━━━━━━━━━━━━━
+
+After click show toast:
+
+“Dossier ready for export”
+
+━━━━━━━━━━━━━━━━━━━━━━
+T015 — GLOBAL EXPORT ACCESS (OPTIONAL)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Also allow export from:
+
+- right command rail
+- case overview header
+
+━━━━━━━━━━━━━━━━━━━━━━
+FINAL DIRECTIVE
+━━━━━━━━━━━━━━━━━━━━━━
+
+ATLAS must feel like:
+
+- it already did the work
+- it understands the case
+- it highlights what matters
+- it outputs intelligence instantly
+
+Operator should:
+
+1. Open case
+2. Immediately understand:
+   - who is involved
+   - where money is going
+   - how strong it is
+3. Click ONE button or export
+
+No manual thinking required.
+
+Make it decisive.
+Make it automatic.
+Make it undeniable.
