@@ -68,6 +68,13 @@ The project is structured as a pnpm monorepo using Node.js and TypeScript.
     *   **Entity Registry Upgrades:** Entities sorted by mention count descending; new RANK column (#01, #02...); CONFIDENCE column shows percentage bar (relative to top entity); rows for top 3 are highlighted.
     *   **Glass UI Overhaul (T007):** New CSS classes: `.nexus-panel` (deeper glass floor), `.nexus-header-strip` (radial red highlight), `.atlas-health-tile` (radial lighting), `.atlas-glass-violet`, `.atlas-panel-glow-*`, `.atlas-mode-badge`. API: `POST /api/cases/:caseId/rebuild-graph` (re-compute graph edges from co-mentions).
 
+7.  **Stabilization + Intelligence Pass (T001–T007, Mar 2026):**
+    *   **Entity Type Correction (T001):** `correctEntityType()` post-processes NER output — entities containing org-structure suffixes (LLC, Corp, Fund, Foundation, Initiative, Committee, etc.) or known govt acronyms (HUD, FBI, DOJ, LAHSA, HACLA, etc.) are forced to `organization` / `government_agency` even if NLP labeled them as `person`. Wired into `addMention()`.
+    *   **Blocklist Expansion (T001):** `SKIP_NAMES` extended with slogan/marketing fragments (Innovation, Excellence, Equity, etc.), nav/UI residue (Back To, See All, Homepage, etc.), section heading words (Analysis, Summary, Overview) and document artifact stubs.
+    *   **Financial Signal Precision (T002):** `scoreFinancialConfidence()` now uses 3-tier action-verb scale: Tier-1 explicit award/appropriation verbs (+0.25), Tier-2 directed flow verbs (+0.15), Tier-3 generic funding (+0.08). Anchor token overlap weighted up to +0.15; no-overlap penalty −0.05. New `EXPLICIT_AWARD_GATE` and `DIRECTED_FLOW_GATE` regex constants.
+    *   **Visual Depth Pass (T005):** New CSS classes: `.atlas-empty-state / icon / title / sub / badge` (premium empty state system); `.atlas-section-header-accent / -cyan / -amber / -green` (left-accent colored section headers with radial glow); `.atlas-scanlines` (panel scan-line depth texture).
+    *   **Empty State Intelligence (T006):** All major panel empty states updated with icon + contextual reason + actionable badge — ENTITY REGISTRY, EVIDENCE VAULT, TEMPORAL TRACE, FLOW TRACE, LINK ANALYSIS graph (distinguishes "entities in triage" from "no docs ingested").
+
 **API Routes:**
 *   A comprehensive set of RESTful API routes under `/api` covering CRUD operations for all core data models.
 *   Specific endpoints for document upload, analysis, web search/ingestion, and entity mention management.

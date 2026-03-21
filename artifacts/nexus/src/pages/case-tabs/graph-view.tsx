@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef } from "react";
+import React, { useMemo, useCallback, useRef, useEffect } from "react";
 import {
   ReactFlow,
   Controls,
@@ -7,8 +7,10 @@ import {
   MarkerType,
   NodeMouseHandler,
   EdgeMouseHandler,
-  NodeDragHandler,
   ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+  type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -22,7 +24,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight, RotateCcw, Maximize2, Eye, EyeOff } from "lucide-react";
+import { X, Plus, Trash2, FileText, Link2, ScanLine, Globe, Calendar, Search, ChevronRight, RotateCcw, Maximize2, Eye, EyeOff, GitBranch } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
@@ -147,14 +149,6 @@ export default function GraphCanvas({
     try { localStorage.removeItem(posStorageKey); } catch { /* ignore */ }
   }, [posStorageKey]);
 
-  const onNodeDragStop: NodeDragHandler = useCallback((_evt, node) => {
-    setNodePositions((prev) => {
-      const updated = { ...prev, [node.id]: node.position };
-      try { localStorage.setItem(posStorageKey, JSON.stringify(updated)); } catch { /* ignore */ }
-      return updated;
-    });
-  }, [posStorageKey]);
-
   // Compute which entity IDs have confirmed edges
   const confirmedEdgeEntityIds = useMemo(() => {
     const ids = new Set<number>();
@@ -181,7 +175,8 @@ export default function GraphCanvas({
     });
   }, [entities, hideIsolated, hideLowDegree, confirmedEdgeEntityIds, confirmedDegree]);
 
-  const nodes = useMemo(() => {
+  // Compute "source of truth" nodes from entity list + saved positions
+  const computedNodes = useMemo(() => {
     const radius = 260;
     const center = { x: 420, y: 300 };
     return visibleEntities.map((entity, i) => {
@@ -202,7 +197,31 @@ export default function GraphCanvas({
     });
   }, [visibleEntities, selectedEntityId, nodePositions]);
 
-  const edges = useMemo(() => {
+  // useNodesState/useEdgesState give ReactFlow internal control over drag positions
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState(computedNodes);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>([] as Edge[]);
+
+  // Sync from computed nodes when entity list or selection changes
+  // (but NOT during drag — onNodesChange handles that internally)
+  const prevEntityKeyRef = useRef("");
+  useEffect(() => {
+    const key = visibleEntities.map(e => `${e.id}:${e.name}:${e.type}`).join("|") + `:sel=${selectedEntityId}`;
+    if (key !== prevEntityKeyRef.current) {
+      prevEntityKeyRef.current = key;
+      setRfNodes(computedNodes);
+    }
+  }, [computedNodes, visibleEntities, selectedEntityId, setRfNodes]);
+
+  // Save position to localStorage on drag stop
+  const onNodeDragStop = useCallback((_evt: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+    setNodePositions((prev) => {
+      const updated = { ...prev, [node.id]: node.position };
+      try { localStorage.setItem(posStorageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
+  }, [posStorageKey]);
+
+  const computedEdges = useMemo(() => {
     const confirmed = relationships.map((rel) => {
       const isSelected = rel.id === selectedRelId;
       return {
@@ -275,6 +294,11 @@ export default function GraphCanvas({
     return [...confirmed, ...suggested];
   }, [relationships, selectedRelId, suggestedEdges, showSuggested]);
 
+  // Sync computed edges into ReactFlow state
+  useEffect(() => {
+    setRfEdges(computedEdges);
+  }, [computedEdges, setRfEdges]);
+
   const onEdgeClick: EdgeMouseHandler = useCallback(
     (_evt, edge) => {
       if ((edge.data as { suggested?: boolean })?.suggested) return;
@@ -302,39 +326,32 @@ export default function GraphCanvas({
   if (entities.length === 0) {
     if (documentCount > 0) {
       return (
-        <div className="h-full flex flex-col items-center justify-center bg-[#000] gap-5">
-          <div className="w-12 h-px bg-[#ffffff08]" />
-          <div className="text-center space-y-2">
-            <div className="font-mono text-xs text-neutral-600 uppercase tracking-widest">
-              NO ENTITIES IN THIS CASE
+        <div className="h-full flex flex-col items-center justify-center bg-[#000]">
+          <div className="atlas-empty-state max-w-xs">
+            <GitBranch className="atlas-empty-icon w-10 h-10" />
+            <div className="atlas-empty-title">GRAPH EMPTY — ENTITIES IN TRIAGE</div>
+            <div className="atlas-empty-sub">
+              {documentCount} document{documentCount !== 1 ? "s" : ""} ingested but no entities have been promoted yet.
+              Open the Entity Registry tab to review and approve candidates.
             </div>
-            <div className="font-mono text-[10px] text-cyan-700 uppercase tracking-wider max-w-[280px] leading-relaxed">
-              Approve detected entities from the Document Vault
-              <br />
-              to begin link analysis.
-            </div>
-            <div className="flex items-center justify-center gap-1.5 mt-1">
-              <ScanLine className="w-3 h-3 text-neutral-800" />
-              <span className="font-mono text-[9px] text-neutral-800 uppercase tracking-widest">
-                Open DOCUMENT VAULT → run ANALYZE → INGEST entities
-              </span>
+            <div className="atlas-empty-badge">
+              <ScanLine className="inline w-2.5 h-2.5 mr-1 mb-0.5" />
+              ENTITY REGISTRY → APPROVE CANDIDATES
             </div>
           </div>
-          <div className="w-12 h-px bg-[#ffffff08]" />
         </div>
       );
     }
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-[#000] gap-4">
-        <div className="w-16 h-px bg-[#ffffff08]" />
-        <div className="text-center font-mono text-neutral-700 text-xs uppercase tracking-widest">
-          NO ENTITIES IN THIS CASE
-          <br />
-          <span className="text-[10px] text-neutral-800 mt-1 block">
-            Add entities to begin link analysis
-          </span>
+      <div className="h-full flex flex-col items-center justify-center bg-[#000]">
+        <div className="atlas-empty-state max-w-xs">
+          <GitBranch className="atlas-empty-icon w-10 h-10" />
+          <div className="atlas-empty-title">NO LINK GRAPH</div>
+          <div className="atlas-empty-sub">
+            Ingest source documents and promote entities to build the network map.
+          </div>
+          <div className="atlas-empty-badge">→ OPEN WEB INGEST TO BEGIN</div>
         </div>
-        <div className="w-16 h-px bg-[#ffffff08]" />
       </div>
     );
   }
@@ -343,8 +360,10 @@ export default function GraphCanvas({
     <div className="relative w-full h-full">
       <ReactFlowProvider>
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           fitView
           fitViewOptions={{ padding: 0.2 }}
           colorMode="dark"

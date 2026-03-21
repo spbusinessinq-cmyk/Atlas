@@ -1,0 +1,262 @@
+This is the next MAJOR ATLAS stabilization + intelligence + UI release pass.
+
+Do NOT do random redesigns.
+Keep the existing ATLAS structure, sections, routes, and system identity.
+This is a precision pass to make ATLAS smarter, cleaner, and closer to live-ready.
+
+GOALS
+1) Fix the intelligence bottleneck / weak reasoning problem
+2) Fix junk extraction / bad actor promotion / irrelevant evidence bleed
+3) Fix the overloaded right sidebar layout
+4) Fix graph drag behavior so nodes move smoothly while dragging
+5) Upgrade ATLAS visual depth to feel sharper, cleaner, more premium — closer to WHITEWING quality
+6) Leave the current architecture intact
+
+━━━━━━━━━━━━━━━━━━━━━━
+T001 — INTELLIGENCE BOTTLENECK / CASE BRAIN FIX
+━━━━━━━━━━━━━━━━━━━━━━
+ATLAS must stop producing stupid or sideways entities for broad/funding cases.
+
+Implement these upgrades:
+
+A. Anchor-first promotion
+- Every seed target must build a strict anchor profile from:
+  - target phrase
+  - normalized keyword tokens
+  - target mode
+  - investigative synonyms
+- Entities should only auto-promote if they satisfy at least one:
+  1. appears in CORE or RELEVANT docs and near anchor language
+  2. appears in 2+ aligned docs with strong co-mention support
+  3. appears with role-bearing language tied to the target
+- Hard-penalize entities that appear only in PARTIAL / MISMATCHED / OFF-TOPIC docs
+
+B. Entity sanity filter
+- Add a stronger reject layer for:
+  - slogan fragments
+  - media sections
+  - generic nouns
+  - category labels
+  - outlet junk
+  - stitched title fragments
+  - unrelated celebrity/public figure mentions
+- Block obvious garbage examples like:
+  - random entertainment names in spending/funding cases
+  - publication navigation residue
+  - article-series fragments
+  - generic headings treated as entities
+
+C. Role/type confidence
+- Improve type inference so orgs/programs/funds/committees/agencies are not mislabeled as person
+- Add stronger org/program/fund heuristics
+- If type confidence is weak, keep held — do not auto-promote
+
+D. Evidence alignment score
+- Add a single “investigative alignment score” per entity and per doc
+- Score should weight:
+  - anchor overlap
+  - target mode fit
+  - role-bearing language
+  - financial/timeline proximity
+  - appearance in high-quality docs
+  - repeat appearance across aligned docs
+- Use this score in promotion and evidence ranking
+
+E. Case health gating
+- If promoted entities are low quality, case must stay SPARSE/DEVELOPING instead of pretending strong
+- No fake confidence inflation
+
+━━━━━━━━━━━━━━━━━━━━━━
+T002 — DOCUMENT / SIGNAL PRECISION HARDENING
+━━━━━━━━━━━━━━━━━━━━━━
+Make evidence pulls smarter.
+
+A. Evidence ranking
+- Rank key evidence using:
+  - relevance
+  - source quality
+  - anchor density
+  - investigative language
+  - financial/timeline signal presence
+  - doc tier (CORE/RELEVANT/PERIPHERAL/OFF-TOPIC)
+- Off-topic docs should never rank above aligned docs
+
+B. Financial signal precision
+- Require tighter context for money signals
+- Prefer:
+  - awarded
+  - appropriated
+  - granted
+  - paid
+  - contract
+  - budget
+  - funding cut
+  - expenditure
+  - invoice / payment / reimbursement
+- Penalize generic article numbers that are not truly funding-related
+
+C. Timeline precision
+- Timeline should prefer case-relevant events only
+- Hard reject timeline junk from unrelated side stories
+- Weight event relevance by anchor match and action relevance
+
+D. Cross-doc corroboration
+- Add a corroboration flag:
+  - solo
+  - corroborated
+  - multi-source confirmed
+- Surface this in dossier/evidence
+
+━━━━━━━━━━━━━━━━━━━━━━
+T003 — RIGHT SIDEBAR REBUILD
+━━━━━━━━━━━━━━━━━━━━━━
+The right sidebar is overloaded. Rebuild it without changing ATLAS structure.
+
+Current problem:
+Too many controls and status blocks stacked in one narrow rail.
+
+Fix:
+Split the right rail into clean grouped modules with collapsible sections:
+
+1. CASE STATUS
+- Auto-build report
+- target mode badge
+- case health
+- promoted / held / triage counts
+
+2. NEXT ACTION
+- single prominent recommendation block
+- only 1 primary action shown at top
+
+3. TRIAGE ACTIONS
+- collapsible
+- keep all existing actions, but grouped and visually tighter
+
+4. QUALITY CONTROLS
+- separate collapsible module
+
+5. DOSSIER ACTIONS
+- generate / recompile dossier
+- compact and distinct
+
+6. DIAGNOSTICS
+- only show advanced metrics here
+- collapsed by default
+
+Requirements:
+- reduce visual clutter
+- improve spacing rhythm
+- better hierarchy
+- keep same functionality
+- no giant wall of stacked boxes
+
+━━━━━━━━━━━━━━━━━━━━━━
+T004 — GRAPH DRAG / INTERACTION FIX
+━━━━━━━━━━━━━━━━━━━━━━
+Fix the graph so nodes move naturally while dragging.
+
+Current bug:
+Node doesn’t glide with cursor; it jumps after release.
+
+Implement:
+- true live drag position updates during pointer move
+- disable snap-on-release behavior unless explicitly intended
+- if layout engine is forcing reposition, suspend auto-layout while dragging
+- resume layout only after release if needed
+- preserve manual node positions once user moves them
+- no jitter
+- no teleporting
+- smooth drag
+
+Also:
+- improve pan/zoom smoothness
+- keep node labels readable
+- edge routing should remain stable while dragging
+
+━━━━━━━━━━━━━━━━━━━━━━
+T005 — ATLAS VISUAL DEPTH PASS
+━━━━━━━━━━━━━━━━━━━━━━
+Make ATLAS feel more premium and operational, closer to WHITEWING sharpness, but keep ATLAS identity.
+
+Do NOT redesign the app from scratch.
+Do NOT add fantasy chrome everywhere.
+Do this through depth, spacing, lighting, and panel treatment.
+
+Implement:
+- stronger layered glass surfaces
+- slightly richer panel depth
+- cleaner section headers
+- more precise borders
+- subtle radial lighting / glow falloff
+- better contrast between nav / content / rail
+- tighter typography rhythm
+- more premium empty states
+- cleaner table/list row treatment
+- better active state treatment for left nav and case section nav
+
+Visual direction:
+- federal / intelligence / operator terminal
+- restrained
+- dark
+- premium
+- sharp
+- minimal
+- not gamer-y
+- not neon overload
+
+Borrow quality cues from WHITEWING:
+- cleaner spacing
+- stronger hierarchy
+- better dark-surface layering
+- sharper focus on main working area
+But keep ATLAS color logic and workflow identity.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T006 — EMPTY STATE INTELLIGENCE
+━━━━━━━━━━━━━━━━━━━━━━
+When a case has docs but no promoted entities, ATLAS should explain WHY with real guidance.
+
+For OVERVIEW / LINK ANALYSIS / ENTITY REGISTRY / FLOW TRACE / TEMPORAL TRACE:
+- show exact reason when empty:
+  - no aligned docs
+  - entities held in triage
+  - no qualifying financial signals
+  - no timeline events above confidence gate
+  - recovery mode suggested
+- show meaningful next step
+- no generic dead empty screens
+
+━━━━━━━━━━━━━━━━━━━━━━
+T007 — LIVE-READY HARDENING
+━━━━━━━━━━━━━━━━━━━━━━
+Before finishing, verify these:
+
+1. No TypeScript errors
+2. Both servers boot clean
+3. No broken routes
+4. Dossier tab loads correctly
+5. Graph drag behaves smoothly
+6. Right rail is cleaner and grouped
+7. Entity extraction quality is noticeably better on:
+   - funding cases
+   - homelessness cases
+   - spending cases
+   - general corruption/accountability cases
+
+Run at least 3 live smoke tests on real cases already in DB and verify:
+- better actors
+- better orgs
+- fewer junk entities
+- better evidence ranking
+- right rail cleaner
+- graph drag fixed
+
+DELIVERABLE FORMAT
+When done, give me:
+- exact shipped changes by task
+- any schema changes
+- any routes changed
+- any files changed
+- whether graph drag bug is fully fixed
+- whether entity quality materially improved
+- whether ATLAS is closer to live-ready now

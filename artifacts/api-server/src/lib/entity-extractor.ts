@@ -168,6 +168,21 @@ const SKIP_NAMES = new Set([
   // Article / media artifact stubs
   "Edition", "Section", "Bureau", "Desk", "Wire", "Feed", "Outlet",
   "Publication", "Platform", "Channel", "Broadcast", "Segment", "Podcast",
+  // Slogan / marketing language fragments
+  "Innovation", "Excellence", "Leadership", "Vision", "Mission", "Values",
+  "Opportunity", "Future", "Together", "Forward", "Access", "Equity", "Growth",
+  "Accountability", "Transparency", "Integrity", "Trust", "Impact", "Outcome",
+  "Progress", "Action", "Change", "Community", "Commitment", "Partnership",
+  // Navigation / UI residue
+  "Back To", "Back to", "Jump To", "Jump to", "Skip To", "Skip to",
+  "See All", "View All", "Show All", "Load More", "See More",
+  "Homepage", "Home Page", "Site Map", "Sitemap", "Breadcrumb",
+  "Next Page", "Previous Page", "Pagination",
+  // Generic section headings treated as entities
+  "Analysis", "Investigation", "Explainer", "Context", "Background",
+  "Summary", "Overview", "Highlights", "Key Points", "Takeaways",
+  // Document artifact single words
+  "Footnote", "Endnote", "Appendix", "Exhibit", "Attachment", "Annex",
 ]);
 
 const MEDIA_SOURCE_BLOCKLIST = new Set([
@@ -1106,6 +1121,28 @@ function mapTagToType(tag: string): string {
   return mapping[tag] || "organization";
 }
 
+// ── Type correction pass ────────────────────────────────────────────────────
+// Entities that sound like orgs/programs/agencies should NOT be labeled person.
+// If an entity name contains these structural indicators, force to org type.
+const ORG_STRUCTURE_SUFFIXES = /\b(?:LLC|LLP|Inc\.?|Corp\.?|Co\.?|Ltd\.?|PLC|PLLC|LTD|INC|CORP|Partnership|Associates|Group|Holdings|Enterprises|Solutions|Services|Systems|Technologies|Networks|Capital|Ventures|Industries|Properties|Investments|Management|Consulting|Strategies)\b/i;
+const ORG_NAME_KEYWORDS = /\b(?:Fund|Foundation|Institute|Authority|Board|Council|Commission|Committee|Agency|Bureau|Department|Program|Initiative|Project|Alliance|Coalition|Association|Federation|Union|League|Network|Center|Centre|Task Force|Working Group|Joint|Office|Division|Branch|Service|Trust|Society|Organization|Org|Club|School|University|College|Bank|Credit Union|Co-op|Cooperative)\b/i;
+const GOVT_AGENCY_KEYWORDS = /\b(?:LAHSA|HACLA|LACDA|HUD|DOJ|FBI|DHS|HHS|CDC|EPA|IRS|SEC|CIA|NSA|ATF|DEA|FEMA|OMB|GAO|CBO|CFPB|FDIC|FTC|FCC|ICE|CBP|USCIS|USPS|TSA|FAA|NTSB|OSHA|NRC|NLRB|PBGC|SSA|VA|BLM|NPS|USFS|USFWS|BIA|BOR|BRE)\b/;
+
+function correctEntityType(name: string, rawType: string): string {
+  if (rawType === "person") {
+    // If name matches org structural patterns, override to organization
+    if (ORG_STRUCTURE_SUFFIXES.test(name)) return "organization";
+    if (ORG_NAME_KEYWORDS.test(name)) return "organization";
+    if (GOVT_AGENCY_KEYWORDS.test(name)) return "government_agency";
+    // If name is all uppercase (likely acronym), likely an org
+    if (/^[A-Z]{2,6}$/.test(name.trim())) return "government_agency";
+  }
+  if (rawType === "organization") {
+    if (GOVT_AGENCY_KEYWORDS.test(name)) return "government_agency";
+  }
+  return rawType;
+}
+
 // Extract plain text from a file — supports PDF and plain text
 export async function extractTextFromFile(filePath: string): Promise<string> {
   const absPath = path.resolve(filePath.replace(/^\/uploads\//, "./uploads/"));
@@ -1172,7 +1209,9 @@ export function extractEntities(
     matchIndex?: number
   ) {
     const name = entityName.trim();
-    if (!isValidName(name, entityType)) return;
+    // Apply type correction before any downstream logic
+    const correctedType = correctEntityType(name, entityType);
+    if (!isValidName(name, correctedType)) return;
 
     // Pre-admission artifact checks before dedup
     if (isNavigationResidue(name)) return;
@@ -1203,12 +1242,12 @@ export function extractEntities(
       }
     }
 
-    const { role, roleConfidence } = classifyEntityRole(name, ctx, entityType);
+    const { role, roleConfidence } = classifyEntityRole(name, ctx, correctedType);
     const topicRelevance = computeTopicRelevance(name, ctx, queryTerms, seedIntent);
 
     const mention: ExtractedMention = {
       entityName: name,
-      entityType,
+      entityType: correctedType,
       confidence: adjustedConf,
       context: ctx,
       startPos: pos,
@@ -1514,6 +1553,11 @@ function extractProgramName(sentence: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+// Strong explicit appropriation/award verbs — highest confidence signals
+const EXPLICIT_AWARD_GATE = /\b(?:awarded|appropriated|contracted|disbursed|allocated|reimburse[d]?|procured|sole[\s-]source[d]?|no[\s-]bid|grant(?:ed)?)\b/i;
+// Directional flow verbs — recipient/payer relationships
+const DIRECTED_FLOW_GATE = /\b(?:received|obtained|secured|paid(?:\s+out)?|funneled|channeled|transferred|redirected)\b/i;
+
 function scoreFinancialConfidence(
   sentence: string,
   signalType: string,
@@ -1523,33 +1567,42 @@ function scoreFinancialConfidence(
   let score = 0.0;
 
   // Funding hard gate present (base requirement)
-  if (FUNDING_HARD_GATE.test(sentence)) score += 0.25;
+  if (FUNDING_HARD_GATE.test(sentence)) score += 0.20;
 
-  // Has explicit action keyword (award, paid, allocated, etc.)
-  if (/\b(?:awarded?|paid?|allocated?|appropriated?|contracted?|granted?|disbursed?|funded?|invested?)\b/i.test(sentence)) score += 0.20;
+  // Tier-1: explicit appropriation/award language (strongest signal)
+  if (EXPLICIT_AWARD_GATE.test(sentence)) score += 0.25;
+  // Tier-2: directional flow verbs
+  else if (DIRECTED_FLOW_GATE.test(sentence)) score += 0.15;
+  // Tier-3: generic funding keyword
+  else if (/\b(?:funded?|invested?|subsidized?|financed?)\b/i.test(sentence)) score += 0.08;
 
   // Named actor in sentence
-  if (entityName) score += 0.15;
+  if (entityName) score += 0.12;
 
-  // controlledBy or receivedBy verb phrase
-  if (CONTROL_VERB_PATTERN.test(sentence) || RECEIVE_VERB_PATTERN.test(sentence)) score += 0.15;
+  // controlledBy or receivedBy verb phrase (explicit relationship)
+  if (CONTROL_VERB_PATTERN.test(sentence) && RECEIVE_VERB_PATTERN.test(sentence)) score += 0.12;
+  else if (CONTROL_VERB_PATTERN.test(sentence) || RECEIVE_VERB_PATTERN.test(sentence)) score += 0.07;
 
   // High-severity signal type
-  if (signalType === "FRAUD_MISUSE" || signalType === "CONTRACT" || signalType === "APPROPRIATION") score += 0.10;
+  if (signalType === "FRAUD_MISUSE") score += 0.12;
+  else if (signalType === "CONTRACT" || signalType === "APPROPRIATION") score += 0.10;
   else if (signalType === "GRANT" || signalType === "CUT_REALLOCATION") score += 0.05;
 
   // Has program name
   if (PROGRAM_INDICATOR.test(sentence)) score += 0.05;
 
-  // Anchor token overlap (bonus up to 0.10 for 2+ tokens)
+  // Anchor token overlap — weighted heavily (primary relevance signal)
   if (anchorTokens.length > 0) {
     const lower = sentence.toLowerCase();
     const hits = anchorTokens.filter(t => lower.includes(t)).length;
-    if (hits >= 2) score += 0.10;
+    if (hits >= 3) score += 0.15;
+    else if (hits >= 2) score += 0.10;
     else if (hits === 1) score += 0.05;
+    // Penalty: no anchor overlap likely means a side story
+    else score -= 0.05;
   }
 
-  return Math.min(1.0, Math.round(score * 100) / 100);
+  return Math.min(1.0, Math.max(0, Math.round(score * 100) / 100));
 }
 
 export function extractFinancialSignals(text: string, anchorTokens: string[] = []): ExtractedFinancialSignal[] {

@@ -1430,15 +1430,15 @@ function OverviewPanel({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Primary entities */}
         <div className="nexus-panel rounded-none">
-          <div className="nexus-header-strip">
+          <div className="atlas-section-header-accent">
             <span className="nexus-label">ENTITY REGISTRY ({entities.length})</span>
+            {entities.length > 0 && <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">{entities.filter(e => e.type === "person").length}P · {entities.filter(e => e.type === "organization").length}O · {entities.filter(e => e.type === "government_agency").length}G</span>}
           </div>
           <div className="p-0">
             {entities.length === 0 ? (
-              <div className="px-4 py-5 space-y-2">
-                <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest text-center">
-                  NO ENTITIES AUTO-PROMOTED
-                </div>
+              <div className="atlas-empty-state">
+                <Database className="atlas-empty-icon w-7 h-7" />
+                <div className="atlas-empty-title">NO ENTITIES PROMOTED</div>
                 {seedDiag && (
                   <div className="space-y-1.5 mt-2">
                     {seedDiag.heldCandidates > 0 && (
@@ -1473,11 +1473,10 @@ function OverviewPanel({
                         </span>
                       </div>
                     )}
-                    <div className="flex items-center justify-center mt-2">
-                      <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">→ run recovery or add sources in web ingest</span>
-                    </div>
+                    <div className="atlas-empty-badge">→ run recovery or add sources in web ingest</div>
                   </div>
                 )}
+                {!seedDiag && <div className="atlas-empty-sub">No entity signals found in ingested content</div>}
               </div>
             ) : (
               entities.filter(e => e.type !== "location").slice(0, 8).map((e) => (
@@ -1505,14 +1504,17 @@ function OverviewPanel({
 
         {/* Document vault preview */}
         <div className="nexus-panel rounded-none">
-          <div className="nexus-header-strip">
+          <div className="atlas-section-header-cyan">
             <span className="nexus-label">EVIDENCE VAULT ({documents.length})</span>
-            <span className="font-mono text-[8px] text-neutral-600">{usableDocs.length} USABLE</span>
+            {documents.length > 0 && <span className="font-mono text-[7px] text-cyan-800 uppercase tracking-widest">{usableDocs.length} USABLE</span>}
           </div>
           <div className="p-0">
             {documents.length === 0 ? (
-              <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
-                NO DOCUMENTS INGESTED
+              <div className="atlas-empty-state">
+                <Files className="atlas-empty-icon w-7 h-7" />
+                <div className="atlas-empty-title">EVIDENCE VAULT EMPTY</div>
+                <div className="atlas-empty-sub">Use web ingest or manual upload to add source documents</div>
+                <div className="atlas-empty-badge">→ open web ingest to begin</div>
               </div>
             ) : (
               (documents as any[]).sort((a: any, b: any) => {
@@ -1554,13 +1556,16 @@ function OverviewPanel({
       {(timeline.length > 0 || financialSignals.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="nexus-panel rounded-none">
-            <div className="nexus-header-strip">
+            <div className="atlas-section-header-cyan">
               <span className="nexus-label">TEMPORAL TRACE ({timeline.length})</span>
+              {timeline.length > 0 && <Clock className="w-2.5 h-2.5 text-neutral-700" />}
             </div>
             <div className="p-3 space-y-2">
               {timeline.length === 0 ? (
-                <div className="py-3 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
-                  NO EVENTS EXTRACTED
+                <div className="atlas-empty-state py-5">
+                  <Clock className="atlas-empty-icon w-6 h-6" />
+                  <div className="atlas-empty-title">NO EVENTS MAPPED</div>
+                  <div className="atlas-empty-sub">Date-anchored events will appear here as documents are processed</div>
                 </div>
               ) : (
                 [...timeline]
@@ -1582,13 +1587,16 @@ function OverviewPanel({
           </div>
 
           <div className="nexus-panel rounded-none">
-            <div className="nexus-header-strip">
+            <div className="atlas-section-header-green">
               <span className="nexus-label">FLOW TRACE ({financialSignals.length})</span>
+              {financialSignals.length > 0 && <TrendingUp className="w-2.5 h-2.5 text-neutral-700" />}
             </div>
             <div className="p-0">
               {financialSignals.length === 0 ? (
-                <div className="px-4 py-5 font-mono text-[9px] text-neutral-700 text-center uppercase tracking-widest">
-                  NO FINANCIAL SIGNALS
+                <div className="atlas-empty-state py-5">
+                  <TrendingUp className="atlas-empty-icon w-6 h-6" />
+                  <div className="atlas-empty-title">NO FINANCIAL SIGNALS</div>
+                  <div className="atlas-empty-sub">Ingest docs with budget, contract, grant or appropriation language to detect signals</div>
                 </div>
               ) : (
                 financialSignals.slice(0, 5).map((sig: any, i: number) => (
@@ -2842,6 +2850,11 @@ function DefaultInspector({
   const [dossier, setDossier] = React.useState<null | Record<string, any>>(null);
   const [dossierLoading, setDossierLoading] = React.useState(false);
   const [dossierExpanded, setDossierExpanded] = React.useState(false);
+  const [statusOpen, setStatusOpen] = React.useState(true);
+  const [triageOpen, setTriageOpen] = React.useState(true);
+  const [qualityOpen, setQualityOpen] = React.useState(false);
+  const [diagOpen, setDiagOpen] = React.useState(false);
+  const [dossierSectionOpen, setDossierSectionOpen] = React.useState(true);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
@@ -2868,16 +2881,30 @@ function DefaultInspector({
     } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
   };
 
+  const sd = parseSeedDiag(caseData.description);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="nexus-header-strip flex-shrink-0">
         <span className="nexus-label">CASE OVERVIEW</span>
       </div>
 
-      <div className="flex-1 overflow-auto p-3 space-y-3">
+      <div className="flex-1 overflow-auto divide-y divide-[#ffffff07]">
+
+        {/* ══ SECTION 1: CASE STATUS ══ */}
+        <div>
+          <button
+            onClick={() => setStatusOpen(o => !o)}
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+          >
+            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-700 group-hover:text-neutral-500">CASE STATUS</span>
+            <span className="font-mono text-[8px] text-neutral-800">{statusOpen ? "▲" : "▼"}</span>
+          </button>
+          {statusOpen && (
+            <div className="px-3 pb-3 space-y-2.5 pt-1">
+
         {/* ── AUTO-BUILD REPORT ── */}
         {(() => {
-          const sd = parseSeedDiag(caseData.description);
           const usableDocs = sd ? (sd.ok + sd.partial) : documents.length;
           const blockedDocs = sd ? (sd.failed + sd.wrapper) : 0;
           const abq = sd?.autoBuildQuality ?? null;
@@ -2924,9 +2951,9 @@ function DefaultInspector({
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {sd?.highContam > 0 && (
-                    <span className="font-mono text-[7px] text-orange-500 border border-orange-900/30 px-1 uppercase" title={`${sd.highContam} high-contamination doc(s) restricted`}>
-                      {sd.highContam}× CONTAM
+                  {((sd?.highContam ?? 0) > 0) && (
+                    <span className="font-mono text-[7px] text-orange-500 border border-orange-900/30 px-1 uppercase" title={`${sd!.highContam} high-contamination doc(s) restricted`}>
+                      {sd!.highContam}× CONTAM
                     </span>
                   )}
                   {sd?.recoveryTriggered && (
@@ -3109,264 +3136,328 @@ function DefaultInspector({
           </div>
         )}
 
+            </div>
+          )}
+        </div>
+
+        {/* ══ SECTION 2: NEXT ACTION ══ */}
         {nextAction && (
-          <div
-            className={cn(
-              "p-2.5 border space-y-2 cursor-pointer transition-colors",
-              nextAction.color
-            )}
-            onClick={() => onNavigate(nextAction.navigate)}
-          >
-            <div className="flex items-center gap-2">
-              <nextAction.icon className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="font-mono text-[9px] uppercase tracking-widest font-bold">
-                NEXT ACTION
-              </span>
-            </div>
-            <div className="font-mono text-[9px] opacity-80 leading-relaxed uppercase tracking-wide">
-              {nextAction.message}
-            </div>
-            <div className="font-mono text-[9px] opacity-60 uppercase tracking-widest hover:opacity-90 transition-opacity">
-              {nextAction.cta} →
+          <div className="p-2.5">
+            <div
+              className={cn("p-2.5 border space-y-2 cursor-pointer transition-colors", nextAction.color)}
+              onClick={() => onNavigate(nextAction.navigate)}
+            >
+              <div className="flex items-center gap-2">
+                <nextAction.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="font-mono text-[9px] uppercase tracking-widest font-bold">NEXT ACTION</span>
+              </div>
+              <div className="font-mono text-[9px] opacity-80 leading-relaxed uppercase tracking-wide">
+                {nextAction.message}
+              </div>
+              <div className="font-mono text-[9px] opacity-60 uppercase tracking-widest hover:opacity-90 transition-opacity">
+                {nextAction.cta} →
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── CASE CONTROLS ── */}
-        <div className="space-y-1.5 pt-1">
-          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] pb-1">CASE CONTROLS</div>
-          {ctrlMsg && (
-            <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1">{ctrlMsg}</div>
-          )}
-          {pendingMentions > 0 && (
-            <>
-              <div className="font-mono text-[8px] text-neutral-800 uppercase tracking-widest pt-0.5">TRIAGE ACTIONS</div>
-              <button
-                disabled={ctrlWorking}
-                onClick={() => bulkReject("off-topic")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">✕</span> REJECT OFF-TOPIC MENTIONS
-              </button>
-              <button
-                disabled={ctrlWorking}
-                onClick={() => bulkReject("junk")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">✕</span> REJECT JUNK / BOILERPLATE
-              </button>
-              <button
-                disabled={ctrlWorking}
-                onClick={() => bulkReject("low-role")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-500 hover:border-amber-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">◌</span> HOLD LOW-ROLE (UNKNOWN)
-              </button>
-              <button
-                disabled={ctrlWorking}
-                onClick={() => bulkReject("artifact")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">✕</span> REJECT ARTIFACT MENTIONS
-              </button>
-              <button
-                disabled={ctrlWorking}
-                onClick={() => bulkReject("nav-boilerplate")}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">✕</span> REJECT NAV / BOILERPLATE
-              </button>
-              <button
-                disabled={ctrlWorking}
-                onClick={async () => {
-                  setCtrlWorking(true); setCtrlMsg(null);
-                  try {
-                    const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ type: "title-lead-highconf" })
-                    });
-                    const d = await r.json();
-                    setCtrlMsg(`Promoted ${d.approved ?? "?"} title/lead high-conf mention(s).`);
-                    await invalidate();
-                  } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
-                }}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-teal-400 hover:border-teal-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">▲</span> PROMOTE TITLE/LEAD HIGH-CONF
-              </button>
-              <button
-                disabled={ctrlWorking}
-                onClick={async () => {
-                  setCtrlWorking(true); setCtrlMsg(null);
-                  try {
-                    const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ type: "role-bearing" })
-                    });
-                    const d = await r.json();
-                    setCtrlMsg(`Promoted ${d.approved ?? "?"} role-bearing mention(s).`);
-                    await invalidate();
-                  } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
-                }}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-green-400 hover:border-green-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-              >
-                <span className="text-[10px]">▲</span> PROMOTE ROLE-BEARING HIGH-CONF
-              </button>
-            </>
-          )}
-          <div className="font-mono text-[8px] text-neutral-800 uppercase tracking-widest pt-0.5">QUALITY CONTROLS</div>
-          <button
-            disabled={ctrlWorking}
-            onClick={() => bulkReject("low-confidence")}
-            className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-          >
-            <span className="text-[10px]">✕</span> REJECT LOW-CONFIDENCE MENTIONS
-          </button>
-          <button
-            disabled={ctrlWorking}
-            onClick={() => bulkReject("single-word-person")}
-            className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-          >
-            <span className="text-[10px]">✕</span> REJECT SINGLE-WORD PERSONS
-          </button>
-          <button
-            disabled={ctrlWorking}
-            onClick={purgeFailedDocs}
-            className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-600 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
-          >
-            <span className="text-[10px]">⊗</span> PURGE FAILED DOCUMENTS
-          </button>
-          {pendingMentions > 0 && (
+        {/* ══ SECTION 3: TRIAGE ACTIONS ══ */}
+        {pendingMentions > 0 && (
+          <div>
             <button
-              disabled={ctrlWorking}
-              onClick={() => bulkReject("all-pending")}
-              className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-red-900/40 text-red-900 hover:text-red-500 hover:border-red-700/50 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40"
+              onClick={() => setTriageOpen(o => !o)}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
             >
-              <span className="text-[10px]">⊗</span> REJECT ALL {pendingMentions} PENDING
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-700 group-hover:text-neutral-500">TRIAGE ACTIONS</span>
+                <span className="font-mono text-[7px] text-orange-600 border border-orange-900/40 px-1">{pendingMentions}</span>
+              </div>
+              <span className="font-mono text-[8px] text-neutral-800">{triageOpen ? "▲" : "▼"}</span>
             </button>
-          )}
-        </div>
-
-        {/* ── AUTO DOSSIER ── */}
-        <div className="space-y-1.5 pt-1">
-          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest border-b border-[#ffffff08] pb-1 flex items-center justify-between">
-            <span>ATLAS DOSSIER</span>
-            {dossier && (
-              <button
-                onClick={() => setDossierExpanded(e => !e)}
-                className="text-[8px] font-mono text-neutral-600 hover:text-neutral-400 transition-colors uppercase"
-              >
-                {dossierExpanded ? "▲ COLLAPSE" : "▼ EXPAND"}
-              </button>
+            {triageOpen && (
+              <div className="px-2 pb-2 space-y-1">
+                {ctrlMsg && (
+                  <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1 mb-1">{ctrlMsg}</div>
+                )}
+                <button disabled={ctrlWorking} onClick={() => bulkReject("off-topic")}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">✕</span> REJECT OFF-TOPIC MENTIONS
+                </button>
+                <button disabled={ctrlWorking} onClick={() => bulkReject("junk")}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">✕</span> REJECT JUNK / BOILERPLATE
+                </button>
+                <button disabled={ctrlWorking} onClick={() => bulkReject("artifact")}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">✕</span> REJECT ARTIFACT MENTIONS
+                </button>
+                <button disabled={ctrlWorking} onClick={() => bulkReject("nav-boilerplate")}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">✕</span> REJECT NAV / BOILERPLATE
+                </button>
+                <button disabled={ctrlWorking} onClick={() => bulkReject("low-role")}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-500 hover:border-amber-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">◌</span> HOLD LOW-ROLE (UNKNOWN)
+                </button>
+                <button disabled={ctrlWorking}
+                  onClick={async () => {
+                    setCtrlWorking(true); setCtrlMsg(null);
+                    try {
+                      const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type: "title-lead-highconf" })
+                      });
+                      const d = await r.json();
+                      setCtrlMsg(`Promoted ${d.approved ?? "?"} title/lead high-conf mention(s).`);
+                      await invalidate();
+                    } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-teal-400 hover:border-teal-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">▲</span> PROMOTE TITLE/LEAD HIGH-CONF
+                </button>
+                <button disabled={ctrlWorking}
+                  onClick={async () => {
+                    setCtrlWorking(true); setCtrlMsg(null);
+                    try {
+                      const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type: "role-bearing" })
+                      });
+                      const d = await r.json();
+                      setCtrlMsg(`Promoted ${d.approved ?? "?"} role-bearing mention(s).`);
+                      await invalidate();
+                    } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-green-400 hover:border-green-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">▲</span> PROMOTE ROLE-BEARING HIGH-CONF
+                </button>
+                <button disabled={ctrlWorking} onClick={() => bulkReject("all-pending")}
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-red-900/40 text-red-900 hover:text-red-500 hover:border-red-700/50 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                  <span className="text-[10px]">⊗</span> REJECT ALL {pendingMentions} PENDING
+                </button>
+              </div>
             )}
           </div>
-          {!dossier ? (
-            <button
-              disabled={dossierLoading}
-              onClick={async () => {
-                setDossierLoading(true);
-                try {
-                  const r = await fetch(`/api/cases/${caseId}/dossier`);
-                  const d = await r.json();
-                  setDossier(d);
-                  setDossierExpanded(true);
-                } catch { /* silent */ } finally { setDossierLoading(false); }
-              }}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-violet-900/40 text-violet-700 hover:text-violet-400 hover:border-violet-700/50 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
-            >
-              {dossierLoading ? "GENERATING..." : "⊕ GENERATE DOSSIER"}
-            </button>
-          ) : (
-            <div className="space-y-1.5">
-              {dossierExpanded && (() => {
-                const s = dossier.sections ?? {};
-                return (
-                  <div className="space-y-2 text-[9px] font-mono">
-                    {s.caseSummary && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-violet-700 uppercase tracking-widest">SUMMARY</div>
-                        <p className="text-neutral-500 leading-relaxed">{s.caseSummary}</p>
-                      </div>
-                    )}
-                    {s.keyEntities?.length > 0 && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-cyan-700 uppercase tracking-widest">KEY ENTITIES</div>
-                        <div className="space-y-0.5">
-                          {s.keyEntities.map((e: any) => (
-                            <div key={e.id} className="flex items-center justify-between">
-                              <span className="text-white uppercase">{e.name}</span>
-                              <span className="text-neutral-700 text-[8px]">{e.type.replace(/_/g, " ")} · {e.docCount}d</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {s.entityRelationships?.length > 0 && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-blue-700 uppercase tracking-widest">ENTITY CONNECTIONS</div>
-                        {s.entityRelationships.slice(0, 4).map((r: any, i: number) => (
-                          <div key={i} className="text-neutral-600 truncate">
-                            <span className="text-neutral-400">{r.entityAName}</span>
-                            <span className="text-neutral-700 mx-1">→</span>
-                            <span className="text-neutral-400">{r.entityBName}</span>
-                            <span className="text-neutral-800 ml-1 text-[8px]">{r.relationshipType?.replace(/_/g, " ")}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {s.timelineSignals?.length > 0 && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-amber-700 uppercase tracking-widest">TIMELINE SIGNALS</div>
-                        {s.timelineSignals.slice(0, 3).map((t: any, i: number) => (
-                          <div key={i} className="flex gap-1.5">
-                            <span className="text-neutral-700 flex-shrink-0">{t.date?.slice(0, 10) ?? "?"}</span>
-                            <span className="text-neutral-500 truncate">{t.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {s.financialSignals?.length > 0 && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-green-700 uppercase tracking-widest">FINANCIAL SIGNALS</div>
-                        {s.financialSignals.slice(0, 3).map((f: any, i: number) => (
-                          <div key={i} className="text-neutral-600 truncate">
-                            <span className="text-neutral-400">{f.entityName}</span>
-                            <span className="text-neutral-700 ml-1">— {f.context.slice(0, 60)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {s.investigativeAngles?.length > 0 && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-orange-700 uppercase tracking-widest">INVESTIGATIVE ANGLES</div>
-                        {s.investigativeAngles.map((a: any, i: number) => (
-                          <div key={i} className="text-neutral-600 flex gap-1">
-                            <span className="text-neutral-800">·</span>
-                            <span>{a.angle}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {s.nextQueries?.length > 0 && (
-                      <div className="space-y-0.5">
-                        <div className="text-[8px] text-neutral-600 uppercase tracking-widest">QUERY EXPANSION</div>
-                        {s.nextQueries.slice(0, 5).map((q: string, i: number) => (
-                          <div key={i} className="text-neutral-700 truncate">→ {q}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              <button
-                onClick={() => { setDossier(null); setDossierExpanded(false); }}
-                className="w-full text-left font-mono text-[8px] text-neutral-800 hover:text-neutral-600 uppercase tracking-wider transition-colors"
-              >
-                ↺ REGENERATE
+        )}
+
+        {/* ══ SECTION 4: QUALITY CONTROLS ══ */}
+        <div>
+          <button
+            onClick={() => setQualityOpen(o => !o)}
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+          >
+            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-700 group-hover:text-neutral-500">QUALITY CONTROLS</span>
+            <span className="font-mono text-[8px] text-neutral-800">{qualityOpen ? "▲" : "▼"}</span>
+          </button>
+          {qualityOpen && (
+            <div className="px-2 pb-2 space-y-1">
+              {ctrlMsg && !triageOpen && (
+                <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1 mb-1">{ctrlMsg}</div>
+              )}
+              <button disabled={ctrlWorking} onClick={() => bulkReject("low-confidence")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                <span className="text-[10px]">✕</span> REJECT LOW-CONFIDENCE MENTIONS
+              </button>
+              <button disabled={ctrlWorking} onClick={() => bulkReject("single-word-person")}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-400 hover:border-amber-800/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                <span className="text-[10px]">✕</span> REJECT SINGLE-WORD PERSONS
+              </button>
+              <button disabled={ctrlWorking} onClick={purgeFailedDocs}
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-600 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
+                <span className="text-[10px]">⊗</span> PURGE FAILED DOCUMENTS
               </button>
             </div>
           )}
         </div>
+
+        {/* ══ SECTION 5: ATLAS DOSSIER ══ */}
+        <div>
+          <button
+            onClick={() => setDossierSectionOpen(o => !o)}
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+          >
+            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-violet-800 group-hover:text-violet-700">ATLAS DOSSIER</span>
+            <span className="font-mono text-[8px] text-neutral-800">{dossierSectionOpen ? "▲" : "▼"}</span>
+          </button>
+          {dossierSectionOpen && (
+            <div className="px-2.5 pb-2.5 space-y-2">
+              {!dossier ? (
+                <button
+                  disabled={dossierLoading}
+                  onClick={async () => {
+                    setDossierLoading(true);
+                    try {
+                      const r = await fetch(`/api/cases/${caseId}/dossier`);
+                      const d = await r.json();
+                      setDossier(d);
+                      setDossierExpanded(true);
+                    } catch { /* silent */ } finally { setDossierLoading(false); }
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-violet-900/40 text-violet-700 hover:text-violet-400 hover:border-violet-700/50 font-mono text-[9px] uppercase tracking-widest transition-colors disabled:opacity-40"
+                >
+                  {dossierLoading ? "GENERATING..." : "⊕ GENERATE DOSSIER"}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[8px] text-violet-700 uppercase tracking-widest">DOSSIER READY</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setDossierExpanded(e => !e)}
+                        className="font-mono text-[7px] text-neutral-600 hover:text-neutral-400 uppercase tracking-wider transition-colors"
+                      >
+                        {dossierExpanded ? "▲ COLLAPSE" : "▼ EXPAND"}
+                      </button>
+                      <button
+                        onClick={() => { setDossier(null); setDossierExpanded(false); }}
+                        className="font-mono text-[7px] text-neutral-800 hover:text-neutral-600 uppercase tracking-wider transition-colors"
+                      >
+                        ↺ REGEN
+                      </button>
+                    </div>
+                  </div>
+                  {dossierExpanded && (() => {
+                    const s = dossier.sections ?? {};
+                    return (
+                      <div className="space-y-2 text-[9px] font-mono">
+                        {s.caseSummary && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-violet-700 uppercase tracking-widest">SUMMARY</div>
+                            <p className="text-neutral-500 leading-relaxed">{s.caseSummary}</p>
+                          </div>
+                        )}
+                        {s.keyEntities?.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-cyan-700 uppercase tracking-widest">KEY ENTITIES</div>
+                            {s.keyEntities.map((e: any) => (
+                              <div key={e.id} className="flex items-center justify-between">
+                                <span className="text-white uppercase">{e.name}</span>
+                                <span className="text-neutral-700 text-[8px]">{e.type.replace(/_/g, " ")} · {e.docCount}d</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {s.entityRelationships?.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-blue-700 uppercase tracking-widest">CONNECTIONS</div>
+                            {s.entityRelationships.slice(0, 4).map((r: any, i: number) => (
+                              <div key={i} className="text-neutral-600 truncate">
+                                <span className="text-neutral-400">{r.entityAName}</span>
+                                <span className="text-neutral-700 mx-1">→</span>
+                                <span className="text-neutral-400">{r.entityBName}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {s.timelineSignals?.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-amber-700 uppercase tracking-widest">TIMELINE</div>
+                            {s.timelineSignals.slice(0, 3).map((t: any, i: number) => (
+                              <div key={i} className="flex gap-1.5">
+                                <span className="text-neutral-700 flex-shrink-0">{t.date?.slice(0, 10) ?? "?"}</span>
+                                <span className="text-neutral-500 truncate">{t.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {s.financialSignals?.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-green-700 uppercase tracking-widest">FINANCIAL</div>
+                            {s.financialSignals.slice(0, 3).map((f: any, i: number) => (
+                              <div key={i} className="text-neutral-600 truncate">
+                                <span className="text-neutral-400">{f.entityName}</span>
+                                <span className="text-neutral-700 ml-1">— {f.context.slice(0, 50)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {s.investigativeAngles?.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-orange-700 uppercase tracking-widest">ANGLES</div>
+                            {s.investigativeAngles.map((a: any, i: number) => (
+                              <div key={i} className="text-neutral-600 flex gap-1">
+                                <span className="text-neutral-800">·</span>
+                                <span>{a.angle}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {s.nextQueries?.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[8px] text-neutral-600 uppercase tracking-widest">QUERY EXPANSION</div>
+                            {s.nextQueries.slice(0, 4).map((q: string, i: number) => (
+                              <div key={i} className="text-neutral-700 truncate">→ {q}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ══ SECTION 6: DIAGNOSTICS ══ (collapsed by default) */}
+        {sd && (
+          <div>
+            <button
+              onClick={() => setDiagOpen(o => !o)}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+            >
+              <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-800 group-hover:text-neutral-600">DIAGNOSTICS</span>
+              <span className="font-mono text-[8px] text-neutral-800">{diagOpen ? "▲" : "▼"}</span>
+            </button>
+            {diagOpen && (
+              <div className="px-3 pb-3 space-y-2">
+                {/* Reject reasons */}
+                {(() => {
+                  const rejectEntries = Object.entries(sd.rejectReasons ?? {})
+                    .filter(([, v]) => (v as number) > 0)
+                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                    .slice(0, 5);
+                  return rejectEntries.length > 0 ? (
+                    <div className="space-y-0.5">
+                      <div className="font-mono text-[7px] text-neutral-800 uppercase tracking-widest">REJECT REASONS</div>
+                      {rejectEntries.map(([reason, count]) => (
+                        <div key={reason} className="flex items-center justify-between">
+                          <span className="font-mono text-[8px] text-neutral-700 uppercase">{reason.replace(/_/g, "-")}</span>
+                          <span className="font-mono text-[8px] text-red-800">{count as number}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
+                {/* Numeric metrics */}
+                <div className="space-y-0.5">
+                  <div className="font-mono text-[7px] text-neutral-800 uppercase tracking-widest">RAW COUNTS</div>
+                  {[
+                    { label: "detected", val: sd.detected },
+                    { label: "admitted", val: sd.admitted },
+                    { label: "held cand.", val: sd.heldCandidates },
+                    { label: "suppressed", val: sd.suppressedNoise },
+                    { label: "fw blocked", val: sd.rejectedFw },
+                    { label: "artifact rej.", val: sd.artifactRejected },
+                  ].filter(x => (x.val ?? 0) > 0).map(({ label, val }) => (
+                    <div key={label} className="flex items-center justify-between">
+                      <span className="font-mono text-[8px] text-neutral-800 uppercase">{label}</span>
+                      <span className="font-mono text-[8px] text-neutral-700">{val}</span>
+                    </div>
+                  ))}
+                </div>
+                {sd.fallback && (
+                  <div className="font-mono text-[7px] text-amber-800 uppercase">FALLBACK MODE ACTIVE</div>
+                )}
+                {sd.recoveryTriggered && sd.recoveryReason && (
+                  <div className="font-mono text-[7px] text-teal-800 uppercase truncate" title={sd.recoveryReason}>
+                    RECOVERY: {sd.recoveryReason}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Plus, Clock } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 export default function TimelineTab({ caseId, timeline }: { caseId: number, timeline: TimelineEntry[] }) {
@@ -22,7 +22,17 @@ export default function TimelineTab({ caseId, timeline }: { caseId: number, time
       <div className="flex-1 overflow-auto p-6 lg:p-10">
         <div className="relative pl-6 space-y-8 before:absolute before:inset-0 before:ml-[5px] before:h-full before:w-px before:bg-red-600/30 max-w-3xl mx-auto">
           {sorted.length === 0 ? (
-            <div className="text-center font-mono text-neutral-500 text-sm uppercase tracking-widest py-10">NO TIMELINE ENTRIES DETECTED</div>
+            <div className="flex flex-col items-center pt-20">
+              <div className="atlas-empty-state">
+                <Clock className="atlas-empty-icon w-8 h-8" />
+                <div className="atlas-empty-title">TEMPORAL TRACE EMPTY</div>
+                <div className="atlas-empty-sub">
+                  Date-anchored events are auto-extracted from ingested documents.
+                  Add events manually using the + button above.
+                </div>
+                <div className="atlas-empty-badge">→ ingest docs or add event manually</div>
+              </div>
+            </div>
           ) : sorted.map((entry) => (
             <div key={entry.id} className="relative group">
               {/* Diamond Marker */}
