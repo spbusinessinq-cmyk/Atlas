@@ -203,7 +203,13 @@ function Router() {
           </Layout>
         </AuthGate>
       </Route>
-      <Route component={NotFound} />
+      <Route path="/:rest*">
+        <AuthGate>
+          <Layout>
+            <RouteShell><NotFound /></RouteShell>
+          </Layout>
+        </AuthGate>
+      </Route>
     </Switch>
   );
 }
@@ -212,11 +218,15 @@ function Router() {
 
 function App() {
   const [booted, setBooted] = useState(() => {
-    try { return sessionStorage.getItem("atlas-booted") === "1"; } catch { return true; }
+    try {
+      // Skip boot screen when embedded in an iframe (canvas preview, etc.)
+      if (typeof window !== "undefined" && window !== window.top) return true;
+      return localStorage.getItem("atlas-booted") === "1";
+    } catch { return true; }
   });
 
   const handleBootComplete = () => {
-    try { sessionStorage.setItem("atlas-booted", "1"); } catch { /* ignore */ }
+    try { localStorage.setItem("atlas-booted", "1"); } catch { /* ignore */ }
     setBooted(true);
   };
 

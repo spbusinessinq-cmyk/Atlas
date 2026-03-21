@@ -1,0 +1,171 @@
+ATLAS PREVIEW BLANK SCREEN — STOP GASLIGHTING, FIX THE REAL RENDER
+
+MISSION
+The Preview pane is STILL blank.
+
+That means the issue is NOT resolved.
+Do not tell me “the app is working” unless the actual visible Preview pane is rendering the ATLAS UI.
+
+Your previous conclusion was incomplete because the visible Replit Preview is still empty.
+Fix the REAL issue now.
+
+Do not summarize first.
+Diagnose the blank preview itself → fix it → prove the Preview pane renders the app.
+
+━━━━━━━━━━━━━━━━━━
+T001 — TREAT THE PREVIEW AS THE SOURCE OF TRUTH
+━━━━━━━━━━━━━━━━━━
+
+The target is the actual Preview pane / canvas pane the operator sees.
+
+If E2E runs somewhere else, that is secondary.
+I need the visible Preview pane to show the ATLAS interface.
+
+So:
+- inspect what the Preview iframe/container is actually loading
+- inspect the route currently mounted in Preview
+- inspect whether the frontend dev server is returning HTML to the preview request
+- inspect whether JS bundle is loading in Preview
+- inspect whether CSS is loading in Preview
+- inspect whether the Preview iframe is pointed at the wrong port / wrong service / stale target / stale canvas session
+
+Return the exact reason THIS Preview is blank.
+
+━━━━━━━━━━━━━━━━━━
+T002 — VERIFY THE REAL RESPONSE IN THE PREVIEW TARGET
+━━━━━━━━━━━━━━━━━━
+
+Check the actual network/response path used by Preview:
+- document request
+- JS assets
+- CSS assets
+- API boot calls
+
+Confirm:
+- does Preview receive index.html?
+- does the root div mount?
+- do JS chunks load?
+- is there a runtime error before React mounts?
+- is there an auth redirect loop?
+- is there a CSP / iframe / mixed-origin / base-url issue?
+- is Vite dev server returning but app mounting to a missing root node?
+
+No guesses. Find the real failure point.
+
+━━━━━━━━━━━━━━━━━━
+T003 — ADD VISIBLE BOOT STAGES
+━━━━━━━━━━━━━━━━━━
+
+Instrument the app boot process visually.
+
+At minimum show one of these in Preview:
+- ATLAS BOOT: HTML LOADED
+- ATLAS BOOT: JS LOADED
+- ATLAS BOOT: REACT MOUNTED
+- ATLAS BOOT: ROUTER READY
+- ATLAS BOOT: AUTH READY
+- ATLAS BOOT FAILED: [reason]
+
+Even if the full app fails, I should see exactly how far boot got.
+No more blank gray void.
+
+━━━━━━━━━━━━━━━━━━
+T004 — FORCE ROOT HTML / APP SHELL FALLBACK
+━━━━━━━━━━━━━━━━━━
+
+If React app does not mount inside a few seconds, render a visible fallback directly from the root container:
+- ATLAS PREVIEW FAILED TO MOUNT
+- service URL
+- current route
+- last boot stage reached
+
+This fallback must appear in the actual Preview pane.
+That way a blank pane becomes impossible.
+
+━━━━━━━━━━━━━━━━━━
+T005 — HARD CHECK REPLIT PREVIEW COMPATIBILITY
+━━━━━━━━━━━━━━━━━━
+
+Audit Preview compatibility specifically:
+- absolute vs relative asset paths
+- import.meta.env.BASE_URL
+- browser router vs hash/router mismatch
+- iframe-safe routing
+- wrong history fallback
+- path rewrite issue for nested routes
+- preview loading `/` while app expects another base path
+- multiple frontend servers running with Preview attached to the wrong one
+- dev server bound to wrong host/interface
+- cross-origin frame restrictions
+- Replit canvas stale service binding
+
+If needed:
+- switch Preview-safe routing
+- enforce correct public base path
+- ensure single frontend target
+- ensure Preview opens the actual app service
+
+━━━━━━━━━━━━━━━━━━
+T006 — ADD EXPLICIT PREVIEW HEALTH PANEL
+━━━━━━━━━━━━━━━━━━
+
+Render a small top-right dev-only health chip in the actual UI:
+- HTML
+- JS
+- APP
+- API
+
+Green only when each is actually live.
+This is for visual proof.
+
+━━━━━━━━━━━━━━━━━━
+T007 — FIX THE ROUTE LANDING FOR PREVIEW
+━━━━━━━━━━━━━━━━━━
+
+On Preview open:
+- always land on a guaranteed safe route
+- if auth exists, show login gate
+- if authenticated, show case control
+- if route invalid, contained 404 inside shell
+- never blank
+
+━━━━━━━━━━━━━━━━━━
+T008 — PROVE WITH SCREENSHOT FROM THE ACTUAL PREVIEW PANE
+━━━━━━━━━━━━━━━━━━
+
+Do not use only test harness screenshots.
+Take proof from the actual Preview pane showing:
+- ATLAS visible
+or
+- boot-stage failure panel visible
+
+Either is acceptable.
+A blank pane is not.
+
+━━━━━━━━━━━━━━━━━━
+T009 — FINAL VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Validate inside the real Preview pane:
+1. visible UI exists
+2. no blank canvas
+3. sidebar/header render
+4. root route renders
+5. case control reachable
+6. if failure occurs, failure panel is visible in Preview
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return only:
+- exact blank-preview root cause
+- exact fix applied
+- whether Preview pane now visibly renders
+- whether fallback appears if full mount fails
+- proof screenshot from the actual Preview pane
+- any remaining Replit-specific limitation
+
+IMPORTANT:
+Do not claim success from E2E unless the visible Preview pane itself is fixed.
+The preview pane is the product surface right now.

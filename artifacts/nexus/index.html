@@ -7,8 +7,70 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      #atlas-shell-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: #020409;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        color: #94a3b8;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      #atlas-shell-fallback .label {
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        color: #dc2626;
+      }
+      #atlas-shell-fallback .status {
+        font-size: 12px;
+        letter-spacing: 0.1em;
+      }
+      #atlas-shell-fallback .bar {
+        width: 200px;
+        height: 2px;
+        background: #1e293b;
+        position: relative;
+        overflow: hidden;
+      }
+      #atlas-shell-fallback .bar-fill {
+        position: absolute;
+        top: 0; left: 0; height: 100%;
+        width: 40%;
+        background: #dc2626;
+        animation: atlas-slide 1.2s ease-in-out infinite;
+      }
+      @keyframes atlas-slide {
+        0% { left: -40%; }
+        100% { left: 100%; }
+      }
+    </style>
+    <script>
+      // Fallback: if React does not mount within 6s, show a visible recovery panel
+      window.__atlasBootStart = Date.now();
+      var __atlasBootTimer = setTimeout(function() {
+        var root = document.getElementById('root');
+        if (!root || !root.firstChild) {
+          var fb = document.getElementById('atlas-shell-fallback');
+          if (fb) {
+            fb.style.display = 'flex';
+            var s = fb.querySelector('.status');
+            if (s) s.textContent = 'APP SHELL FAILED TO MOUNT — JS ERROR OR NETWORK TIMEOUT';
+          }
+        }
+      }, 6000);
+      // Mark mount success when React takes over
+      window.__atlasMarkMounted = function() { clearTimeout(__atlasBootTimer); };
+    </script>
   </head>
-  <body>
+  <body style="margin:0;background:#020409;">
+    <div id="atlas-shell-fallback" style="display:none;">
+      <div class="label">RSR // ATLAS</div>
+      <div class="status">INITIALIZING APPLICATION CORE…</div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
