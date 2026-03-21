@@ -1,0 +1,171 @@
+ATLAS PREVIEW RECOVERY + ROOT APP RESTORE — NO MORE BLANK SCREEN
+
+MISSION
+The app is still compiling and the validation agent says routes/components are working, but the visible Preview/Canvas is still blank or half-dead.
+
+This means I do NOT want more feature work right now.
+I want a hard recovery pass that restores the actual visible app shell and proves the live preview is rendering again.
+
+Do not summarize first.
+Diagnose → fix → verify → return proof.
+
+━━━━━━━━━━━━━━━━━━
+T001 — IDENTIFY THE TRUE FAILURE
+━━━━━━━━━━━━━━━━━━
+
+Figure out exactly why the visible Preview/Canvas is blank even though validation claims the app works.
+
+Check all of these:
+- root route render failure
+- blank layout shell with no routed page mounted
+- React error boundary swallowing render crash
+- suspense/loading fallback never resolving
+- router/provider/store failure at app root
+- broken preview target / stale iframe
+- CSS causing full-screen invisible layer
+- auth gate rendering nothing
+- fatal error in console not surfacing to UI
+
+Return exact root cause, not guesses.
+
+━━━━━━━━━━━━━━━━━━
+T002 — RESTORE ROOT APPLICATION VISIBILITY
+━━━━━━━━━━━━━━━━━━
+
+I need the actual ATLAS app visible again in the normal Preview pane.
+
+Add a temporary but visible root-safe fallback:
+- if the main app fails to mount, render a styled ATLAS recovery screen
+- show:
+  - APP SHELL ONLINE / ROUTE FAILED
+  - APP SHELL FAILED
+  - AUTH GATE BLOCKED
+  - PROVIDER FAILURE
+  - ROUTER FAILURE
+
+No more blank gray nothing.
+If anything fails, it must render a visible failure state.
+
+━━━━━━━━━━━━━━━━━━
+T003 — HARDEN ROOT APP SHELL
+━━━━━━━━━━━━━━━━━━
+
+Audit the root entry path:
+- main.tsx / app root
+- router mount
+- auth wrapper
+- provider tree
+- layout shell
+- case routes
+- dashboard route
+
+Fix anything that can cause the entire preview to go empty.
+
+Requirements:
+- root layout always renders
+- sidebar/header should appear even if route content crashes
+- route crash should show contained error state, not kill whole app
+
+━━━━━━━━━━━━━━━━━━
+T004 — ADD APP-LEVEL ERROR BOUNDARY
+━━━━━━━━━━━━━━━━━━
+
+Implement a real top-level error boundary for Preview mode.
+
+If any subtree crashes:
+- show styled ATLAS fatal panel
+- include component/route name if available
+- include “RETURN TO CASE CONTROL” button
+- include “RELOAD APP” button
+
+No silent failures.
+
+━━━━━━━━━━━━━━━━━━
+T005 — PREVIEW / IFRAME RECOVERY
+━━━━━━━━━━━━━━━━━━
+
+Assume Replit preview may be stale or pointing at a bad state.
+
+Check:
+- preview URL target
+- iframe mount target
+- hydration mismatch
+- stale dev session / hot reload corruption
+- incorrect base path
+- route opening to invalid screen
+- preview frame only loading one child canvas instead of full app
+
+If needed:
+- reinitialize preview entry
+- force root route redirect to dashboard if path invalid
+- add safe default route redirect
+
+━━━━━━━━━━━━━━━━━━
+T006 — FORCE SAFE DEFAULT LANDING
+━━━━━━━━━━━━━━━━━━
+
+If the user opens `/` or Preview with no route:
+- land on CASE CONTROL dashboard
+- not blank
+- not graph-only
+- not dead shell
+
+If current path is invalid:
+- redirect to `/`
+- if case route invalid, show contained 404 panel inside app shell
+
+━━━━━━━━━━━━━━━━━━
+T007 — VISUAL MOUNT PROOF
+━━━━━━━━━━━━━━━━━━
+
+For verification add a small temporary visible marker in header:
+ATLAS ROOT ONLINE
+
+Only show in dev if needed.
+This is to prove the real app shell is mounted in Preview.
+
+━━━━━━━━━━━━━━━━━━
+T008 — CONSOLE + RUNTIME PROOF
+━━━━━━━━━━━━━━━━━━
+
+Capture and verify:
+- frontend build clean
+- API server running
+- root route returns rendered UI
+- preview pane shows full app
+- no blank canvas
+- no hidden fatal runtime error
+
+If there is still a platform-level Preview issue, prove it clearly and show that pop-out direct app works.
+
+━━━━━━━━━━━━━━━━━━
+T009 — FINAL VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Validate these in the actual visible Preview:
+1. dashboard visible
+2. sidebar visible
+3. open case works
+4. dossier works
+5. graph works
+6. document vault works
+7. no blank screen
+8. no gray canvas only
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return only:
+- exact root cause
+- exact fix applied
+- whether Preview is restored
+- whether app shell is restored
+- whether blank screen is gone
+- proof of visible dashboard in Preview
+- any remaining Replit-only limitation
+
+IMPORTANT:
+Do not drift into more feature work.
+Fix the visible app first.
+No more “all systems nominal” unless the Preview actually shows the app.
