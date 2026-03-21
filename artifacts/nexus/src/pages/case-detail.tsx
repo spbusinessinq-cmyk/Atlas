@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { openPrintDossier } from "@/lib/dossier-print";
 
 import GraphCanvas, { LinkIntelPanel, EntityIntelPanel, SuggestedEdge } from "./case-tabs/graph-view";
 import EntitiesTab from "./case-tabs/entities-tab";
@@ -502,6 +503,15 @@ function CaseDetailInner({
         navigate: "graph" as SectionId,
         icon: GitBranch,
         color: "border-cyan-500/20 bg-cyan-500/5 text-cyan-400",
+      };
+    }
+    if (entities.length > 0 && documents.length > 0) {
+      return {
+        message: `${entities.length} entities confirmed across ${documents.length} source${documents.length !== 1 ? "s" : ""}. Generate the intelligence dossier to produce a final report.`,
+        cta: "GENERATE DOSSIER",
+        navigate: "overview" as SectionId,
+        icon: BookOpen,
+        color: "border-violet-500/20 bg-violet-500/5 text-violet-400",
       };
     }
     return null;
@@ -2944,9 +2954,19 @@ function DefaultInspector({
                     </div>
                   ))}
                 </div>
-                {sd && sd.finalPromoted === 0 && sd.detected > 0 && (
-                  <div className="mt-2 font-mono text-[7px] text-amber-700 uppercase tracking-wide">
-                    ↑ {sd.detected} signals detected — none passed gates
+                {sd && sd.detected > 0 && (
+                  <div className="mt-2.5 flex items-center gap-1.5">
+                    <span className="font-mono text-[9px] text-neutral-500 tabular-nums">{sd.detected} detected</span>
+                    <span className="font-mono text-[9px] text-neutral-700">→</span>
+                    {pendingMentions > 0 ? (
+                      <span className="font-mono text-[9px] font-bold text-amber-500 uppercase tracking-wide tabular-nums">
+                        {pendingMentions} require review
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[9px] text-green-600 uppercase tracking-wide">
+                        auto-processed
+                      </span>
+                    )}
                   </div>
                 )}
                 {blockedDocs > 0 && (
@@ -3119,78 +3139,6 @@ function DefaultInspector({
                 REVIEW →
               </button>
             </div>
-            <button
-              onClick={() => setTriageOpen(o => !o)}
-              className={cn("atlas-collapse-btn", triageOpen && "open")}
-            >
-              <div className="flex items-center gap-1.5">
-                <span>BULK ACTIONS</span>
-              </div>
-              <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{triageOpen ? "▲" : "▼"}</span>
-            </button>
-            {triageOpen && (
-              <div className="px-2 pb-2 space-y-1 atlas-fade-in">
-                {ctrlMsg && (
-                  <div className="font-mono text-[9px] text-green-500/80 bg-green-500/5 border border-green-500/20 px-2 py-1 mb-1">{ctrlMsg}</div>
-                )}
-                <button disabled={ctrlWorking} onClick={() => bulkReject("off-topic")}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">✕</span> REJECT OFF-TOPIC MENTIONS
-                </button>
-                <button disabled={ctrlWorking} onClick={() => bulkReject("junk")}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">✕</span> REJECT JUNK / BOILERPLATE
-                </button>
-                <button disabled={ctrlWorking} onClick={() => bulkReject("artifact")}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">✕</span> REJECT ARTIFACT MENTIONS
-                </button>
-                <button disabled={ctrlWorking} onClick={() => bulkReject("nav-boilerplate")}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-red-500 hover:border-red-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">✕</span> REJECT NAV / BOILERPLATE
-                </button>
-                <button disabled={ctrlWorking} onClick={() => bulkReject("low-role")}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-amber-500 hover:border-amber-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">◌</span> HOLD LOW-ROLE (UNKNOWN)
-                </button>
-                <button disabled={ctrlWorking}
-                  onClick={async () => {
-                    setCtrlWorking(true); setCtrlMsg(null);
-                    try {
-                      const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "title-lead-highconf" })
-                      });
-                      const d = await r.json();
-                      setCtrlMsg(`Promoted ${d.approved ?? "?"} title/lead high-conf mention(s).`);
-                      await invalidate();
-                    } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-teal-400 hover:border-teal-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">▲</span> PROMOTE TITLE/LEAD HIGH-CONF
-                </button>
-                <button disabled={ctrlWorking}
-                  onClick={async () => {
-                    setCtrlWorking(true); setCtrlMsg(null);
-                    try {
-                      const r = await fetch(`/api/cases/${caseId}/mentions/bulk-approve`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "role-bearing" })
-                      });
-                      const d = await r.json();
-                      setCtrlMsg(`Promoted ${d.approved ?? "?"} role-bearing mention(s).`);
-                      await invalidate();
-                    } catch (e) { setCtrlMsg(`Error: ${e}`); } finally { setCtrlWorking(false); }
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-[#ffffff0d] text-neutral-700 hover:text-green-400 hover:border-green-900/40 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">▲</span> PROMOTE ROLE-BEARING HIGH-CONF
-                </button>
-                <button disabled={ctrlWorking} onClick={() => bulkReject("all-pending")}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 border border-red-900/40 text-red-900 hover:text-red-500 hover:border-red-700/50 font-mono text-[9px] uppercase tracking-wider transition-colors disabled:opacity-40">
-                  <span className="text-[10px]">⊗</span> REJECT ALL {pendingMentions} PENDING
-                </button>
-              </div>
-            )}
           </div>
         )}
 
@@ -3271,32 +3219,82 @@ function DefaultInspector({
                       </button>
                     </div>
                   </div>
+                  <button
+                    onClick={() => openPrintDossier({
+                      caseId: Number(caseId),
+                      caseTitle: caseData.title,
+                      caseStatus: caseData.status,
+                      autoBuildQuality: sd?.autoBuildQuality ?? null,
+                      entities: entities.map(e => ({ name: e.name, type: e.type, docCount: (e as any).docCount ?? 0 })),
+                      documents,
+                      dossierSections: dossier.sections ?? {},
+                    })}
+                    style={{
+                      background: "linear-gradient(135deg, rgba(139,92,246,0.12), rgba(109,40,217,0.06))",
+                      borderColor: "rgba(139,92,246,0.35)",
+                      boxShadow: "inset 0 1px 0 rgba(139,92,246,0.1)",
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 border font-mono text-[9px] text-violet-400 hover:text-violet-300 uppercase tracking-widest transition-all hover:border-violet-500/55 hover:bg-violet-900/20"
+                  >
+                    <span style={{ fontSize: "11px" }}>↓</span>
+                    EXPORT PDF
+                  </button>
                   {dossierExpanded && (() => {
                     const s = dossier.sections ?? {};
                     return (
-                      <div className="space-y-2 text-[9px] font-mono">
+                      <div className="space-y-3 text-[9px] font-mono">
+                        {/* SUMMARY */}
                         {s.caseSummary && (
                           <div className="space-y-0.5">
-                            <div className="text-[8px] text-violet-700 uppercase tracking-widest">SUMMARY</div>
-                            <p className="text-neutral-500 leading-relaxed">{s.caseSummary}</p>
+                            <div className="text-[7px] text-violet-700 uppercase tracking-[0.2em]">SUMMARY</div>
+                            <p className="text-neutral-500 leading-relaxed text-[8.5px]">{s.caseSummary}</p>
                           </div>
                         )}
-                        {s.keyEntities?.length > 0 && (
-                          <div className="space-y-0.5">
-                            <div className="text-[8px] text-cyan-700 uppercase tracking-widest">KEY ENTITIES</div>
-                            {s.keyEntities.map((e: any) => (
-                              <div key={e.id} className="flex items-center justify-between">
-                                <span className="text-white uppercase">{e.name}</span>
-                                <span className="text-neutral-700 text-[8px]">{e.type.replace(/_/g, " ")} · {e.docCount}d</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+
+                        {/* INTELLIGENCE TIERS — CONFIRMED / DEVELOPING */}
+                        {s.keyEntities?.length > 0 && (() => {
+                          const confirmed = s.keyEntities.filter((e: any) => (e.docCount ?? 0) >= 3);
+                          const developing = s.keyEntities.filter((e: any) => (e.docCount ?? 0) > 0 && (e.docCount ?? 0) < 3);
+                          return (
+                            <div className="space-y-2">
+                              {confirmed.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <div className="w-1 h-1 rounded-full bg-green-500" />
+                                    <span className="text-[7px] text-green-600 uppercase tracking-[0.2em]">CONFIRMED</span>
+                                  </div>
+                                  {confirmed.map((e: any) => (
+                                    <div key={e.id} className="flex items-center justify-between py-0.5">
+                                      <span className="text-neutral-200 uppercase text-[8.5px]">{e.name}</span>
+                                      <span className="text-neutral-700 text-[7px]">{e.docCount}d</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {developing.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <div className="w-1 h-1 rounded-full bg-amber-500" />
+                                    <span className="text-[7px] text-amber-600 uppercase tracking-[0.2em]">DEVELOPING</span>
+                                  </div>
+                                  {developing.map((e: any) => (
+                                    <div key={e.id} className="flex items-center justify-between py-0.5">
+                                      <span className="text-neutral-500 uppercase text-[8px]">{e.name}</span>
+                                      <span className="text-neutral-800 text-[7px]">{e.docCount}d</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* CONNECTIONS */}
                         {s.entityRelationships?.length > 0 && (
                           <div className="space-y-0.5">
-                            <div className="text-[8px] text-blue-700 uppercase tracking-widest">CONNECTIONS</div>
+                            <div className="text-[7px] text-blue-700 uppercase tracking-[0.2em]">CONNECTIONS</div>
                             {s.entityRelationships.slice(0, 4).map((r: any, i: number) => (
-                              <div key={i} className="text-neutral-600 truncate">
+                              <div key={i} className="text-neutral-600 truncate text-[8px]">
                                 <span className="text-neutral-400">{r.entityAName}</span>
                                 <span className="text-neutral-700 mx-1">→</span>
                                 <span className="text-neutral-400">{r.entityBName}</span>
@@ -3304,44 +3302,75 @@ function DefaultInspector({
                             ))}
                           </div>
                         )}
+
+                        {/* TIMELINE */}
                         {s.timelineSignals?.length > 0 && (
                           <div className="space-y-0.5">
-                            <div className="text-[8px] text-amber-700 uppercase tracking-widest">TIMELINE</div>
+                            <div className="text-[7px] text-amber-700 uppercase tracking-[0.2em]">TIMELINE</div>
                             {s.timelineSignals.slice(0, 3).map((t: any, i: number) => (
-                              <div key={i} className="flex gap-1.5">
-                                <span className="text-neutral-700 flex-shrink-0">{t.date?.slice(0, 10) ?? "?"}</span>
+                              <div key={i} className="flex gap-1.5 text-[8px]">
+                                <span className="text-neutral-700 flex-shrink-0 tabular-nums">{t.date?.slice(0, 10) ?? "?"}</span>
                                 <span className="text-neutral-500 truncate">{t.title}</span>
                               </div>
                             ))}
                           </div>
                         )}
+
+                        {/* FINANCIAL — T004: entity + context + confidence */}
                         {s.financialSignals?.length > 0 && (
-                          <div className="space-y-0.5">
-                            <div className="text-[8px] text-green-700 uppercase tracking-widest">FINANCIAL</div>
+                          <div className="space-y-1">
+                            <div className="text-[7px] text-green-700 uppercase tracking-[0.2em]">FINANCIAL FLOWS</div>
                             {s.financialSignals.slice(0, 3).map((f: any, i: number) => (
-                              <div key={i} className="text-neutral-600 truncate">
-                                <span className="text-neutral-400">{f.entityName}</span>
-                                <span className="text-neutral-700 ml-1">— {f.context.slice(0, 50)}</span>
+                              <div key={i} style={{ borderLeft: "2px solid rgba(34,197,94,0.2)", paddingLeft: "6px" }}>
+                                <div className="text-neutral-300 text-[8.5px] font-bold">{f.entityName}</div>
+                                <div className="text-neutral-600 text-[7.5px] leading-snug mt-0.5 line-clamp-2">{f.context.slice(0, 80)}</div>
+                                {f.confidence !== undefined && (
+                                  <div className="text-[7px] text-neutral-800 mt-0.5">CONF: {Math.round((f.confidence ?? 0) * 100)}%</div>
+                                )}
                               </div>
                             ))}
                           </div>
                         )}
+
+                        {/* ANGLES */}
                         {s.investigativeAngles?.length > 0 && (
                           <div className="space-y-0.5">
-                            <div className="text-[8px] text-orange-700 uppercase tracking-widest">ANGLES</div>
+                            <div className="text-[7px] text-orange-700 uppercase tracking-[0.2em]">ANGLES</div>
                             {s.investigativeAngles.map((a: any, i: number) => (
-                              <div key={i} className="text-neutral-600 flex gap-1">
-                                <span className="text-neutral-800">·</span>
+                              <div key={i} className="text-neutral-600 flex gap-1 text-[8px]">
+                                <span className="text-neutral-800 flex-shrink-0">·</span>
                                 <span>{a.angle}</span>
                               </div>
                             ))}
                           </div>
                         )}
+
+                        {/* GAPS — T005 */}
+                        {(() => {
+                          const gaps: string[] = [];
+                          if (!s.keyEntities?.some((e: any) => e.type === "person")) gaps.push("No individual actors confirmed");
+                          if ((s.financialSignals?.length ?? 0) === 0) gaps.push("No financial flows detected");
+                          if ((s.timelineSignals?.length ?? 0) === 0) gaps.push("No timeline events mapped");
+                          if ((s.entityRelationships?.length ?? 0) === 0) gaps.push("No confirmed relationships");
+                          return gaps.length > 0 ? (
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-1 h-1 rounded-full bg-neutral-700" />
+                                <span className="text-[7px] text-neutral-700 uppercase tracking-[0.2em]">GAPS</span>
+                              </div>
+                              {gaps.map((g, i) => (
+                                <div key={i} className="text-[7.5px] text-neutral-800 pl-2.5">· {g}</div>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
+
+                        {/* QUERY EXPANSION */}
                         {s.nextQueries?.length > 0 && (
                           <div className="space-y-0.5">
-                            <div className="text-[8px] text-neutral-600 uppercase tracking-widest">QUERY EXPANSION</div>
-                            {s.nextQueries.slice(0, 4).map((q: string, i: number) => (
-                              <div key={i} className="text-neutral-700 truncate">→ {q}</div>
+                            <div className="text-[7px] text-neutral-700 uppercase tracking-[0.2em]">EXPAND</div>
+                            {s.nextQueries.slice(0, 3).map((q: string, i: number) => (
+                              <div key={i} className="text-neutral-800 text-[7.5px] truncate">→ {q}</div>
                             ))}
                           </div>
                         )}

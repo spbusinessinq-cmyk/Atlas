@@ -1,0 +1,194 @@
+This is the ATLAS FINAL ZERO-FRICTION + AUTO-INTELLIGENCE + PRINT DOSSIER PASS.
+
+This is the LAST PASS before launch.
+
+Do NOT add new systems beyond what is defined here.
+Do NOT expand scope.
+Do NOT overbuild.
+
+This pass must:
+- remove operator friction
+- automate intelligence synthesis
+- increase trust and clarity
+- produce a professional printable case dossier
+
+ATLAS must feel like:
+a system that thinks first, and produces real-world outputs.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T001 — AUTO-INTELLIGENCE (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━
+
+System must do the work before the operator:
+
+- auto-triage (reject junk, promote strong signals)
+- auto-entity classification
+- auto-money chain synthesis
+- auto-merge duplicate signals
+- auto-confidence scoring
+
+Operator only reviews exceptions.
+
+Show:
+“227 detected → 18 require review”
+
+Not full raw workload.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T002 — SINGLE ACTION SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━
+
+Only ONE dominant action visible at a time:
+
+- “Review X items”
+- “Generate Dossier”
+- “Expand Sources”
+
+Remove multi-button clutter.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T003 — PASSIVE REVIEW MODEL
+━━━━━━━━━━━━━━━━━━━━━━
+
+Convert workflow:
+
+- system processes everything
+- operator only sees:
+  - flagged entities
+  - conflicts
+  - low-confidence signals
+
+Hide bulk controls by default.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T004 — MONEY FLOW TRUST
+━━━━━━━━━━━━━━━━━━━━━━
+
+All financial signals must show:
+
+- who gave
+- who received
+- amount (if present)
+- program/contract
+- support count (how many docs confirm)
+
+Merge duplicate flows.
+
+Confidence must be real, not inflated.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T005 — INTELLIGENCE CLARITY
+━━━━━━━━━━━━━━━━━━━━━━
+
+Dossier + case must clearly separate:
+
+- CONFIRMED
+- DEVELOPING
+- GAPS
+
+No mixing weak signals with conclusions.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T006 — PRINTABLE DOSSIER SYSTEM (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Add a “EXPORT DOSSIER (PDF)” action.
+
+This must generate a clean, professional, print-ready intelligence document.
+
+Layout requirements:
+
+PAGE 1 — COVER
+- ATLAS header (clean, minimal)
+- Case Title
+- Case ID
+- Date / Time
+- Confidence Level
+- Classification label (e.g., PROVISIONAL / STRONG)
+
+PAGE 2 — EXECUTIVE SUMMARY
+- 1–2 paragraph clean summary
+- Key finding statement
+
+PAGE 3 — PRIMARY ACTORS
+- Individuals
+- Organizations
+- Agencies
+
+PAGE 4 — KEY FINDINGS
+- bullet or structured findings
+- no clutter
+
+PAGE 5 — FINANCIAL FLOWS (if present)
+- structured:
+  source → recipient → amount → program
+- include support count
+
+PAGE 6 — EVIDENCE
+- top sources
+- clean formatting (title, source, relevance)
+
+PAGE 7 — TIMELINE
+- date → event
+
+PAGE 8 — INTELLIGENCE GAPS
+- what is missing
+- what needs verification
+
+STYLE REQUIREMENTS:
+- white or very light background
+- black/gray text
+- minimal accent color (red/amber/green)
+- no UI styling (no dark theme)
+- print-safe margins
+- clean typography
+- no clutter
+
+Output must feel like:
+a real intelligence report — not a screenshot.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T007 — EXPORT CONTROL
+━━━━━━━━━━━━━━━━━━━━━━
+
+Add:
+
+- “Export PDF”
+- “Print View”
+
+Ensure:
+- no UI elements appear in export
+- layout is stable
+- pagination is correct
+
+━━━━━━━━━━━━━━━━━━━━━━
+T008 — UI CLEANUP (FINAL)
+━━━━━━━━━━━━━━━━━━━━━━
+
+- remove unnecessary buttons
+- compress right rail
+- ensure one clear action
+- reduce noise by ~20%
+
+━━━━━━━━━━━━━━━━━━━━━━
+T009 — FINAL EXPERIENCE RULE
+━━━━━━━━━━━━━━━━━━━━━━
+
+Operator flow must be:
+
+1. Open case
+2. Read summary
+3. See evidence + flows
+4. Take ONE action OR export
+
+No friction.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+FINAL DIRECTIVE:
+
+ATLAS must:
+- think first
+- reduce work
+- present truth clearly
+- produce real-world output
