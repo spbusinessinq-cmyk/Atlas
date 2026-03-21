@@ -59,6 +59,14 @@ export interface RankedFinancialSignal {
   programName: string | null;
   financialConfidence: number | null;
   documentTitle: string | null;
+  inferredSignal?: boolean | null;
+}
+
+export interface EarlySignalEntry {
+  type: "entity" | "financial" | "timeline";
+  label: string;
+  confidence: number;
+  note?: string;
 }
 
 export interface KeyRelationship {
@@ -98,6 +106,8 @@ export interface CaseBrief {
   currentState: string;
   knownGaps: string[];
   suggestedNextQueries: string[];
+  earlySignals: EarlySignalEntry[];
+  caseHealth: "SPARSE" | "DEVELOPING" | "STRONG";
 
   stats: {
     totalDocs: number;
@@ -445,6 +455,7 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
       programName: (fs as any).programName || null,
       financialConfidence: conf,
       documentTitle: fs.documentTitle || null,
+      inferredSignal: (fs as any).inferredSignal ?? null,
       _score: score,
     });
   }
@@ -516,6 +527,33 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
   else if (dataQuality === "WEAK") caseConfidence = 15 + Math.min(25, primaryEntities.length * 5 + usableCount * 2);
   caseConfidence = Math.min(99, Math.round(caseConfidence));
 
+  // ── Multi-doc signal fusion: tag inferred signals ──────────────────────
+  // If two or more financial signals reference the same entityName/programName,
+  // mark the lower-confidence one as inferredSignal=true (synthesized cross-doc).
+  const entitySignalCount = new Map<string, number>();
+  for (const sig of topFinancial) {
+    const key = sig.programName ?? sig.entityName ?? "";
+    if (key) entitySignalCount.set(key, (entitySignalCount.get(key) ?? 0) + 1);
+  }
+  for (const sig of topFinancial) {
+    const key = sig.programName ?? sig.entityName ?? "";
+    if (key && (entitySignalCount.get(key) ?? 0) >= 2 && sig.inferredSignal === null) {
+      (sig as any).inferredSignal = true;
+      if (sig.financialConfidence !== null) {
+        sig.financialConfidence = Math.max(0.10, sig.financialConfidence - 0.10);
+      }
+    }
+  }
+
+  // ── Early signals (P4): surface non-numeric + low-conf indicators ────────
+  const earlySignals = buildEarlySignals(primaryEntities, secondaryEntities, topFinancial, topTimeline, financialSignals);
+
+  // ── Case health ──────────────────────────────────────────────────────────
+  const caseHealth: CaseBrief["caseHealth"] =
+    dataQuality === "STRONG" ? "STRONG" :
+    dataQuality === "MODERATE" ? "DEVELOPING" :
+    "SPARSE";
+
   return {
     caseId,
     caseTitle: caseRow.title,
@@ -540,6 +578,8 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     currentState,
     knownGaps,
     suggestedNextQueries,
+    earlySignals,
+    caseHealth,
     stats: {
       totalDocs: docs.length,
       usableDocs: usableCount,
@@ -591,7 +631,7 @@ function buildWhatThisCaseIs(
   } else if (orgs.length > 0) {
     parts.push(`Key institutions: ${orgs.join(", ")}.`);
   } else {
-    parts.push("No named actors confirmed — entity extraction returned no promoted records.");
+    parts.push("No confirmed actors — running in early recovery mode. Proper noun extraction active.");
   }
 
   // Financial signal with specifics
@@ -687,10 +727,66 @@ function buildCurrentState(
 
   if (quality === "WEAK" && docs.length < 3) {
     parts.push("Evidence base is thin — additional source ingestion required for reliable analysis.");
+    parts.push("Early indicators suggest this subject has investigative relevance but confirmation signals are absent.");
+  }
+
+  if (quality === "WEAK" || quality === "EMPTY") {
+    if (financial.some(f => f.signalType?.startsWith("NON_NUMERIC"))) {
+      parts.push("Non-numeric funding language detected — hard dollar figures not yet confirmed.");
+    }
+    if (timeline.some(t => t.title?.startsWith("[SOFT]"))) {
+      parts.push("Soft temporal signals captured — date references without confirmed action verbs.");
+    }
   }
 
   if (parts.length === 0) return "Evidence gathered. No dominant signal identified in current data set.";
   return parts.join(" ");
+}
+
+function buildEarlySignals(
+  primary: RankedEntity[],
+  secondary: RankedEntity[],
+  financial: RankedFinancialSignal[],
+  timeline: RankedTimelineEvent[],
+  allFinancial: typeof financial
+): EarlySignalEntry[] {
+  const signals: EarlySignalEntry[] = [];
+
+  // Low-confidence entity names from secondary pool
+  for (const e of secondary.slice(0, 3)) {
+    signals.push({
+      type: "entity",
+      label: e.name,
+      confidence: 0.35,
+      note: "Secondary actor — not yet confirmed via multi-doc support",
+    });
+  }
+
+  // Non-numeric financial signals
+  for (const f of allFinancial) {
+    const isNonNumeric = f.signalType?.startsWith("NON_NUMERIC") || f.amountDisplay === "NON-NUMERIC";
+    if (!isNonNumeric) continue;
+    const label = f.programName ?? f.entityName ?? f.eventSummary?.slice(0, 60) ?? "Unknown";
+    signals.push({
+      type: "financial",
+      label,
+      confidence: f.financialConfidence ?? 0.25,
+      note: "Funding language detected — no hard dollar amount confirmed",
+    });
+  }
+
+  // Soft timeline events
+  for (const t of timeline) {
+    if (!t.title?.startsWith("[SOFT]")) continue;
+    signals.push({
+      type: "timeline",
+      label: t.title.replace(/^\[SOFT\]\[?[A-Z_]*\]?\s*/, "").slice(0, 80),
+      confidence: 0.30,
+      note: "Date reference — no confirmed action verb",
+    });
+  }
+
+  return signals.slice(0, 6);
 }
 
 function buildKnownGaps(

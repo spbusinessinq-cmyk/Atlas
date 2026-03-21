@@ -1305,6 +1305,7 @@ export interface ExtractedTimelineEvent {
   eventDate: string;
   eventType: string;
   summary: string;
+  softEvent?: boolean;
 }
 
 const EVENT_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
@@ -1376,6 +1377,43 @@ export function extractTimelineEvents(text: string): ExtractedTimelineEvent[] {
 
     events.push({ eventDate: dateStr, eventType, summary });
     if (events.length >= 15) break;
+  }
+
+  return events;
+}
+
+/**
+ * Soft timeline recovery: date + entity/program reference, no action keyword required.
+ * Used as fallback when strict extractTimelineEvents returns 0 events.
+ */
+
+const SOFT_ENTITY_REF = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/;
+const SOFT_PROGRAM_REF = /\b(?:program|project|initiative|fund|agency|department|office|authority|commission|bureau|administration|council)\b/i;
+
+export function extractSoftTimelineEvents(text: string): ExtractedTimelineEvent[] {
+  if (!text || text.trim().length < 20) return [];
+
+  const events: ExtractedTimelineEvent[] = [];
+  const seen = new Set<string>();
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 20);
+
+  for (const sentence of sentences) {
+    const dateStr = extractDateFromSentence(sentence);
+    if (!dateStr) continue;
+
+    // Must reference an entity name OR a program-type word
+    const hasEntity = SOFT_ENTITY_REF.test(sentence);
+    const hasProgram = SOFT_PROGRAM_REF.test(sentence);
+    if (!hasEntity && !hasProgram) continue;
+
+    const eventType = classifyEventType(sentence);
+    const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 200);
+    const key = `${dateStr.slice(0, 10)}-${summary.slice(0, 60)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    events.push({ eventDate: dateStr, eventType, summary, softEvent: true });
+    if (events.length >= 8) break;
   }
 
   return events;
@@ -1581,6 +1619,72 @@ export function extractFinancialSignals(text: string, anchorTokens: string[] = [
       });
       if (signals.length >= 20) return signals;
     }
+  }
+
+  return signals;
+}
+
+/**
+ * Non-numeric signal extraction (P4): detects funding language WITHOUT a dollar amount.
+ * Creates NON_NUMERIC_SIGNAL entries — no amount, confidence capped at 0.5.
+ * Used to populate intelligence when hard dollar amounts are absent.
+ */
+
+const NON_NUMERIC_FUNDING_GATE = /\b(?:funding|budget|program\s+cost|allocated?|allocation|spending|appropriation|grant(?:ed?)?|contract(?:ed?)?|procurement|invest(?:ment|ed)|subsidized?|expenditure|financing|funded?)\b/i;
+const NON_NUMERIC_NOISE = /\b(?:click|subscribe|newsletter|sale|discount|promo|coupon|offer|deal|cart|checkout|percent\s+off|sign\s+up|free\s+trial|unlimited|monthly|weekly|per\s+month)\b/i;
+
+export function extractNonNumericSignals(text: string, anchorTokens: string[] = []): ExtractedFinancialSignal[] {
+  if (!text || text.trim().length < 20) return [];
+
+  const signals: ExtractedFinancialSignal[] = [];
+  const seen = new Set<string>();
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim().length > 10);
+
+  for (const sentence of sentences) {
+    if (!NON_NUMERIC_FUNDING_GATE.test(sentence)) continue;
+    if (NON_NUMERIC_NOISE.test(sentence)) continue;
+    if (FINANCIAL_AD_COPY_PATTERN.test(sentence)) continue;
+    if (FINANCIAL_SPORTS_PATTERN.test(sentence)) continue;
+
+    // Must have entity/program context to be useful
+    const entityMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/.exec(sentence);
+    const hasProgram = SOFT_PROGRAM_REF.test(sentence);
+    if (!entityMatch && !hasProgram) continue;
+
+    const signalType = getSignalType(sentence);
+    const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
+    const entityName = entityMatch ? entityMatch[1] : null;
+    const programName = extractProgramName(sentence);
+
+    const dedupKey = `NON_NUMERIC:${summary.slice(0, 80)}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+
+    // Confidence: base 0.2 + anchor overlap bonus
+    let conf = 0.20;
+    if (anchorTokens.length > 0) {
+      const lower = sentence.toLowerCase();
+      const hits = anchorTokens.filter(t => lower.includes(t)).length;
+      if (hits >= 2) conf += 0.20;
+      else if (hits === 1) conf += 0.10;
+    }
+    if (entityName) conf += 0.10;
+    conf = Math.min(0.50, Math.round(conf * 100) / 100);
+
+    signals.push({
+      amountRaw: "",
+      amountDisplay: "NON-NUMERIC",
+      normalizedAmount: null,
+      currency: "USD",
+      signalType: `NON_NUMERIC_${signalType}`,
+      eventSummary: summary,
+      entityName,
+      controlledBy: extractActorNearVerb(sentence, CONTROL_VERB_PATTERN),
+      receivedBy: extractActorNearVerb(sentence, RECEIVE_VERB_PATTERN),
+      programName,
+      financialConfidence: conf,
+    });
+    if (signals.length >= 5) break;
   }
 
   return signals;
@@ -1984,6 +2088,7 @@ export interface RawTimelineEvent {
   eventDate: string;
   eventType: string;
   summary: string;
+  softEvent?: boolean;
 }
 
 export interface RawFinancialSignal {
@@ -1998,6 +2103,7 @@ export interface RawFinancialSignal {
   receivedBy?: string | null;
   programName?: string | null;
   financialConfidence?: number;
+  inferredSignal?: boolean;
 }
 
 const TIMELINE_ACTION_KEYWORDS = /\b(?:approved?|funded?|allocated?|appropriated?|awarded?|contracted?|charged?|investigated?|indicted?|announced?|launched?|signed?|enacted?|ordered?|expanded?|audited?|subpoenaed?|arrested?|convicted?|sentenced?|settled?|dismissed?|reformed?|initiated?|established?|created?|passed?)\b/i;

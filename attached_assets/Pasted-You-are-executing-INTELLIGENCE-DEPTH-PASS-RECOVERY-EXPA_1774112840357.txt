@@ -1,0 +1,201 @@
+You are executing INTELLIGENCE DEPTH PASS — RECOVERY + EXPANSION ENGINE.
+
+Do NOT weaken precision rules.
+Do NOT reintroduce noise.
+
+Your goal:
+Recover valid intelligence when direct signals are missing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — MULTI-DOC SIGNAL FUSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem:
+Signals often exist across multiple documents, not one.
+
+Fix:
+
+M1) Create signal fusion layer:
+
+If:
+- doc A contains money ($X)
+- doc B contains actor/program
+- doc C contains action (approved/funded/etc)
+
+Combine into ONE inferred signal
+
+---
+
+M2) Fusion conditions:
+
+Allow fusion if:
+- shared entity OR
+- shared program OR
+- same event/time window
+
+---
+
+M3) Tag as:
+"inferred_signal = true"
+
+Lower confidence slightly (-0.1)
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — ENTITY RECOVERY MODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+E1) If zero entities detected:
+
+Run secondary pass:
+
+- extract proper nouns
+- filter by:
+  appears ≥2 times OR
+  appears near funding / investigation language
+
+---
+
+E2) Promote fallback entities as:
+LOW_CONF_ENTITY
+
+---
+
+E3) If entity appears in multiple docs:
+upgrade to NORMAL
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — SOFT TIMELINE RECOVERY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If strict timeline returns 0:
+
+T1) allow fallback events:
+
+- must contain date
+- must reference entity OR program
+
+T2) label as:
+"soft_event"
+
+T3) visually mark in UI
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — CONTEXTUAL SIGNAL DETECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add SECONDARY financial detection:
+
+If:
+- no explicit dollar amount
+BUT
+- contains:
+  "funding", "budget", "program cost", "allocated", "spending"
+
+Create:
+"NON_NUMERIC_SIGNAL"
+
+---
+
+Store:
+type
+actors
+program
+NO amount
+
+Confidence capped at 0.5
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — DOSSIER INTELLIGENCE MODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If system is sparse:
+
+Rewrite dossier tone:
+
+Instead of:
+"no data"
+
+Use:
+
+"This investigation currently lacks direct financial confirmations, but multiple indicators suggest potential funding structures tied to [entities/programs]. Further document ingestion required to validate financial flows."
+
+---
+
+Add section:
+"EARLY SIGNALS"
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — UI INTELLIGENCE FEEDBACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Update UI to reflect intelligence state:
+
+S1) Show badges:
+
+- STRONG SIGNAL
+- INFERRED SIGNAL
+- WEAK SIGNAL
+
+---
+
+S2) Replace empty stats with:
+
+"NO HARD SIGNALS — RUNNING RECOVERY MODE"
+
+---
+
+S3) Case health becomes:
+
+- STRONG
+- DEVELOPING
+- SPARSE
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — GRAPH BOOTSTRAP MODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If:
+entities ≥2 (even low confidence)
+
+Build provisional graph
+
+Edges can include:
+- co-occurrence
+- shared documents
+- inferred relationships
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 8 — FINAL EXPECTED RESULT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run again:
+
+"disney yearly spending"
+
+You should now see:
+
+- at least 2–5 entities (even low confidence)
+- at least 1 inferred or non-numeric signal
+- timeline populated (soft if needed)
+- dossier reads like early investigation
+- graph initializes
+
+Do not reintroduce noise.
+Do not fabricate facts.
+Only elevate patterns already present.
+
+Execute fully.

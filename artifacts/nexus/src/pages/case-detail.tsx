@@ -1389,6 +1389,16 @@ function OverviewPanel({
           ))}
         </div>
 
+        {/* ── RECOVERY MODE INDICATOR ── */}
+        {entities.length === 0 && usableDocs.length > 0 && (
+          <div className="mx-3 mb-2 px-3 py-2 border border-amber-900/30 bg-amber-950/5 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse flex-shrink-0" />
+            <span className="font-mono text-[8px] text-amber-700 uppercase tracking-widest">
+              RECOVERY MODE ACTIVE — entity extraction fallback engaged
+            </span>
+          </div>
+        )}
+
         {/* ── ACTION BUTTONS ── */}
         <div className="border-t border-[#ffffff06] px-3 py-2 flex flex-wrap items-center gap-2">
           <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest mr-1">ACTIONS</span>
@@ -1657,6 +1667,13 @@ function OverviewPanel({
 
 type BriefQuality = "STRONG" | "MODERATE" | "WEAK" | "EMPTY";
 
+interface EarlySignalEntry {
+  type: "entity" | "financial" | "timeline";
+  label: string;
+  confidence: number;
+  note?: string;
+}
+
 interface CaseBriefData {
   caseId: number;
   caseTitle: string;
@@ -1668,12 +1685,13 @@ interface CaseBriefData {
   dataQuality: BriefQuality;
   qualityNote: string;
   caseConfidence?: number;
+  caseHealth?: "SPARSE" | "DEVELOPING" | "STRONG";
   whatThisCaseIs: string;
   primaryActors: string[];
   primaryOrganizations: string[];
   keyEvidence: Array<{ id: number; title: string; source: string | null; score: number; scoreBreakdown: string; hasTimeline: boolean; hasFinancial: boolean; priority?: string; alignment?: string }>;
   topTimeline: Array<{ id: number; title: string; eventDate: string; eventType: string; priority: number }>;
-  topFinancial: Array<{ id: number; amountRaw: string; normalizedAmount: number | null; signalType: string; eventSummary: string | null; entityName: string | null }>;
+  topFinancial: Array<{ id: number; amountRaw: string; amountDisplay?: string | null; normalizedAmount: number | null; signalType: string; eventSummary: string | null; entityName: string | null; controlledBy?: string | null; receivedBy?: string | null; programName?: string | null; financialConfidence?: number | null; inferredSignal?: boolean | null }>;
   primaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number; promotionReason: string; isPrimary?: boolean }>;
   secondaryEntities: Array<{ id: number; name: string; type: string; mentionCount: number; docSupport: number; avgConfidence: number }>;
   keyRelationships: Array<{ entityA: string; entityB: string; relationshipType: string; confidence: number }>;
@@ -1681,6 +1699,7 @@ interface CaseBriefData {
   currentState: string;
   knownGaps: string[];
   suggestedNextQueries: string[];
+  earlySignals?: EarlySignalEntry[];
   stats: { totalDocs: number; usableDocs: number; totalEntities: number; totalTimeline: number; totalFinancial: number; totalRelationships?: number; totalMentions?: number };
 }
 
@@ -1747,6 +1766,16 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
               "border-neutral-800 bg-transparent"
             )}>
               {qc?.label}
+            </span>
+          )}
+          {brief?.caseHealth && (
+            <span className={cn(
+              "font-mono text-[8px] border px-1 py-0.5 tracking-wider",
+              brief.caseHealth === "STRONG" ? "text-green-400 border-green-900/40 bg-green-950/10" :
+              brief.caseHealth === "DEVELOPING" ? "text-cyan-400 border-cyan-900/40 bg-cyan-950/10" :
+              "text-amber-500 border-amber-900/40 bg-amber-950/10"
+            )}>
+              {brief.caseHealth}
             </span>
           )}
           {brief?.compiledAt && (
@@ -1999,20 +2028,24 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
                   <div className="font-mono text-[9px] text-neutral-700 italic">No date-anchored events found.</div>
                 ) : (
                   <div className="space-y-2">
-                    {brief.topTimeline.map((ev) => (
-                      <div key={ev.id} className="flex gap-2.5 items-start">
-                        <div className="w-1 h-1 bg-cyan-600 rounded-full mt-1.5 flex-shrink-0" />
-                        <div>
-                          <div className="font-mono text-[8px] text-cyan-600/70">
-                            {new Date(ev.eventDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                            {" · "}<span className="text-neutral-700">{ev.eventType.replace(/_/g, " ")}</span>
-                          </div>
-                          <div className="font-mono text-[9px] text-neutral-300">
-                            {ev.title.replace(/^\[[A-Z_]+\]\s*/, "")}
+                    {brief.topTimeline.map((ev) => {
+                      const isSoft = ev.title?.startsWith("[SOFT]");
+                      const cleanTitle = ev.title.replace(/^\[SOFT\]\[?[A-Z_]*\]?\s*/i, "").replace(/^\[[A-Z_]+\]\s*/, "");
+                      return (
+                        <div key={ev.id} className="flex gap-2.5 items-start">
+                          <div className={cn("w-1 h-1 rounded-full mt-1.5 flex-shrink-0", isSoft ? "bg-amber-700" : "bg-cyan-600")} />
+                          <div>
+                            <div className="flex items-center gap-1.5 font-mono text-[8px] text-cyan-600/70">
+                              <span>{new Date(ev.eventDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
+                              <span className="text-neutral-700">·</span>
+                              <span className="text-neutral-700">{ev.eventType.replace(/_/g, " ")}</span>
+                              {isSoft && <span className="text-amber-700 border border-amber-900/50 px-1 py-px text-[7px] tracking-wider">SOFT</span>}
+                            </div>
+                            <div className="font-mono text-[9px] text-neutral-300">{cleanTitle}</div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2036,21 +2069,38 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
                   <div className="font-mono text-[9px] text-neutral-700 italic">No financial signals detected.</div>
                 ) : (
                   <div className="space-y-2">
-                    {brief.topFinancial.map((sig) => (
-                      <div key={sig.id} className="flex gap-2.5 items-start">
-                        <div className="w-1 h-1 bg-green-600 rounded-full mt-1.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[9px] font-bold text-green-400">{sig.amountRaw}</span>
-                            <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff08] px-1">{sig.signalType}</span>
-                            {sig.entityName && <span className="font-mono text-[8px] text-cyan-500">{sig.entityName}</span>}
+                    {brief.topFinancial.map((sig) => {
+                      const isNonNumeric = sig.signalType?.startsWith("NON_NUMERIC") || sig.amountDisplay === "NON-NUMERIC";
+                      const conf = sig.financialConfidence ?? 0;
+                      const signalStrength = isNonNumeric || conf < 0.40 ? "WEAK" :
+                        sig.inferredSignal ? "INFERRED" :
+                        conf >= 0.75 ? "STRONG" : "MODERATE";
+                      const strengthColor = signalStrength === "STRONG" ? "text-green-400 border-green-900/50" :
+                        signalStrength === "INFERRED" ? "text-cyan-500 border-cyan-900/50" :
+                        signalStrength === "MODERATE" ? "text-neutral-400 border-neutral-800" :
+                        "text-amber-700 border-amber-900/40";
+                      const displayAmount = sig.amountDisplay || sig.amountRaw;
+                      return (
+                        <div key={sig.id} className="flex gap-2.5 items-start">
+                          <div className={cn("w-1 h-1 rounded-full mt-1.5 flex-shrink-0", isNonNumeric ? "bg-amber-800" : "bg-green-600")} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={cn("font-mono text-[9px] font-bold", isNonNumeric ? "text-amber-700" : "text-green-400")}>
+                                {isNonNumeric ? "NON-NUMERIC" : displayAmount}
+                              </span>
+                              <span className={cn("font-mono text-[7px] border px-1 py-px tracking-wider", strengthColor)}>
+                                {signalStrength} SIGNAL
+                              </span>
+                              <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff08] px-1">{sig.signalType?.replace(/^NON_NUMERIC_/, "")}</span>
+                              {sig.entityName && <span className="font-mono text-[8px] text-cyan-500">{sig.entityName}</span>}
+                            </div>
+                            {sig.eventSummary && (
+                              <div className="font-mono text-[8px] text-neutral-600 mt-0.5">{sig.eventSummary.slice(0, 140)}</div>
+                            )}
                           </div>
-                          {sig.eventSummary && (
-                            <div className="font-mono text-[8px] text-neutral-600 mt-0.5">{sig.eventSummary.slice(0, 140)}</div>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2064,6 +2114,36 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
             </div>
             <div className="px-3 py-2 font-mono text-[9px] text-neutral-400 leading-relaxed">{brief.currentState}</div>
           </div>
+
+          {/* EARLY SIGNALS — shown when caseHealth is SPARSE and earlySignals present */}
+          {brief.caseHealth === "SPARSE" && brief.earlySignals && brief.earlySignals.length > 0 && (
+            <div className="atlas-brief-section border border-amber-900/30 bg-amber-950/5">
+              <div className="atlas-brief-section-header">
+                <span className="font-mono text-[8px] text-amber-600 uppercase tracking-widest">EARLY SIGNALS — RECOVERY MODE ACTIVE</span>
+              </div>
+              <div className="px-3 py-2 space-y-1.5">
+                <div className="font-mono text-[7px] text-amber-800 mb-2 leading-relaxed">
+                  NO HARD SIGNALS — RUNNING RECOVERY MODE. Extracting preliminary indicators from available sources.
+                </div>
+                {brief.earlySignals.map((sig, i) => {
+                  const typeIcon = sig.type === "entity" ? "◈" : sig.type === "financial" ? "◎" : "◷";
+                  const typeColor = sig.type === "entity" ? "text-cyan-700" : sig.type === "financial" ? "text-amber-700" : "text-neutral-600";
+                  return (
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className={cn("font-mono text-[8px] mt-0.5 flex-shrink-0", typeColor)}>{typeIcon}</span>
+                      <div>
+                        <span className="font-mono text-[8px] text-neutral-400">{sig.label}</span>
+                        {sig.note && <div className="font-mono text-[7px] text-neutral-700 mt-px">{sig.note}</div>}
+                      </div>
+                      <span className="ml-auto font-mono text-[7px] text-neutral-700 border border-neutral-900 px-1">
+                        {Math.round(sig.confidence * 100)}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* KNOWN GAPS + SUGGESTED QUERIES */}
           <div className="grid grid-cols-2 gap-2">
@@ -2583,24 +2663,40 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
                     const typeKey = (sig.signalType || "").toLowerCase();
                     const borderClass = SIGNAL_BORDER[typeKey] ?? "border-[#ffffff0d]";
                     const conf: number | null = sig.financialConfidence ?? null;
+                    const isNonNumeric = sig.signalType?.startsWith("NON_NUMERIC") || sig.amountDisplay === "NON-NUMERIC";
+                    const signalStrength = isNonNumeric || (conf !== null && conf < 0.40) ? "WEAK" :
+                      sig.inferredSignal ? "INFERRED" :
+                      conf !== null && conf >= 0.75 ? "STRONG" : "MODERATE";
+                    const strengthClass = signalStrength === "STRONG" ? "text-green-400 border-green-900/50" :
+                      signalStrength === "INFERRED" ? "text-cyan-500 border-cyan-900/50" :
+                      signalStrength === "MODERATE" ? "text-neutral-500 border-neutral-800" :
+                      "text-amber-700 border-amber-900/40";
                     return (
                     <div
                       key={sig.id}
-                      className={`p-3 border ${borderClass} bg-[#0a0e14] space-y-2`}
+                      className={`p-3 border ${isNonNumeric ? "border-amber-900/20 bg-amber-950/5" : borderClass + " bg-[#0a0e14]"} space-y-2`}
                     >
-                      {/* Header: type badge + amount */}
+                      {/* Header: type badge + strength badge + amount */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border border-[#ffffff10] ${SIGNAL_COLOR[typeKey] ?? "text-neutral-400"}`}>
-                          {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
+                          {sig.signalType?.replace(/^NON_NUMERIC_/, "").replace(/_/g, " ") || "SIGNAL"}
+                        </span>
+                        <span className={`text-[7px] font-mono uppercase px-1 py-0.5 border ${strengthClass} tracking-wider`}>
+                          {signalStrength} SIGNAL
                         </span>
                         {conf !== null && (
                           <span className={`text-[8px] font-mono uppercase ${confColor(conf)}`}>
                             CONF {Math.round(conf * 100)}%
                           </span>
                         )}
-                        {(sig.amountDisplay || sig.amountRaw) && (
+                        {(sig.amountDisplay || sig.amountRaw) && !isNonNumeric && (
                           <span className="ml-auto text-lg font-bold text-green-400 font-mono tabular-nums leading-none">
                             {sig.amountDisplay || sig.amountRaw}
+                          </span>
+                        )}
+                        {isNonNumeric && (
+                          <span className="ml-auto text-[10px] font-bold text-amber-700/60 font-mono uppercase tracking-wider">
+                            NON-NUMERIC
                           </span>
                         )}
                       </div>

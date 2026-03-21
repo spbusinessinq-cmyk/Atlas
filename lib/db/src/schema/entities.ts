@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,7 @@ export const entitiesTable = pgTable("entities", {
   description: text("description"),
   aliases: text("aliases").array().default([]),
   caseId: integer("case_id"),
+  recoveryMode: boolean("recovery_mode").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

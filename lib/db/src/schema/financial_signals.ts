@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,6 +15,7 @@ export const financialSignalsTable = pgTable("financial_signals", {
   receivedBy: text("received_by"),
   programName: text("program_name"),
   financialConfidence: real("financial_confidence"),
+  inferredSignal: boolean("inferred_signal").default(false),
   entityId: integer("entity_id"),
   documentId: integer("document_id"),
   documentTitle: text("document_title"),

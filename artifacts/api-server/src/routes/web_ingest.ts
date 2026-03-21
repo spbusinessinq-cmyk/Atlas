@@ -17,7 +17,9 @@ import { parse as parseHtml } from "node-html-parser";
 import {
   extractEntities,
   extractTimelineEvents,
+  extractSoftTimelineEvents,
   extractFinancialSignals,
+  extractNonNumericSignals,
   computeDocRelevanceScore,
   normalizeEntityName,
   resolveToCanonical,
@@ -1144,6 +1146,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   const docPriorities = new Map<number, string>(); // docId → priority
   const docTiers = new Map<number, string>();      // docId → CORE|RELEVANT|PERIPHERAL|OFF_TOPIC|CONTAMINATED
   const promotedEntityNames: string[] = []; // canonical names approved into the graph
+  const allIngestedTexts: string[] = [];     // raw text of every admitted doc (for recovery pass)
   let recoveryTriggered = false;
   let recoveryReason = "";
   let starterPromoted = 0; // count before recovery
@@ -1241,6 +1244,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       validDocsIngested++;
       if (docExtractionStatus === "ok") okDocIds.add(doc.id);
       const textForAnalysis = cleanRawText(rawText);
+      allIngestedTexts.push(textForAnalysis);
 
       // ── Contamination scoring ────────────────────────────────────────────
       const cleanResult = cleanBodyText(textForAnalysis);
@@ -1333,11 +1337,12 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
         pipelineRejectReasons[r] = (pipelineRejectReasons[r] ?? 0) + n;
       }
 
-      // ── Auto-extract timeline events (anchor-filtered) ───────────────────
+      // ── Auto-extract timeline events (anchor-filtered + soft fallback) ────
       if (relevance.priority !== "NOISE") {
         try {
           const rawTimelineEvents = extractTimelineEvents(textForAnalysis);
           const timelineEvents = filterTimelineByAnchor(rawTimelineEvents, caseAnchor);
+          let strictInserted = 0;
           for (const ev of timelineEvents) {
             try {
               await db.insert(timelineEntriesTable).values({
@@ -1347,8 +1352,23 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
                 linkedDocumentId: doc.id,
                 caseId,
               });
-            } catch {
-              // skip duplicate/constraint errors
+              strictInserted++;
+            } catch { /* skip duplicates */ }
+          }
+          // P3: Soft timeline recovery — if strict returned 0, use softer extraction
+          if (strictInserted === 0) {
+            const softEvents = extractSoftTimelineEvents(textForAnalysis);
+            for (const ev of softEvents) {
+              try {
+                await db.insert(timelineEntriesTable).values({
+                  title: `[SOFT][${ev.eventType}] ${ev.summary.slice(0, 110)}`,
+                  description: ev.summary,
+                  eventDate: ev.eventDate,
+                  linkedDocumentId: doc.id,
+                  caseId,
+                  softEvent: true,
+                });
+              } catch { /* skip duplicates */ }
             }
           }
         } catch {
@@ -1393,6 +1413,36 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           }
         } catch {
           // don't let financial extraction crash the pipeline
+        }
+      }
+
+      // ── Non-numeric signal extraction (runs after numeric pass) ───────────
+      if (relevance.priority !== "NOISE") {
+        try {
+          const nonNumericSignals = extractNonNumericSignals(textForAnalysis, caseAnchor.anchorTokens);
+          for (const sig of nonNumericSignals) {
+            if ((sig.financialConfidence ?? 0) < 0.25) continue;
+            try {
+              await db.insert(financialSignalsTable).values({
+                caseId,
+                linkedDocumentId: doc.id,
+                amountRaw: sig.amountRaw,
+                amountDisplay: sig.amountDisplay,
+                normalizedAmount: sig.normalizedAmount,
+                currency: sig.currency ?? "USD",
+                signalType: sig.signalType,
+                eventSummary: sig.eventSummary,
+                entityName: sig.entityName,
+                controlledBy: sig.controlledBy,
+                receivedBy: sig.receivedBy,
+                programName: sig.programName,
+                financialConfidence: sig.financialConfidence,
+                inferredSignal: false,
+              });
+            } catch { /* skip duplicates */ }
+          }
+        } catch {
+          // don't crash the pipeline
         }
       }
 
@@ -1901,6 +1951,76 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     }
   }
 
+  // ── P3 Entity Recovery Mode: secondary proper noun pass ──────────────────
+  // Last resort: if NO entities were promoted at all, scan ingested text for
+  // capitalized proper nouns that appear ≥2 times OR near funding/investigation
+  // keywords and insert them as entities with recoveryMode=true.
+  if (approvedEntityIds.size === 0 && validDocsIngested > 0) {
+    const INVEST_NEAR = /\b(?:funding|grant|contract|budget|investigation|probe|audit|fraud|corruption|spending|allocat|appropriat|program|project|initia)\b/i;
+    const PROPER_NOUN = /\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,3})\b/g;
+    const RECOVERY_BLOCKLIST = new Set([
+      "The", "This", "That", "These", "Those", "There", "Here", "With", "From",
+      "When", "Where", "What", "Which", "While", "After", "Before", "During",
+      "January","February","March","April","May","June","July","August",
+      "September","October","November","December","Monday","Tuesday",
+      "Wednesday","Thursday","Friday","Saturday","Sunday",
+      "United","States","Federal","National","American","State",
+    ]);
+    const nounFreq = new Map<string, number>();
+    const nounNearFunding = new Set<string>();
+
+    for (const docText of allIngestedTexts) {
+      const sentences = docText.split(/(?<=[.!?])\s+|\n+/);
+      for (const s of sentences) {
+        const nearFunding = INVEST_NEAR.test(s);
+        let m: RegExpExecArray | null;
+        PROPER_NOUN.lastIndex = 0;
+        while ((m = PROPER_NOUN.exec(s)) !== null) {
+          const noun = m[1].trim();
+          if (RECOVERY_BLOCKLIST.has(noun) || noun.length < 3) continue;
+          nounFreq.set(noun, (nounFreq.get(noun) ?? 0) + 1);
+          if (nearFunding) nounNearFunding.add(noun);
+        }
+      }
+    }
+
+    const recoveryCandidates = Array.from(nounFreq.entries())
+      .filter(([noun, freq]) => {
+        if (WRAPPER_ENTITY_BLOCKLIST.has(noun)) return false;
+        return freq >= 2 || nounNearFunding.has(noun);
+      })
+      .sort((a, b) => {
+        const aScore = (nounNearFunding.has(a[0]) ? 5 : 0) + a[1];
+        const bScore = (nounNearFunding.has(b[0]) ? 5 : 0) + b[1];
+        return bScore - aScore;
+      })
+      .slice(0, 4);
+
+    let recoveryInserted = 0;
+    for (const [noun] of recoveryCandidates) {
+      try {
+        const entityType = INSTITUTION_PATTERN.test(noun) ? "organization" : "person";
+        const entityRows = await db.insert(entitiesTable).values({
+          name: noun,
+          type: entityType,
+          caseId,
+          recoveryMode: true,
+        }).returning();
+        approvedEntityIds.set(noun.toLowerCase(), entityRows[0].id);
+        promotedEntityNames.push(noun);
+        recoveryInserted++;
+      } catch { /* skip duplicates */ }
+    }
+
+    if (recoveryInserted > 0) {
+      await logEvent(
+        "entity_recovery_mode",
+        `Recovery mode: inserted ${recoveryInserted} proper-noun entity(ies) — no primary conditions met`,
+        { caseId }
+      );
+    }
+  }
+
   // ── Weak-Build Recovery (T005) ────────────────────────────────────────────
   // If serious intent and starter graph is thin, try expanding to more documents
 
@@ -2340,6 +2460,41 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
     graphFailureReason = "single_entity_only";
   } else if (approvedEntityIds.size === 0) {
     graphFailureReason = "no_entities_promoted";
+  }
+
+  // ── P3 Graph Bootstrap: provisional edges for recovery-mode entities ──────
+  // If standard graph seeding produced no edges but we have ≥2 approved entities,
+  // create provisional co-occurrence edges at 0.45 confidence using any doc.
+  if (graphFailureReason === "no_shared_quality_docs" || graphFailureReason === "no_entities_promoted") {
+    if (approvedEntityIds.size >= 2) {
+      const entityKeys = Array.from(approvedEntityIds.keys());
+      let bootstrapEdges = 0;
+      for (let i = 0; i < entityKeys.length; i++) {
+        for (let j = i + 1; j < entityKeys.length; j++) {
+          const entityAId = approvedEntityIds.get(entityKeys[i]);
+          const entityBId = approvedEntityIds.get(entityKeys[j]);
+          if (!entityAId || !entityBId) continue;
+          try {
+            await db.insert(relationshipsTable).values({
+              entityAId,
+              entityBId,
+              relationshipType: "provisional_co_mention",
+              caseId,
+              confidence: 0.45,
+            });
+            bootstrapEdges++;
+          } catch { /* skip duplicates */ }
+        }
+      }
+      if (bootstrapEdges > 0) {
+        graphFailureReason = null;
+        await logEvent(
+          "graph_bootstrap",
+          `Graph bootstrap: ${bootstrapEdges} provisional edge(s) at 0.45 conf between ${approvedEntityIds.size} recovery entities`,
+          { caseId }
+        );
+      }
+    }
   }
 
   // ── Case summary with machine-readable seed diagnostics ──────────────────

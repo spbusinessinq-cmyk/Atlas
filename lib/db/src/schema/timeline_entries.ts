@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,6 +10,7 @@ export const timelineEntriesTable = pgTable("timeline_entries", {
   linkedEntityId: integer("linked_entity_id"),
   linkedDocumentId: integer("linked_document_id"),
   caseId: integer("case_id"),
+  softEvent: boolean("soft_event").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
