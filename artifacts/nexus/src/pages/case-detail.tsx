@@ -222,26 +222,28 @@ interface WorkflowStep { id: string; label: string; status: StepStatus }
 
 function WorkflowStrip({ steps }: { steps: WorkflowStep[] }) {
   return (
-    <div className="flex items-center gap-0 px-3 py-1 bg-[#000] border-b border-[#ffffff06] overflow-x-auto flex-shrink-0">
+    <div className="atlas-workflow-strip flex-shrink-0">
       {steps.map((step, i) => (
         <React.Fragment key={step.id}>
           <div className={cn(
-            "flex items-center gap-1 px-2 py-0.5 font-mono text-[8px] uppercase tracking-widest whitespace-nowrap",
-            step.status === "done" && "text-green-600",
-            step.status === "active" && "text-cyan-400",
+            "flex items-center gap-1.5 px-2.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.14em] whitespace-nowrap",
+            step.status === "done"    && "text-green-600/70",
+            step.status === "active"  && "text-cyan-400",
             step.status === "pending" && "text-neutral-800",
           )}>
-            {step.status === "done" && <CheckCircle2 className="w-2.5 h-2.5" />}
+            {step.status === "done" && (
+              <CheckCircle2 className="w-2 h-2 flex-shrink-0" />
+            )}
             {step.status === "active" && (
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 flex-shrink-0 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 flex-shrink-0 animate-pulse" style={{ boxShadow: "0 0 4px rgba(34,211,238,0.6)" }} />
             )}
             {step.status === "pending" && (
-              <span className="w-1.5 h-1.5 rounded-full bg-neutral-800 flex-shrink-0" />
+              <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: "rgba(255,255,255,0.1)" }} />
             )}
             {step.label}
           </div>
           {i < steps.length - 1 && (
-            <ChevronRight className="w-2.5 h-2.5 text-[#ffffff0d] flex-shrink-0" />
+            <span className="font-mono text-[7px] flex-shrink-0" style={{ color: "rgba(255,255,255,0.08)" }}>›</span>
           )}
         </React.Fragment>
       ))}
@@ -512,36 +514,39 @@ function CaseDetailInner({
   return (
     <div className="flex h-full overflow-hidden">
       {/* ──────── LEFT RAIL ──────── */}
-      <aside className="w-52 flex-shrink-0 flex flex-col bg-[#040507] border-r border-[#ffffff0d] overflow-hidden">
-        <div className="px-3 py-2 border-b border-[#ffffff0d] flex-shrink-0">
+      <aside className="w-48 flex-shrink-0 flex flex-col border-r overflow-hidden" style={{ background: "var(--atlas-surface-0)", borderColor: "rgba(255,255,255,0.052)" }}>
+        {/* Back link */}
+        <div className="atlas-rail-back flex-shrink-0">
           <Link href="/">
-            <button className="flex items-center gap-1.5 text-[9px] font-mono text-neutral-700 hover:text-white uppercase tracking-widest transition-colors">
-              <ArrowLeft className="w-3 h-3" />
+            <button className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-widest transition-colors" style={{ color: "rgba(255,255,255,0.22)" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>
+              <ArrowLeft className="w-2.5 h-2.5 flex-shrink-0" />
               CASE CONTROL
             </button>
           </Link>
         </div>
 
-        <div className="px-3 pt-4 pb-3 border-b border-[#ffffff0d] flex-shrink-0 space-y-1.5">
-          <div className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
+        {/* Case identity block */}
+        <div className="atlas-case-block flex-shrink-0">
+          <div className="font-mono text-[7px] uppercase tracking-[0.22em] mb-1.5" style={{ color: "rgba(220,38,38,0.6)" }}>
             CASE-{caseData.id.toString().padStart(6, "0")}
           </div>
-          <div className="text-sm font-bold text-white uppercase leading-tight tracking-tight">
+          <div className="text-[11px] font-bold text-white uppercase leading-tight tracking-tight mb-2" style={{ letterSpacing: "0.03em" }}>
             {caseData.title}
           </div>
-          <div className={`flex items-center gap-1.5 text-[10px] font-mono ${statusColor}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
+          <div className={`flex items-center gap-1.5 font-mono text-[9px] ${statusColor}`}>
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDot}`} />
             {caseData.status.toUpperCase()}
           </div>
-          <div className="font-mono text-[9px] text-neutral-700">
-            INIT: {formatDate(caseData.createdAt).split(",")[0]}
+          <div className="font-mono text-[7px] mt-1.5 uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.18)" }}>
+            INIT {formatDate(caseData.createdAt).split(",")[0]}
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
-          <div className="px-2 py-1 font-mono text-[8px] text-neutral-800 uppercase tracking-widest">
-            NAVIGATION
-          </div>
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-1">
+          <div className="atlas-nav-section-label">Modules</div>
           {SECTIONS.map((s) => {
             const Icon = s.icon;
             const isActive = activeSection === s.id;
@@ -550,51 +555,34 @@ function CaseDetailInner({
               <button
                 key={s.id}
                 onClick={() => onSectionChange(s.id)}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-mono uppercase tracking-wider transition-all text-left border-l-2",
-                  isActive
-                    ? "bg-[#dc262608] text-white border-red-600"
-                    : "text-neutral-600 hover:text-neutral-300 hover:bg-[#ffffff04] border-transparent"
-                )}
+                className={cn("atlas-nav-item", isActive && "active")}
               >
-                <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="flex-1">{s.label}</span>
+                <Icon className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+                <span className="flex-1 truncate">{s.label}</span>
                 {hasBadge && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0 animate-pulse" />
                 )}
               </button>
             );
           })}
         </nav>
 
-        <div className="px-3 py-3 border-t border-[#ffffff0d] flex-shrink-0 space-y-1">
+        {/* Case stats footer */}
+        <div className="flex-shrink-0 px-3.5 py-3 space-y-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.04)", background: "rgba(255,255,255,0.006)" }}>
           {[
             { label: "ENTITIES", val: entities.length },
-            { label: "DOCUMENTS", val: documents.length },
+            { label: "DOCS", val: documents.length },
             { label: "LINKS", val: relationships.length },
-            { label: "TIMELINE", val: timeline.length },
-            ...(moneyFlows.length > 0
-              ? [{ label: "FLOWS", val: moneyFlows.length }]
-              : []),
+            { label: "EVENTS", val: timeline.length },
             ...(pendingMentions > 0
-              ? [{ label: "ATLAS PENDING", val: pendingMentions, warn: true }]
+              ? [{ label: "PENDING", val: pendingMentions, warn: true }]
               : []),
           ].map((m) => (
-            <div key={m.label} className="flex justify-between items-center">
-              <span
-                className={cn(
-                  "font-mono text-[9px] uppercase tracking-widest",
-                  (m as { warn?: boolean }).warn ? "text-amber-600" : "text-neutral-700"
-                )}
-              >
+            <div key={m.label} className="atlas-case-stat">
+              <span className={cn("atlas-case-stat-label", (m as { warn?: boolean }).warn && "!text-amber-600/70")}>
                 {m.label}
               </span>
-              <span
-                className={cn(
-                  "font-mono text-[11px] font-bold tabular-nums",
-                  (m as { warn?: boolean }).warn ? "text-amber-400" : "text-neutral-400"
-                )}
-              >
+              <span className={cn("atlas-case-stat-val", (m as { warn?: boolean }).warn && "warn")}>
                 {m.val.toString().padStart(2, "0")}
               </span>
             </div>
@@ -603,18 +591,24 @@ function CaseDetailInner({
       </aside>
 
       {/* ──────── CENTER CANVAS ──────── */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#080a0d]">
-        <div className="nexus-header-strip flex-shrink-0">
-          <span className="nexus-label truncate max-w-xs">{centerLabel}</span>
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ background: "#020408" }}>
+        <div className="atlas-canvas-header flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-1 h-4 flex-shrink-0" style={{ background: "rgba(220,38,38,0.7)", boxShadow: "0 0 6px rgba(220,38,38,0.35)" }} />
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] truncate max-w-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{centerLabel}</span>
+          </div>
           {activeSection === "graph" && !viewingDoc && (
-            <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-              {entities.length} NODES&nbsp;·&nbsp;{relationships.length} EDGES
-              {suggestedEdges.length > 0 && (
-                <span className="text-cyan-800">
-                  &nbsp;·&nbsp;{suggestedEdges.length} SUGGESTED
-                </span>
-              )}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[8px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>
+                {entities.length}&nbsp;<span style={{ color: "rgba(255,255,255,0.1)" }}>NODES</span>
+                &nbsp;·&nbsp;{relationships.length}&nbsp;<span style={{ color: "rgba(255,255,255,0.1)" }}>EDGES</span>
+                {suggestedEdges.length > 0 && (
+                  <span style={{ color: "rgba(6,182,212,0.45)" }}>
+                    &nbsp;·&nbsp;{suggestedEdges.length} SUGGESTED
+                  </span>
+                )}
+              </span>
+            </div>
           )}
         </div>
 
@@ -714,7 +708,7 @@ function CaseDetailInner({
       </main>
 
       {/* ──────── RIGHT INSPECTOR ──────── */}
-      <aside className="w-64 flex-shrink-0 border-l border-[#ffffff0d] hidden lg:flex flex-col overflow-hidden bg-[#040507]">
+      <aside className="w-64 flex-shrink-0 hidden lg:flex flex-col overflow-hidden" style={{ background: "var(--atlas-surface-0)", borderLeft: "1px solid rgba(255,255,255,0.052)" }}>
         {activeSection === "graph" && selectedRel && (
           <LinkIntelPanel
             relationship={selectedRel}
@@ -2885,20 +2879,23 @@ function DefaultInspector({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="nexus-header-strip flex-shrink-0">
-        <span className="nexus-label">CASE OVERVIEW</span>
+      <div className="atlas-module-header flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-0.5 h-3.5 flex-shrink-0" style={{ background: "rgba(220,38,38,0.6)" }} />
+          <span className="atlas-module-label">CASE INTELLIGENCE</span>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto divide-y divide-[#ffffff07]">
+      <div className="flex-1 overflow-auto">
 
         {/* ══ SECTION 1: CASE STATUS ══ */}
-        <div>
+        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
           <button
             onClick={() => setStatusOpen(o => !o)}
-            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+            className={cn("atlas-collapse-btn", statusOpen && "open")}
           >
-            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-700 group-hover:text-neutral-500">CASE STATUS</span>
-            <span className="font-mono text-[8px] text-neutral-800">{statusOpen ? "▲" : "▼"}</span>
+            <span>CASE STATUS</span>
+            <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{statusOpen ? "▲" : "▼"}</span>
           </button>
           {statusOpen && (
             <div className="px-3 pb-3 space-y-2.5 pt-1">
@@ -3166,13 +3163,13 @@ function DefaultInspector({
           <div>
             <button
               onClick={() => setTriageOpen(o => !o)}
-              className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+              className={cn("atlas-collapse-btn", triageOpen && "open")}
             >
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-700 group-hover:text-neutral-500">TRIAGE ACTIONS</span>
-                <span className="font-mono text-[7px] text-orange-600 border border-orange-900/40 px-1">{pendingMentions}</span>
+                <span>TRIAGE ACTIONS</span>
+                <span className="font-mono text-[7px] border px-1.5 py-0.5" style={{ color: "rgba(245,158,11,0.8)", borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.04)" }}>{pendingMentions}</span>
               </div>
-              <span className="font-mono text-[8px] text-neutral-800">{triageOpen ? "▲" : "▼"}</span>
+              <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{triageOpen ? "▲" : "▼"}</span>
             </button>
             {triageOpen && (
               <div className="px-2 pb-2 space-y-1">
@@ -3244,10 +3241,10 @@ function DefaultInspector({
         <div>
           <button
             onClick={() => setQualityOpen(o => !o)}
-            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+            className={cn("atlas-collapse-btn", qualityOpen && "open")}
           >
-            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-700 group-hover:text-neutral-500">QUALITY CONTROLS</span>
-            <span className="font-mono text-[8px] text-neutral-800">{qualityOpen ? "▲" : "▼"}</span>
+            <span>QUALITY CONTROLS</span>
+            <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{qualityOpen ? "▲" : "▼"}</span>
           </button>
           {qualityOpen && (
             <div className="px-2 pb-2 space-y-1">
@@ -3274,10 +3271,11 @@ function DefaultInspector({
         <div>
           <button
             onClick={() => setDossierSectionOpen(o => !o)}
-            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+            className={cn("atlas-collapse-btn", dossierSectionOpen && "open")}
+            style={dossierSectionOpen ? { color: "rgba(139,92,246,0.55)" } : {}}
           >
-            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-violet-800 group-hover:text-violet-700">ATLAS DOSSIER</span>
-            <span className="font-mono text-[8px] text-neutral-800">{dossierSectionOpen ? "▲" : "▼"}</span>
+            <span style={{ color: dossierSectionOpen ? "rgba(139,92,246,0.65)" : undefined }}>ATLAS DOSSIER</span>
+            <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{dossierSectionOpen ? "▲" : "▼"}</span>
           </button>
           {dossierSectionOpen && (
             <div className="px-2.5 pb-2.5 space-y-2">
@@ -3404,10 +3402,10 @@ function DefaultInspector({
           <div>
             <button
               onClick={() => setDiagOpen(o => !o)}
-              className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#ffffff03] transition-colors group"
+              className={cn("atlas-collapse-btn", diagOpen && "open")}
             >
-              <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-neutral-800 group-hover:text-neutral-600">DIAGNOSTICS</span>
-              <span className="font-mono text-[8px] text-neutral-800">{diagOpen ? "▲" : "▼"}</span>
+              <span>DIAGNOSTICS</span>
+              <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{diagOpen ? "▲" : "▼"}</span>
             </button>
             {diagOpen && (
               <div className="px-3 pb-3 space-y-2">

@@ -29,7 +29,7 @@ The project is structured as a pnpm monorepo using Node.js and TypeScript.
 
 1.  **NEXUS Platform:**
     *   **Core Data Models:** Case, Entity, Document, Relationship, TimelineEntry, Event (ORION), Note, MoneyFlow, EntityMention, RelationshipEvidence.
-    *   **UI/UX:** Features a Case Dashboard, detailed Case Views (Overview, Entity Registry, Document Vault, Link Analysis, Temporal Trace), searchable Entity Database, interactive Link Analysis Graph, Timeline View, ORION Event Intake, and Notes Panel. The UI incorporates a "Premium Glass" aesthetic with specific CSS for panels, buttons, and navigation, including a boot-up sequence.
+    *   **UI/UX:** Features a Case Dashboard, detailed Case Views (Overview, Entity Registry, Document Vault, Link Analysis, Temporal Trace), searchable Entity Database, interactive Link Analysis Graph, Timeline View, ORION Event Intake, and Notes Panel. The UI incorporates an "Elite Federal Intelligence Workstation" aesthetic with a comprehensive CSS design system: `.atlas-nav-item`, `.atlas-case-block`, `.atlas-module-header-*`, `.atlas-collapse-btn`, `.atlas-canvas-header`, `.atlas-workflow-strip`, `.atlas-graph-bg`, `.atlas-doc-row`, and depth tokens `--atlas-surface-0/5` with `--atlas-border-0/3` for precise layering. Left rail is `w-48` with red accent nav indicators; center canvas has red tick + section label header; graph nodes use gradient backgrounds with depth box-shadows; document rows use tier-coded left border colors.
 
 2.  **ATLAS Subsystem (Automated Entity Extraction):**
     *   Processes PDFs and web articles to extract people, organizations, and locations, making extracted mentions available for analyst review (ingestion or rejection).

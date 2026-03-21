@@ -54,14 +54,20 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
 
   return (
     <div className="nexus-panel rounded-none h-full flex flex-col">
-      <div className="nexus-header-strip">
-        <span className="nexus-label">ENTITY REGISTRY</span>
-        <div className="flex items-center gap-4">
+      <div className="atlas-module-header-cyan flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-0.5 h-3.5 flex-shrink-0" style={{ background: "rgba(6,182,212,0.5)" }} />
+          <span className="atlas-module-label">ENTITY REGISTRY — <span style={{ color: "rgba(255,255,255,0.55)" }}>{entities.length}</span></span>
+        </div>
+        <div className="flex items-center gap-3">
           <div className="relative">
-            <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-neutral-500" />
+            <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.2)" }} />
             <input 
-              placeholder="SEARCH REGISTRY..." 
-              className="bg-[#000] border border-[#ffffff1a] text-[10px] font-mono pl-7 pr-3 py-1 w-48 text-white focus:outline-none focus:border-red-500 placeholder:text-neutral-600 transition-colors"
+              placeholder="SEARCH..." 
+              className="border text-[9px] font-mono pl-6 pr-2.5 py-1 w-36 focus:outline-none placeholder:uppercase transition-colors"
+              style={{ background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)" }}
+              onFocus={e => { e.currentTarget.style.borderColor = "rgba(6,182,212,0.4)"; }}
+              onBlur={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -71,14 +77,16 @@ export default function EntitiesTab({ caseId, entities }: { caseId: number, enti
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="flex bg-[#ffffff05] border-b border-[#ffffff0d] px-4 py-2 font-mono text-[9px] text-neutral-600 uppercase tracking-widest sticky top-0">
-          <div className="w-6 text-center mr-3">#</div>
-          <div className="w-28">TYPE</div>
-          <div className="flex-1">NAME</div>
-          <div className="w-20 text-right hidden md:block">CONFIDENCE</div>
-          <div className="w-14 text-right hidden md:block">MNTNS</div>
-          <div className="w-10 text-right hidden md:block">DOCS</div>
-          <div className="w-16 text-right">→</div>
+        <div className="flex sticky top-0 z-10" style={{ background: "rgba(3,5,10,0.97)", borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
+          <div className="flex w-full px-4 py-1.5 font-mono text-[7px] uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)" }}>
+            <div className="w-6 text-center mr-3">#</div>
+            <div className="w-28">TYPE</div>
+            <div className="flex-1">NAME</div>
+            <div className="w-20 text-right hidden md:block">CONFIDENCE</div>
+            <div className="w-14 text-right hidden md:block">MNTNS</div>
+            <div className="w-10 text-right hidden md:block">DOCS</div>
+            <div className="w-16 text-right">→</div>
+          </div>
         </div>
         
         <div className="divide-y divide-[#ffffff04]">

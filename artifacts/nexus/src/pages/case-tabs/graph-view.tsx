@@ -99,23 +99,26 @@ const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: numb
 
 function buildNodeStyle(color: string, isSelected: boolean) {
   return {
-    background: isSelected ? "#0d1f2a" : "#090d12",
-    color: "#ffffff",
-    border: isSelected ? `2px solid ${color}` : `1px solid ${color}50`,
-    borderLeft: `3px solid ${color}`,
-    borderRadius: "0",
-    padding: "10px 16px",
-    fontFamily: "monospace",
-    fontSize: "11px",
-    width: 165,
+    background: isSelected
+      ? `linear-gradient(135deg, rgba(6,9,15,0.98) 0%, rgba(8,12,20,0.98) 100%)`
+      : `linear-gradient(135deg, rgba(4,6,12,0.97) 0%, rgba(6,9,15,0.97) 100%)`,
+    color: isSelected ? "#ffffff" : "rgba(255,255,255,0.88)",
+    border: isSelected ? `1px solid ${color}80` : `1px solid rgba(255,255,255,0.1)`,
+    borderLeft: `2px solid ${color}`,
+    borderRadius: "1px",
+    padding: "9px 14px",
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: "10px",
+    width: 158,
     textAlign: "left" as const,
     textTransform: "uppercase" as const,
-    fontWeight: "bold",
-    letterSpacing: "0.05em",
+    fontWeight: "600",
+    letterSpacing: "0.04em",
     boxShadow: isSelected
-      ? `0 0 18px ${color}50, 0 0 6px ${color}25`
-      : `0 0 6px ${color}18`,
+      ? `inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px ${color}30, 0 0 24px ${color}35, 0 6px 24px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.9)`
+      : `inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.75), 0 1px 6px rgba(0,0,0,0.9)`,
     outline: "none",
+    transition: "border-color 0.15s, box-shadow 0.15s",
   };
 }
 
@@ -367,7 +370,7 @@ export default function GraphCanvas({
           fitView
           fitViewOptions={{ padding: 0.2 }}
           colorMode="dark"
-          className="bg-[#000] atlas-graph"
+          className="atlas-graph-bg atlas-graph"
           onEdgeClick={onEdgeClick}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
@@ -382,92 +385,152 @@ export default function GraphCanvas({
         >
           <Background
             variant={BackgroundVariant.Dots}
-            gap={24}
-            size={1}
-            color="#ffffff10"
+            gap={32}
+            size={0.8}
+            color="rgba(255,255,255,0.06)"
           />
           <Controls
             style={{
-              backgroundColor: "#0d1117",
-              border: "1px solid #ffffff1a",
-              borderRadius: "0",
+              backgroundColor: "rgba(2,4,10,0.95)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              borderRadius: "1px",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
             }}
           />
         </ReactFlow>
       </ReactFlowProvider>
 
       {/* Layout controls overlay */}
-      <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1.5">
+      <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1">
         {suggestedEdges.length > 0 && (
           <button
             onClick={() => onToggleSuggested ? onToggleSuggested(!showSuggested) : undefined}
-            className={`flex items-center gap-1 px-2 py-1 bg-[#0d1117] border font-mono text-[9px] uppercase tracking-wider transition-colors ${showSuggested ? "border-cyan-500/40 text-cyan-600 hover:text-cyan-400" : "border-[#ffffff15] text-neutral-600 hover:text-white"}`}
             title={showSuggested ? "Hide suggested links" : "Show suggested links"}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.25rem",
+              padding: "0.2rem 0.5rem",
+              background: showSuggested ? "rgba(6,182,212,0.05)" : "rgba(2,4,10,0.9)",
+              border: showSuggested ? "1px solid rgba(6,182,212,0.3)" : "1px solid rgba(255,255,255,0.07)",
+              color: showSuggested ? "rgba(6,182,212,0.8)" : "rgba(255,255,255,0.3)",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+              textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+              transition: "all 0.12s",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+            }}
           >
-            {showSuggested ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            {showSuggested ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
             {showSuggested ? "SUGGESTED ✓" : "SUGGESTED"}
           </button>
         )}
         <button
           onClick={() => setHideIsolated(v => !v)}
-          className={`flex items-center gap-1 px-2 py-1 bg-[#0d1117] border font-mono text-[9px] uppercase tracking-wider transition-colors ${hideIsolated ? "border-amber-500/40 text-amber-500" : "border-[#ffffff15] text-neutral-600 hover:text-white"}`}
           title="Hide nodes with no confirmed edges"
+          style={{
+            display: "flex", alignItems: "center", gap: "0.25rem",
+            padding: "0.2rem 0.5rem",
+            background: hideIsolated ? "rgba(245,158,11,0.05)" : "rgba(2,4,10,0.9)",
+            border: hideIsolated ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.07)",
+            color: hideIsolated ? "rgba(245,158,11,0.8)" : "rgba(255,255,255,0.3)",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+            textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+            transition: "all 0.12s",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+          }}
         >
-          <EyeOff className="w-3 h-3" />
-          {hideIsolated ? "ISOLATED HIDDEN" : "HIDE ISOLATED"}
+          <EyeOff className="w-2.5 h-2.5" />
+          {hideIsolated ? "ISOLATED ✓" : "ISOLATED"}
         </button>
         <button
           onClick={() => setHideLowDegree(v => !v)}
-          className={`flex items-center gap-1 px-2 py-1 bg-[#0d1117] border font-mono text-[9px] uppercase tracking-wider transition-colors ${hideLowDegree ? "border-amber-500/40 text-amber-500" : "border-[#ffffff15] text-neutral-600 hover:text-white"}`}
           title="Hide nodes with only 1 confirmed edge"
+          style={{
+            display: "flex", alignItems: "center", gap: "0.25rem",
+            padding: "0.2rem 0.5rem",
+            background: hideLowDegree ? "rgba(245,158,11,0.05)" : "rgba(2,4,10,0.9)",
+            border: hideLowDegree ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.07)",
+            color: hideLowDegree ? "rgba(245,158,11,0.8)" : "rgba(255,255,255,0.3)",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+            textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+            transition: "all 0.12s",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+          }}
         >
-          <EyeOff className="w-3 h-3" />
-          {hideLowDegree ? "LOW-DEG HIDDEN" : "HIDE LOW-DEG"}
+          <EyeOff className="w-2.5 h-2.5" />
+          {hideLowDegree ? "LOW-DEG ✓" : "LOW-DEG"}
         </button>
         <button
           onClick={() => rfRef.current?.fitView({ padding: 0.2, duration: 400 })}
-          className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-cyan-500/40 text-neutral-500 hover:text-cyan-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
           title="Fit graph to view"
+          style={{
+            display: "flex", alignItems: "center", gap: "0.25rem",
+            padding: "0.2rem 0.5rem",
+            background: "rgba(2,4,10,0.9)", border: "1px solid rgba(255,255,255,0.07)",
+            color: "rgba(255,255,255,0.3)",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+            textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+            transition: "all 0.12s",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = "rgba(6,182,212,0.8)"; e.currentTarget.style.borderColor = "rgba(6,182,212,0.25)"; }}
+          onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.3)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; }}
         >
-          <Maximize2 className="w-3 h-3" />
+          <Maximize2 className="w-2.5 h-2.5" />
           FIT
         </button>
         <button
           onClick={handleResetLayout}
-          className="flex items-center gap-1 px-2 py-1 bg-[#0d1117] border border-[#ffffff15] hover:border-red-500/40 text-neutral-500 hover:text-red-400 font-mono text-[9px] uppercase tracking-wider transition-colors"
           title="Reset node layout"
+          style={{
+            display: "flex", alignItems: "center", gap: "0.25rem",
+            padding: "0.2rem 0.5rem",
+            background: "rgba(2,4,10,0.9)", border: "1px solid rgba(255,255,255,0.07)",
+            color: "rgba(255,255,255,0.3)",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "8px",
+            textTransform: "uppercase", letterSpacing: "0.10em", cursor: "pointer",
+            transition: "all 0.12s",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = "rgba(220,38,38,0.8)"; e.currentTarget.style.borderColor = "rgba(220,38,38,0.25)"; }}
+          onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.3)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; }}
         >
-          <RotateCcw className="w-3 h-3" />
+          <RotateCcw className="w-2.5 h-2.5" />
           RESET
         </button>
       </div>
 
       {/* ── Graph stats (top-left) ── */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2 pointer-events-none">
-        <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-          {visibleEntities.length}{visibleEntities.length !== entities.length ? `/${entities.length}` : ""} NODE{entities.length !== 1 ? "S" : ""}
-        </span>
-        <span className="text-neutral-800">·</span>
-        <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
-          {relationships.length} EDGE{relationships.length !== 1 ? "S" : ""}
-        </span>
-        {suggestedEdges.length > 0 && (
-          <>
-            <span className="text-neutral-800">·</span>
-            <span className="font-mono text-[9px] text-cyan-900 uppercase tracking-widest">
-              {suggestedEdges.length} SUGGESTED
-              {highSuggested > 0 && <span className="text-cyan-700"> ({highSuggested} HIGH)</span>}
-            </span>
-          </>
-        )}
+        <div style={{
+          display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "0.2rem 0.625rem",
+          background: "rgba(2,4,10,0.85)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
+        }}>
+          <span className="font-mono text-[8px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>
+            {visibleEntities.length}{visibleEntities.length !== entities.length ? `/${entities.length}` : ""}&nbsp;NODES
+          </span>
+          <span style={{ color: "rgba(255,255,255,0.1)" }}>·</span>
+          <span className="font-mono text-[8px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>
+            {relationships.length}&nbsp;EDGES
+          </span>
+          {suggestedEdges.length > 0 && (
+            <>
+              <span style={{ color: "rgba(255,255,255,0.1)" }}>·</span>
+              <span className="font-mono text-[8px] uppercase tracking-widest" style={{ color: "rgba(6,182,212,0.4)" }}>
+                {suggestedEdges.length} SUGGESTED{highSuggested > 0 && ` · ${highSuggested} HIGH`}
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Bottom hint ── */}
-      <div className="absolute bottom-3 left-3 z-10 font-mono text-[9px] text-neutral-800 uppercase tracking-widest pointer-events-none">
-        CLICK EDGE → LINK INTELLIGENCE &nbsp;·&nbsp; CLICK NODE → ENTITY DOSSIER
+      <div className="absolute bottom-3 left-3 z-10 font-mono text-[8px] uppercase tracking-widest pointer-events-none" style={{ color: "rgba(255,255,255,0.12)" }}>
+        CLICK EDGE → LINK INTEL &nbsp;·&nbsp; CLICK NODE → ENTITY DOSSIER
         {medSuggested > 0 && (
-          <span className="text-cyan-900">
-            &nbsp;·&nbsp; DASHED = CO-MENTION SUGGESTION
+          <span style={{ color: "rgba(6,182,212,0.25)" }}>
+            &nbsp;·&nbsp; DASHED = CO-MENTION
           </span>
         )}
       </div>

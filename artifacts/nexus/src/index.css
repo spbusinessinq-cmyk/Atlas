@@ -685,6 +685,445 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
     inset 4px 0 12px rgba(34,197,94,0.03);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   ATLAS ELITE DESIGN SYSTEM — Federal Intelligence Workstation UI
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Upgraded surface tokens ────────────────────────────────────────────────── */
+:root, .dark {
+  --atlas-surface-0: #010204;
+  --atlas-surface-1: #02040a;
+  --atlas-surface-2: #04060d;
+  --atlas-surface-3: #070a11;
+  --atlas-surface-4: #0b0e16;
+  --atlas-surface-5: #0f1219;
+  --atlas-border-0: rgba(255,255,255,0.038);
+  --atlas-border-1: rgba(255,255,255,0.065);
+  --atlas-border-2: rgba(255,255,255,0.095);
+  --atlas-border-3: rgba(255,255,255,0.13);
+}
+
+/* ── Upgraded nexus-panel base ───────────────────────────────────────────────── */
+.nexus-panel {
+  background: rgba(3, 5, 10, 0.94) !important;
+  border: 1px solid rgba(255,255,255,0.062) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    inset 0 0 0 1px rgba(255,255,255,0.012),
+    0 4px 28px rgba(0,0,0,0.55),
+    0 1px 6px rgba(0,0,0,0.8) !important;
+}
+
+/* ── Upgraded nexus-header-strip ─────────────────────────────────────────────── */
+.nexus-header-strip {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  padding: 0.3rem 0.75rem !important;
+  background:
+    radial-gradient(ellipse 240% 100% at 0% 50%, rgba(220,38,38,0.045) 0%, transparent 55%),
+    rgba(255,255,255,0.015) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.055) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -1px 0 rgba(0,0,0,0.4) !important;
+}
+
+/* ── Left rail ──────────────────────────────────────────────────────────────── */
+
+/* Back-link strip at top of left rail */
+.atlas-rail-back {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.45rem 0.875rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.008);
+}
+
+/* Case identity block */
+.atlas-case-block {
+  padding: 1rem 0.875rem 0.875rem;
+  border-bottom: 1px solid rgba(255,255,255,0.045);
+  background:
+    radial-gradient(ellipse 200% 140% at 0% 0%, rgba(220,38,38,0.04) 0%, transparent 60%),
+    rgba(255,255,255,0.006);
+  flex-shrink: 0;
+}
+
+/* Nav section label */
+.atlas-nav-section-label {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.18);
+  padding: 0.625rem 0.875rem 0.3rem;
+}
+
+/* Nav item base */
+.atlas-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.32);
+  border-left: 2px solid transparent;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+}
+.atlas-nav-item:hover {
+  color: rgba(255,255,255,0.65);
+  background: rgba(255,255,255,0.025);
+  border-left-color: rgba(255,255,255,0.08);
+}
+.atlas-nav-item.active {
+  color: rgba(255,255,255,0.92);
+  background:
+    radial-gradient(ellipse 200% 100% at 0% 50%, rgba(220,38,38,0.065) 0%, transparent 70%),
+    rgba(220,38,38,0.04);
+  border-left-color: rgba(220,38,38,0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.025),
+    inset 0 -1px 0 rgba(0,0,0,0.2),
+    inset 4px 0 20px rgba(220,38,38,0.04);
+}
+
+/* Case stat counter row (left rail footer) */
+.atlas-case-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+}
+.atlas-case-stat-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.2);
+}
+.atlas-case-stat-val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  font-variant-numeric: tabular-nums;
+}
+.atlas-case-stat-val.warn {
+  color: rgba(245,158,11,0.8);
+}
+
+/* ── Module headers ──────────────────────────────────────────────────────────── */
+
+/* Master module header — full-width section title bar */
+.atlas-module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.75rem 0.3rem 0.625rem;
+  background:
+    radial-gradient(ellipse 300% 120% at 0% 50%, rgba(220,38,38,0.035) 0%, transparent 60%),
+    rgba(255,255,255,0.012);
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+  flex-shrink: 0;
+}
+.atlas-module-header-cyan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.75rem 0.3rem 0.625rem;
+  background:
+    radial-gradient(ellipse 300% 120% at 0% 50%, rgba(6,182,212,0.03) 0%, transparent 60%),
+    rgba(255,255,255,0.012);
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+  flex-shrink: 0;
+}
+.atlas-module-header-amber {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.75rem 0.3rem 0.625rem;
+  background:
+    radial-gradient(ellipse 300% 120% at 0% 50%, rgba(245,158,11,0.03) 0%, transparent 60%),
+    rgba(255,255,255,0.012);
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+  flex-shrink: 0;
+}
+.atlas-module-header-green {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.75rem 0.3rem 0.625rem;
+  background:
+    radial-gradient(ellipse 300% 120% at 0% 50%, rgba(34,197,94,0.025) 0%, transparent 60%),
+    rgba(255,255,255,0.012);
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+  flex-shrink: 0;
+}
+
+/* Module label style */
+.atlas-module-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.38);
+  font-weight: 500;
+}
+
+/* ── Data rows ───────────────────────────────────────────────────────────────── */
+
+/* Standard intelligence data row */
+.atlas-data-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s;
+}
+.atlas-data-row:hover {
+  background: rgba(255,255,255,0.018);
+}
+.atlas-data-row:last-child {
+  border-bottom: none;
+}
+
+/* Elevated data row (for primary evidence) */
+.atlas-data-row-primary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.035);
+  border-left: 2px solid rgba(220,38,38,0.4);
+  background: rgba(220,38,38,0.015);
+  transition: background 0.1s;
+}
+.atlas-data-row-primary:hover {
+  background: rgba(220,38,38,0.025);
+}
+
+/* ── Tags / badges ───────────────────────────────────────────────────────────── */
+.atlas-tag {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 0.15rem 0.4rem;
+  color: rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.02);
+  white-space: nowrap;
+}
+.atlas-tag-red    { border-color: rgba(220,38,38,0.35);  color: rgba(220,38,38,0.8);  background: rgba(220,38,38,0.04); }
+.atlas-tag-cyan   { border-color: rgba(6,182,212,0.3);   color: rgba(6,182,212,0.8);  background: rgba(6,182,212,0.04); }
+.atlas-tag-amber  { border-color: rgba(245,158,11,0.3);  color: rgba(245,158,11,0.8); background: rgba(245,158,11,0.04); }
+.atlas-tag-green  { border-color: rgba(34,197,94,0.3);   color: rgba(34,197,94,0.8);  background: rgba(34,197,94,0.04); }
+.atlas-tag-violet { border-color: rgba(139,92,246,0.3);  color: rgba(139,92,246,0.8); background: rgba(139,92,246,0.04); }
+
+/* ── Workflow strip ──────────────────────────────────────────────────────────── */
+.atlas-workflow-strip {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  background: rgba(0,0,0,0.55);
+  border-bottom: 1px solid rgba(255,255,255,0.035);
+  overflow-x: auto;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+/* ── Center canvas header ────────────────────────────────────────────────────── */
+.atlas-canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.875rem;
+  background:
+    radial-gradient(ellipse 300% 100% at 0% 50%, rgba(220,38,38,0.038) 0%, transparent 55%),
+    rgba(255,255,255,0.014);
+  border-bottom: 1px solid rgba(255,255,255,0.058);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -1px 0 rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+
+/* ── Graph canvas environment ────────────────────────────────────────────────── */
+.atlas-graph-bg {
+  background:
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(220,38,38,0.025) 0%, transparent 70%),
+    repeating-linear-gradient(
+      0deg, transparent, transparent 39px,
+      rgba(255,255,255,0.012) 39px, rgba(255,255,255,0.012) 40px
+    ),
+    repeating-linear-gradient(
+      90deg, transparent, transparent 39px,
+      rgba(255,255,255,0.012) 39px, rgba(255,255,255,0.012) 40px
+    ),
+    #010306;
+}
+
+/* ── Graph node card ─────────────────────────────────────────────────────────── */
+.atlas-graph-node {
+  background:
+    radial-gradient(ellipse 120% 160% at 20% 0%, rgba(255,255,255,0.04) 0%, transparent 60%),
+    rgba(6, 9, 15, 0.97);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 4px 20px rgba(0,0,0,0.7),
+    0 1px 4px rgba(0,0,0,0.9);
+  border-radius: 2px;
+  min-width: 130px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.atlas-graph-node:hover {
+  border-color: rgba(255,255,255,0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 6px 24px rgba(0,0,0,0.75),
+    0 2px 8px rgba(0,0,0,0.9);
+}
+.atlas-graph-node.selected {
+  border-color: rgba(220,38,38,0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 0 0 1px rgba(220,38,38,0.2),
+    0 6px 24px rgba(220,38,38,0.15),
+    0 2px 8px rgba(0,0,0,0.8);
+}
+
+/* ── Intel brief cards ───────────────────────────────────────────────────────── */
+.atlas-intel-card {
+  background:
+    radial-gradient(ellipse 200% 200% at 0% 0%, rgba(255,255,255,0.02) 0%, transparent 50%),
+    rgba(4, 6, 12, 0.92);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 2px 12px rgba(0,0,0,0.45);
+}
+.atlas-intel-card-red {
+  background:
+    radial-gradient(ellipse 200% 200% at 0% 0%, rgba(220,38,38,0.05) 0%, transparent 50%),
+    rgba(4, 2, 4, 0.94);
+  border: 1px solid rgba(220,38,38,0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 0 20px rgba(220,38,38,0.06),
+    0 2px 12px rgba(0,0,0,0.5);
+}
+.atlas-intel-card-cyan {
+  background:
+    radial-gradient(ellipse 200% 200% at 0% 0%, rgba(6,182,212,0.04) 0%, transparent 50%),
+    rgba(0, 5, 10, 0.94);
+  border: 1px solid rgba(6,182,212,0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 0 20px rgba(6,182,212,0.05),
+    0 2px 12px rgba(0,0,0,0.5);
+}
+
+/* ── Dividers ────────────────────────────────────────────────────────────────── */
+.atlas-divider-h {
+  height: 1px;
+  background: rgba(255,255,255,0.04);
+  margin: 0;
+  border: none;
+}
+.atlas-divider-accent {
+  height: 1px;
+  background: linear-gradient(to right, rgba(220,38,38,0.4), transparent);
+  margin: 0;
+  border: none;
+}
+
+/* ── Document vault row ──────────────────────────────────────────────────────── */
+.atlas-doc-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s, border-color 0.1s;
+  cursor: pointer;
+}
+.atlas-doc-row:hover {
+  background: rgba(255,255,255,0.02);
+  border-bottom-color: rgba(255,255,255,0.05);
+}
+.atlas-doc-row.selected {
+  background: rgba(220,38,38,0.03);
+  border-bottom-color: rgba(220,38,38,0.12);
+}
+.atlas-doc-row.tier-a {
+  border-left: 2px solid rgba(220,38,38,0.5);
+}
+.atlas-doc-row.tier-b {
+  border-left: 2px solid rgba(245,158,11,0.3);
+}
+.atlas-doc-row.tier-c {
+  border-left: 2px solid rgba(255,255,255,0.06);
+}
+
+/* ── Right rail section headers ──────────────────────────────────────────────── */
+.atlas-rail-section {
+  padding: 0.5rem 0.75rem 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.008);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* ── Collapsible toggle button ───────────────────────────────────────────────── */
+.atlas-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.28);
+  background: rgba(255,255,255,0.006);
+  border-top: 1px solid rgba(255,255,255,0.035);
+  transition: color 0.1s, background 0.1s;
+  cursor: pointer;
+}
+.atlas-collapse-btn:hover {
+  color: rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.02);
+}
+.atlas-collapse-btn.open {
+  color: rgba(255,255,255,0.45);
+  border-bottom: 1px solid rgba(255,255,255,0.035);
+}
+
 /* ── ReactFlow overrides ───────────────────────────────────────────────────── */
 .react-flow__node:focus,
 .react-flow__node:focus-visible,

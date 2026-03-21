@@ -88,10 +88,10 @@ export default function DocumentsTab({
           </div>
         ) : (
           <>
-            <div className="flex bg-[#ffffff04] border-b border-[#ffffff06] px-3 py-1.5 font-mono text-[9px] text-neutral-700 uppercase tracking-widest sticky top-0">
+            <div className="flex sticky top-0 z-10" style={{ background: "rgba(3,5,10,0.97)", borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
               <div className="w-8 mr-3 flex-shrink-0" />
-              <div className="flex-1">TITLE / SOURCE</div>
-              <div className="w-48 text-right">ACTIONS</div>
+              <div className="flex-1 px-3 py-1.5 font-mono text-[7px] uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)" }}>EVIDENCE TITLE / SOURCE</div>
+              <div className="w-48 px-3 py-1.5 font-mono text-[7px] uppercase tracking-[0.2em] text-right" style={{ color: "rgba(255,255,255,0.2)" }}>ACTIONS</div>
             </div>
             {documents.map((doc) => (
               <DocumentRow
@@ -116,9 +116,9 @@ export default function DocumentsTab({
 }
 
 const SIGNAL_BADGE: Record<"HIGH" | "MEDIUM" | "LOW", { text: string; cls: string }> = {
-  HIGH:   { text: "HIGH SIG",   cls: "text-green-500 border-green-500/40 bg-green-500/5" },
-  MEDIUM: { text: "MED SIG",    cls: "text-yellow-500 border-yellow-500/40 bg-yellow-500/5" },
-  LOW:    { text: "LOW SIG",    cls: "text-neutral-700 border-[#ffffff0d] bg-transparent" },
+  HIGH:   { text: "HIGH",   cls: "text-green-400 border-green-500/30 bg-green-500/5" },
+  MEDIUM: { text: "MED",    cls: "text-amber-500 border-amber-500/25 bg-amber-500/5" },
+  LOW:    { text: "LOW",    cls: "text-neutral-700 border-[#ffffff0d] bg-transparent" },
 };
 
 function DocumentRow({
@@ -166,34 +166,38 @@ function DocumentRow({
     }
   };
 
+  // Derive tier for left border coloring
+  const tier = diag?.priority ?? "TIER-3";
+  const tierBorderColor = tier === "TIER-1" ? "rgba(220,38,38,0.5)" : tier === "TIER-2" ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.06)";
+
   return (
     <div
-      className={cn(
-        "flex items-center gap-0 border-b border-[#ffffff06] transition-all duration-150",
-        isSelected
-          ? "bg-[#dc262608] border-l-2 border-l-red-600"
-          : "border-l-2 border-l-transparent"
-      )}
+      className={cn("flex items-center gap-0 transition-all duration-100")}
+      style={{
+        borderBottom: "1px solid rgba(255,255,255,0.032)",
+        borderLeft: `2px solid ${isSelected ? "rgba(220,38,38,0.7)" : tierBorderColor}`,
+        background: isSelected ? "rgba(220,38,38,0.03)" : "transparent",
+      }}
     >
       <div
         onClick={onSelect}
-        className={cn(
-          "flex items-center gap-2.5 flex-1 min-w-0 px-3 py-1.5 cursor-pointer",
-          isSelected ? "hover:bg-[#dc26260a]" : "hover:bg-[#ffffff04]"
-        )}
+        className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2 cursor-pointer"
+        style={{ transition: "background 0.1s" }}
+        onMouseEnter={e => !isSelected && (e.currentTarget.style.background = "rgba(255,255,255,0.015)")}
+        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
       >
+        {/* Type icon */}
         <div
-          className={cn(
-            "w-5 h-5 flex-shrink-0 border flex items-center justify-center",
-            isSelected
-              ? isWeb ? "bg-cyan-500/10 border-cyan-500/30" : "bg-red-500/10 border-red-500/30"
-              : "bg-[#000] border-[#ffffff0d]"
-          )}
+          className="w-5 h-5 flex-shrink-0 flex items-center justify-center"
+          style={{
+            border: `1px solid ${isSelected ? (isWeb ? "rgba(6,182,212,0.35)" : "rgba(220,38,38,0.35)") : "rgba(255,255,255,0.07)"}`,
+            background: isSelected ? (isWeb ? "rgba(6,182,212,0.06)" : "rgba(220,38,38,0.06)") : "rgba(255,255,255,0.02)",
+          }}
         >
           {isWeb ? (
-            <Globe className={cn("w-2.5 h-2.5", isSelected ? "text-cyan-500" : "text-neutral-700")} />
+            <Globe className="w-2.5 h-2.5" style={{ color: isSelected ? "rgba(6,182,212,0.9)" : "rgba(255,255,255,0.25)" }} />
           ) : (
-            <span className={cn("text-[6px] font-mono", isSelected ? "text-red-400" : "text-neutral-700")}>
+            <span className="text-[6px] font-mono" style={{ color: isSelected ? "rgba(220,38,38,0.8)" : "rgba(255,255,255,0.22)" }}>
               DOC
             </span>
           )}
@@ -201,31 +205,30 @@ function DocumentRow({
 
         <div className="flex-1 min-w-0">
           <div
-            className={cn(
-              "text-xs font-semibold uppercase truncate transition-colors leading-tight",
-              isSelected ? "text-white" : "text-neutral-400"
-            )}
+            className="font-mono text-[10px] font-semibold uppercase truncate leading-tight mb-0.5"
+            style={{ color: isSelected ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.45)", letterSpacing: "0.04em" }}
             title={doc.title}
           >
             {doc.title}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap text-[8px] font-mono mt-0.5 uppercase tracking-wider text-neutral-700">
-            <span className="truncate max-w-[90px]">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono text-[8px] uppercase tracking-wider truncate max-w-[90px]" style={{ color: "rgba(255,255,255,0.2)" }}>
               {(doc as ExtendedDoc).sourceDomain || doc.source || "UNKNOWN"}
             </span>
-            <span className="text-[#ffffff10]">·</span>
-            <span className="flex-shrink-0 tabular-nums" title={`Ingested: ${formatDate(doc.uploadedAt)}`}>
+            <span style={{ color: "rgba(255,255,255,0.1)" }}>·</span>
+            <span className="font-mono text-[8px] tabular-nums" style={{ color: "rgba(255,255,255,0.18)" }} title={`Ingested: ${formatDate(doc.uploadedAt)}`}>
               {formatDate(doc.uploadedAt).split(",")[0]}
             </span>
-            <span className="text-[#ffffff10]">·</span>
+            <span style={{ color: "rgba(255,255,255,0.1)" }}>·</span>
+            {/* Signal badge */}
             <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${signalBadge.cls}`}>
               {signalBadge.text}
             </span>
             {diag?.priority && (() => {
               const tierMap: Record<string, string> = {
-                "TIER-1": "text-red-500 border-red-500/40 bg-red-500/5",
-                "TIER-2": "text-amber-500 border-amber-500/40 bg-amber-500/5",
-                "TIER-3": "text-neutral-600 border-[#ffffff10] bg-transparent",
+                "TIER-1": "text-red-400 border-red-500/35 bg-red-500/04",
+                "TIER-2": "text-amber-400 border-amber-500/30 bg-amber-500/04",
+                "TIER-3": "text-neutral-700 border-[#ffffff0d] bg-transparent",
               };
               return (
                 <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${tierMap[diag.priority!] ?? "text-neutral-700 border-[#ffffff10]"}`}>
@@ -235,9 +238,9 @@ function DocumentRow({
             })()}
             {diag?.alignment && (() => {
               const alignMap: Record<string, string> = {
-                "CORE":       "text-cyan-600 border-cyan-500/30",
-                "RELEVANT":   "text-sky-700 border-sky-500/20",
-                "PERIPHERAL": "text-neutral-700 border-[#ffffff08]",
+                "CORE":       "text-cyan-500/70 border-cyan-500/25",
+                "RELEVANT":   "text-sky-600/60 border-sky-500/15",
+                "PERIPHERAL": "text-neutral-700 border-[#ffffff07]",
               };
               return (
                 <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${alignMap[diag.alignment!] ?? "text-neutral-700 border-[#ffffff08]"}`}>

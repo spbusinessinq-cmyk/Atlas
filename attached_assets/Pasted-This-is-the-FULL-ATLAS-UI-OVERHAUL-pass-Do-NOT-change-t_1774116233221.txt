@@ -1,0 +1,306 @@
+This is the FULL ATLAS UI OVERHAUL pass.
+
+Do NOT change the product architecture.
+Do NOT remove routes.
+Do NOT redesign the workflow logic.
+Do NOT replace ATLAS with a generic SaaS dashboard.
+
+This pass is purely about making ATLAS look and feel like a real elite intelligence system — closer in quality to WHITEWING / ORION / BLACKDOG.
+
+ATLAS currently works better, but visually it still feels too flat, too cramped, too spreadsheet-like, and too low-status.
+I want it to feel like a federal intelligence workstation.
+
+GOAL
+Transform ATLAS into a sharper, cleaner, more premium command environment with:
+- stronger dark-glass depth
+- cleaner hierarchy
+- better panel rhythm
+- better use of space
+- more dominant center canvas
+- tighter sidebars
+- more controlled accent lighting
+- less “box pile”
+- more “intelligence terminal”
+
+Keep ATLAS identity.
+Make it feel unified with the rest of the RSR systems.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T001 — FULL VISUAL DESIGN LANGUAGE UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━
+Create a more premium ATLAS design system.
+
+Upgrade:
+- panel surfaces
+- borders
+- glows
+- shadows
+- typography hierarchy
+- section spacing
+- content density balance
+- empty states
+- action bars
+- tables
+- tab strips
+
+Design direction:
+- elite intelligence system
+- federal / classified / operational
+- refined dark glass
+- not neon overload
+- not gamer UI
+- not generic SaaS
+- not flat admin dashboard
+
+Use WHITEWING as inspiration for:
+- layering
+- dark mood
+- spacing discipline
+- stronger main-canvas focus
+- premium operational tone
+
+But keep ATLAS colors and identity.
+
+Implement:
+- deeper glass floor panels
+- subtle radial lighting
+- cleaner border contrast
+- stronger section-header treatment
+- slightly more breathing room between stacked modules
+- better visual separation between left nav / case rail / main canvas / right rail
+- richer active states
+- more elegant stat cards
+- better “intelligence dossier” presentation styling
+
+━━━━━━━━━━━━━━━━━━━━━━
+T002 — LAYOUT REBALANCE / MAIN CANVAS DOMINANCE
+━━━━━━━━━━━━━━━━━━━━━━
+The app needs better spatial hierarchy.
+
+Current problem:
+Too much visual competition between:
+- left navigation
+- case rail
+- main panel
+- right rail
+
+Fix:
+- make the main working canvas feel like the primary focus
+- slightly reduce visual weight of the side columns
+- improve proportional balance between the three columns
+- clean up gutter spacing and internal padding
+- ensure dossier / link analysis / document vault feel centered and important
+
+Requirements:
+- no broken responsiveness
+- no route changes
+- no collapsed usability
+- make the working area feel stronger and more premium
+
+━━━━━━━━━━━━━━━━━━━━━━
+T003 — RIGHT SIDEBAR COMPLETE REFACTOR
+━━━━━━━━━━━━━━━━━━━━━━
+The right rail still feels overloaded and ugly.
+
+Rebuild it into a clean intelligence rail with visual grouping and collapsible sections.
+
+Required structure:
+1. CASE STATUS
+- auto-build report
+- target mode
+- case health
+- promoted / held / blocked
+
+2. PRIMARY ACTION
+- one main recommendation only
+- visually prominent
+
+3. TRIAGE ACTIONS
+- grouped and collapsible
+- cleaner spacing
+- smaller footprint
+
+4. QUALITY CONTROLS
+- separate grouped block
+
+5. DOSSIER ACTIONS
+- dedicated compact block
+
+6. ADVANCED DIAGNOSTICS
+- collapsed by default
+
+Visually:
+- no giant stack of same-weight boxes
+- clearer vertical rhythm
+- tighter but more premium
+- stronger labels
+- cleaner section dividers
+- reduce clutter
+
+━━━━━━━━━━━━━━━━━━━━━━
+T004 — LEFT NAV + CASE RAIL UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━
+The left side needs to feel more premium and system-level.
+
+Upgrade:
+- app nav
+- case title block
+- case metadata block
+- section list
+- footer stats
+- active row treatment
+- hover states
+- collapsed-state styling if present
+
+Requirements:
+- stronger hierarchy
+- sharper active indicator
+- better icon alignment
+- better spacing
+- more “classified workstation”
+- make section switching feel deliberate and premium
+
+━━━━━━━━━━━━━━━━━━━━━━
+T005 — SECTION HEADER / MODULE STYLING OVERHAUL
+━━━━━━━━━━━━━━━━━━━━━━
+Rebuild the visual style of all major modules:
+- dossier
+- evidence
+- timeline
+- flow trace
+- entity registry
+- link analysis
+- overview
+- auto-build report
+- key evidence
+- likely angles
+- current state
+- intelligence gaps
+- next queries
+
+Need:
+- better header bars
+- more distinct accent variants
+- less repetitive rectangles
+- more premium module presentation
+- consistent top-edge rhythm
+- subtle scanline/terminal texture where appropriate
+- better dense-data readability
+
+━━━━━━━━━━━━━━━━━━━━━━
+T006 — DOSSIER PRESENTATION OVERHAUL
+━━━━━━━━━━━━━━━━━━━━━━
+The dossier content is useful but still not presented like an elite intel brief.
+
+Upgrade DOSSIER tab and overview dossier sections so they feel like:
+- a real intelligence product
+- a prepared operator brief
+- premium analytical output
+
+Improve:
+- title area
+- confidence badge treatment
+- summary block
+- evidence list styling
+- relationships section
+- likely angles
+- gaps
+- queries
+- case statistics
+- timeline preview
+- money-flow preview
+
+Need:
+- cleaner typography hierarchy
+- stronger readability
+- better spacing
+- better panel framing
+- more confidence and premium feel
+
+━━━━━━━━━━━━━━━━━━━━━━
+T007 — LINK ANALYSIS VISUAL + INTERACTION POLISH
+━━━━━━━━━━━━━━━━━━━━━━
+Link Analysis still looks too basic.
+
+Upgrade:
+- graph background
+- node cards
+- edge labels
+- selected node inspector
+- graph controls
+- empty state
+- overall atmosphere
+
+Also improve interaction polish:
+- smoother drag feel
+- smoother hover
+- cleaner selected state
+- better node depth
+- more satisfying graph experience
+
+Do NOT break current graph behavior.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T008 — DOCUMENT VAULT / TABLE POLISH
+━━━━━━━━━━━━━━━━━━━━━━
+Document Vault is functional but visually mid.
+
+Upgrade:
+- row density
+- title/source/date layout
+- signal badge styling
+- aligned/partial/mismatched markers
+- action button placement
+- ingest bar/header
+- selected/hover states
+
+Goal:
+make docs feel like curated intelligence evidence, not generic admin rows.
+
+━━━━━━━━━━━━━━━━━━━━━━
+T009 — EMPTY STATE OVERHAUL
+━━━━━━━━━━━━━━━━━━━━━━
+Current empty states are better than before but still not premium enough.
+
+Every empty state should feel intentional and elite.
+
+Upgrade empty states for:
+- overview
+- entity registry
+- link analysis
+- temporal trace
+- flow trace
+- document vault
+- dossier gaps / sparse output
+
+Need:
+- better centered compositions
+- better iconography treatment
+- more premium text hierarchy
+- subtle action prompts
+- explanation + recommended next step
+
+━━━━━━━━━━━━━━━━━━━━━━
+T010 — LIVE VISUAL QA
+━━━━━━━━━━━━━━━━━━━━━━
+After implementation:
+- boot both servers clean
+- verify no TS errors introduced
+- verify dossier route still works
+- verify graph still works
+- verify right rail collapse behavior works
+- verify doc rows still work
+- verify empty cases and populated cases both look good
+
+Smoke test on:
+- a populated case
+- a sparse/provisional case
+- an empty/new case
+
+DELIVERABLE
+When done, report:
+1. exact visual systems changed
+2. exact files changed
+3. whether right rail was fully cleaned up
+4. whether ATLAS now visually matches the quality tier of WHITEWING / ORION more closely
+5. whether any behavior changed or only presentation
