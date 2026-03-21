@@ -1,0 +1,398 @@
+ATLAS FINAL LAUNCH PASS — DO EVERYTHING BELOW IN ONE COORDINATED SYSTEM PASS. THIS IS A FULL PRE-LAUNCH INTELLIGENCE / UX / CONTROL / EXPORT / DATA-INTEGRITY UPGRADE. DO NOT PARTIALLY IMPLEMENT. DO NOT STOP AFTER UI ONLY. SHIP ALL OF IT, VERIFY IT, AND SUMMARIZE EXACTLY WHAT WAS CHANGED.
+
+GOAL
+Turn ATLAS from a semi-manual investigation UI into a launch-ready intelligence system with:
+1) stronger intelligence reasoning
+2) operator prompt-driven case seeding
+3) elite print/PDF export
+4) real admin controls (delete/wipe)
+5) proper triage queue access
+6) accurate entity controls
+7) improved flow-trace logic
+8) cleaner graph interaction
+9) launch-safe empty/public state
+10) full end-to-end verification
+
+━━━━━━━━━━━━━━━━━━
+T001 — OPERATOR INTEL INPUT / PROMPT-SEEDED CASES
+━━━━━━━━━━━━━━━━━━
+Build a real “Create Case From Intel” system.
+
+ADD UI:
+- New button in main case-control area: CREATE CASE FROM INTEL
+- Opens a modal / panel with:
+  - Case title input
+  - Investigation type selector
+  - Large textarea for operator notes / allegations / context / what to look for
+  - Link input list (multi-link)
+  - Optional pasted raw evidence block
+  - “Build Investigation” button
+
+BACKEND:
+- Add new API route to create a case from prompt + links + notes.
+- Store the operator prompt, links, and evidence in DB on the case.
+- Pipeline must:
+  1. create case
+  2. ingest provided links first
+  3. extract anchor terms from operator prompt
+  4. use operator prompt as search guidance
+  5. compile dossier automatically
+  6. run graph build
+  7. run recovery if sparse
+  8. generate initial intelligence framing
+
+INTELLIGENCE RULE:
+The prompt is not just metadata — it must influence:
+- doc relevance scoring
+- suggested next queries
+- investigative angle generation
+- entity promotion confidence when a candidate matches prompt anchors
+
+━━━━━━━━━━━━━━━━━━
+T002 — INTELLIGENCE CORE / REAL ANALYST BRAIN
+━━━━━━━━━━━━━━━━━━
+Upgrade dossier intelligence quality so it feels like a real analytical system, not a summary box.
+
+ADD SERVER-COMPUTED DOSSIER SECTIONS:
+- SITUATION ASSESSMENT
+- POWER STRUCTURE
+- BENEFICIARIES / CONTROL PATH
+- RISK LEVEL
+- LEVERAGE POINTS
+- OPERATOR DIRECTIVE
+- WHY THIS MATTERS
+- CONFIDENCE NOTE
+
+REQUIREMENTS:
+- Situation Assessment = plain-English narrative of what is happening
+- Power Structure = who controls / influences / receives / authorizes
+- Beneficiaries / Control Path = who benefits, who receives money, who grants it, who is tied to it
+- Risk Level = LOW / MODERATE / HIGH / CRITICAL with reasoning
+- Leverage Points = what an operator should inspect next
+- Operator Directive = concrete next actions, not generic filler
+- Why This Matters = one-paragraph real-world consequence statement
+- Confidence Note = explain why build is STRONG / PROVISIONAL / WEAK
+
+IMPORTANT:
+- Use real case signals, docs, relationships, timelines, and financial signals.
+- Do not hallucinate.
+- If evidence is sparse, explicitly say why and what is missing.
+
+━━━━━━━━━━━━━━━━━━
+T003 — PDF / PRINT DOSSIER OVERHAUL
+━━━━━━━━━━━━━━━━━━
+Current print export works but looks weak. Rebuild it to look elite and publication-grade.
+
+MAKE PRINT EXPORT:
+- Clean white background
+- Strong typography hierarchy
+- Distinct section dividers
+- Cover page
+- Executive summary page
+- Better margins / line spacing
+- Clear header / footer with page numbers
+- Confidence band / classification treatment
+- Better section headers with subtle professional styling
+- Strong “Why This Matters” callout box
+- Better evidence table formatting
+- Timeline formatting aligned and readable
+- Financial flows rendered as clear structured blocks
+- Source evidence page with title, source, relevance, priority, notes
+- No giant blank areas / broken spacing / weak pagination
+- Print-safe page breaks between key sections
+
+PRINT CONTENT ORDER:
+1. Cover
+2. Executive Summary
+3. Situation Assessment
+4. Primary Actors / Institutions
+5. Power Structure / Relationships
+6. Key Findings
+7. Financial Flows
+8. Timeline
+9. Evidence Sources
+10. Intelligence Gaps
+11. Why This Matters
+12. Operator Directive / Next Steps
+
+EXPORT UX:
+- Button must always work
+- If dossier not yet built, GENERATE & EXPORT should build then export
+- If dossier exists, EXPORT PDF immediately
+- Add visible success/error toast
+- Verify it opens a print-ready window reliably
+
+━━━━━━━━━━━━━━━━━━
+T004 — SYSTEM WIPE / DELETE / PRE-LAUNCH SAFETY
+━━━━━━━━━━━━━━━━━━
+Add proper admin controls.
+
+ADD:
+- Delete Case button
+- Delete Entity button from entity detail / registry access
+- Delete Relationship control where appropriate
+- Full System Wipe admin action
+- Optional “Launch Safe / Public Mode” toggle
+
+SYSTEM WIPE MUST:
+- remove all cases
+- remove all entities
+- remove all docs
+- remove all timeline events
+- remove all financial signals
+- remove all graph relationships
+- remove all pending mentions / triage items
+- reset counters / summary state safely
+
+ADD PROTECTION:
+- confirm dialogs for destructive actions
+- one admin-only route for wipe
+- visible warning copy
+
+PUBLIC / LAUNCH SAFE MODE:
+- if public mode enabled with no live curated data, app should show clean empty state
+- ensure no leftover test cases/entities leak into launch
+- no dirty seed data visible by accident
+
+━━━━━━━━━━━━━━━━━━
+T005 — SIMPLE ACCESS LOCK SCREEN
+━━━━━━━━━━━━━━━━━━
+For now add a simple gated access screen.
+
+REQUIREMENTS:
+- On first visit show access code screen
+- Code for now: 4451
+- Store successful session locally
+- Protect the app routes behind this gate
+- Make the screen clean and consistent with ATLAS style
+- Add small note area: “Authorized access only”
+- Do not overcomplicate with full auth provider yet
+
+Also make it easy later to swap this for real auth.
+
+━━━━━━━━━━━━━━━━━━
+T006 — TRIAGE QUEUE PAGE
+━━━━━━━━━━━━━━━━━━
+Right now triage is buried. Build a dedicated page.
+
+ADD PAGE:
+- /triage
+
+SHOW:
+- pending entities
+- pending docs / detections
+- confidence
+- reason held
+- source count
+- action buttons:
+  - approve
+  - reject
+  - hold
+  - bulk auto-triage
+- filters:
+  - entity
+  - document
+  - low-confidence
+  - artifact
+  - off-topic
+  - recovery-mode
+- counts by category
+- quick jump back into case
+
+This needs to be an actual operator work queue, not just a hidden rail section.
+
+━━━━━━━━━━━━━━━━━━
+T007 — ENTITY REGISTRY / ENTITY DETAIL FIXES
+━━━━━━━━━━━━━━━━━━
+Inside a case, entity registry currently lacks full control and accuracy assurance.
+
+DO ALL:
+- Add entity delete action
+- Add entity detail panel / drawer when clicked
+- Show:
+  - type
+  - mentions
+  - docs hit
+  - confidence
+  - linked entities
+  - linked signals
+  - linked timeline events
+  - why it was promoted / held
+- Add edit / correct type action
+- Add merge / alias support if feasible
+- Improve type correction so orgs / agencies / funds / programs stop getting mislabeled as people
+- Improve junk filtering further
+
+Make entity detail accurate and useful.
+
+━━━━━━━━━━━━━━━━━━
+T008 — FLOW TRACE INTELLIGENCE FIX
+━━━━━━━━━━━━━━━━━━
+Flow Trace still feels weak / weird.
+
+UPGRADE IT:
+- Better financial extraction reasoning
+- Show structured flow:
+  SOURCE / AUTHORITY / PROGRAM / RECEIVER / AMOUNT / CONFIDENCE / TYPE
+- Distinguish:
+  - verified numeric
+  - inferred numeric
+  - non-numeric funding language
+- Better empty state
+- Better card layout
+- Better labeling of weak/moderate/strong signal
+- Better explanation of why a signal exists
+- Penalize obvious side-story money more aggressively
+- Improve prompt-anchor overlap impact on flow relevance
+
+IMPORTANT:
+If a case is about homelessness funding, random unrelated money references must not dominate flow trace.
+
+━━━━━━━━━━━━━━━━━━
+T009 — GRAPH OVERHAUL / CLEANER LOOK / BETTER INTERACTION
+━━━━━━━━━━━━━━━━━━
+The graph needs to feel more modern, cleaner, and easier to control.
+
+VISUAL UPGRADES:
+- Less retro/80s glow spam
+- Cleaner node styling
+- Better contrast
+- Better edge labels
+- Better spacing
+- More premium depth
+
+INTERACTION FIXES:
+- Fix node dragging so it glides with cursor instead of jumping on release
+- Add node hover actions / action menu
+- Add delete node / remove relationship controls
+- Add isolate / expand / trace controls that feel clean
+- Add better suggested vs confirmed visual distinction
+- Improve auto-layout so important nodes center better
+- Reduce clutter from overlapping edges/labels
+
+Make graph feel precise and deliberate, not twitchy.
+
+━━━━━━━━━━━━━━━━━━
+T010 — RIGHT RAIL / SIDEBAR CLEANUP
+━━━━━━━━━━━━━━━━━━
+The right rail is overloaded. Rebuild it for clarity.
+
+MAKE RIGHT RAIL:
+ZONE 1 — STATUS
+- build quality
+- key counts
+- coverage bars
+- blocked sources / warnings
+
+ZONE 2 — INTEL BRIEF
+- WHAT
+- PRIMARY ACTORS / INSTITUTIONS
+- DOCUMENT SIGNALS
+- LIKELY ANGLE
+- CONFIDENCE NOTE
+
+ZONE 3 — NEXT ACTION
+- dominant next operator step
+- triage summary
+- dossier action buttons
+
+RULES:
+- remove operator-hostile pipeline internals from default view
+- collapse diagnostics by default
+- quality controls should not dominate the rail
+- all content should read like command information, not dev scaffolding
+
+━━━━━━━━━━━━━━━━━━
+T011 — GLOBAL UI OVERHAUL
+━━━━━━━━━━━━━━━━━━
+Whole app needs to look tighter, glassier, deeper, more authoritative, closer to WHITEWING quality.
+
+VISUAL TARGET:
+- modern federal/intelligence command product
+- darker, cleaner, sharper
+- subtle glass / layered depth
+- stronger hierarchy
+- less flat, less empty, less amateur
+
+DO:
+- improve panel depth
+- better header authority
+- consistent spacing
+- stronger section headers
+- better shadows / border treatment
+- better empty states
+- cleaner module labels
+- consistent badges
+- better hover states
+- stronger micro-interactions
+- make it feel expensive and operational
+
+Do not make it cheesy. No overdone neon. Controlled, premium, intelligence-grade.
+
+━━━━━━━━━━━━━━━━━━
+T012 — COMPLETE CASE TEST / FULL SYSTEM VERIFY
+━━━━━━━━━━━━━━━━━━
+Run a full end-to-end verification on at least one realistic case.
+
+TEST ENTIRE CHAIN:
+- create case from prompt
+- ingest provided links
+- web search
+- document ingest
+- relevance scoring
+- entity extraction
+- triage generation
+- auto-triage
+- graph build
+- financial flow extraction
+- timeline extraction
+- dossier generation
+- PDF export
+- delete entity
+- delete case
+- wipe safety route
+- lock screen access
+- triage page access
+
+REPORT BACK:
+- what passed
+- what failed
+- what was fixed during test
+- final known limitations if any
+
+━━━━━━━━━━━━━━━━━━
+T013 — GITHUB / LAUNCH PREP
+━━━━━━━━━━━━━━━━━━
+Prepare this app for launch-safe deployment.
+
+DO:
+- make sure no seeded junk data is included by default
+- make sure repo is in clean state
+- ensure env / secrets are not exposed
+- summarize exactly what should be pushed
+- identify if any launch blocker remains
+- confirm if current app is safe to publish after wipe/public mode
+
+━━━━━━━━━━━━━━━━━━
+T014 — FINAL SHIP REPORT
+━━━━━━━━━━━━━━━━━━
+When complete, give a structured ship report:
+- T001 done / what changed
+- T002 done / what changed
+- ...
+- T014 done / what changed
+- verification results
+- remaining blockers
+- recommendation: READY / NOT READY FOR LIVE
+
+IMPORTANT EXECUTION RULES
+- Work across backend + frontend + styles together
+- Do not stop at planning
+- Do not leave features half-wired
+- Restart services and verify everything
+- Fix errors as you go
+- Prefer production-safe implementation
+- No fake placeholders unless clearly labeled
+- Make ATLAS feel smarter, cleaner, more operator-driven, and launch-ready
+
+SHIP THE WHOLE PASS.

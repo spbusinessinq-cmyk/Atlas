@@ -428,7 +428,12 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
   const scoredFinancial: Array<RankedFinancialSignal & { _score: number }> = [];
 
   for (const fs of financialSignals) {
-    const key = fs.amountRaw || "";
+    // Better dedup: entity + signalType + rounded amount (not just raw string)
+    // This catches cases where the same flow appears in different docs with slight formatting diffs
+    const roundedAmt = fs.normalizedAmount ? Math.round(Number(fs.normalizedAmount) / 10_000) * 10_000 : 0;
+    const entityKey = (fs.entityName || "").toLowerCase().trim().slice(0, 30);
+    const typeKey = (fs.signalType || "").toLowerCase().slice(0, 20);
+    const key = `${entityKey}|${typeKey}|${roundedAmt}`;
     if (seenFinancial.has(key)) continue;
     seenFinancial.add(key);
 
@@ -439,8 +444,20 @@ export async function compileCaseBrief(caseId: number): Promise<CaseBrief> {
     if (entityLower && entityNameSet.has(entityLower)) score += 20;
 
     const conf = fs.financialConfidence ? Number(fs.financialConfidence) : null;
-    // Boost score by confidence
     if (conf !== null) score += conf * 10;
+
+    // Bonus for confirmed (not inferred) signals — more reliable
+    if (!(fs as any).inferredSignal) score += 8;
+    // Bonus for complete flow trace (from → to)
+    if ((fs as any).controlledBy && (fs as any).receivedBy) score += 6;
+    else if ((fs as any).controlledBy || (fs as any).receivedBy) score += 3;
+    // Bonus for contextual summary
+    if (fs.eventSummary && fs.eventSummary.length > 40) score += 4;
+    // Bonus for program-linked signals
+    if ((fs as any).programName) score += 2;
+    // Non-numeric signals are lower quality
+    const isNonNumeric = (fs.signalType || "").startsWith("NON_NUMERIC") || (fs as any).amountDisplay === "NON-NUMERIC";
+    if (isNonNumeric) score -= 15;
 
     scoredFinancial.push({
       id: fs.id,

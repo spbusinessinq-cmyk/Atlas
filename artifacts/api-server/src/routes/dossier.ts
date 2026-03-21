@@ -92,22 +92,47 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   const buildCaseSummary = (): string => {
     if (briefText && briefText.length > 80) return briefText;
     const parts: string[] = [];
-    parts.push(`Investigation target: ${caseData.title}.`);
-    if (topPersons.length > 0) {
+
+    // Lead: intent-aware case framing
+    const intentLabel: Record<string, string> = {
+      housing_homelessness: "a public accountability investigation into homelessness spending and shelter program oversight",
+      crime_corruption: "a misconduct and corruption investigation",
+      finance_funding: "a financial oversight investigation into public funding flows",
+      legal_lawsuit: "a litigation intelligence file",
+      policy_government: "a government program oversight investigation",
+      education_university: "an education sector accountability investigation",
+      entertainment_film: "a film industry finance and subsidy investigation",
+      general: "an open intelligence investigation",
+    };
+    const frame = intentLabel[seedIntent] || "an open intelligence investigation";
+    parts.push(`This file covers ${frame} targeting ${caseData.title}.`);
+
+    if (topPersons.length > 0 && topOrgs.length > 0) {
+      parts.push(`Primary persons of interest: ${topPersons.map(e => e.name).join(", ")}. Key institutions: ${topOrgs.map(e => e.name).join(", ")}.`);
+    } else if (topPersons.length > 0) {
       parts.push(`Primary persons of interest: ${topPersons.map(e => e.name).join(", ")}.`);
+    } else if (topOrgs.length > 0) {
+      parts.push(`Key institutional actors: ${topOrgs.map(e => e.name).join(", ")}.`);
     }
-    if (topOrgs.length > 0) {
-      parts.push(`Key institutions identified: ${topOrgs.map(e => e.name).join(", ")}.`);
-    }
-    if (documents.length > 0) {
-      const docSources = [...new Set(documents.map(d => d.source).filter(Boolean))].slice(0, 3);
-      parts.push(`${documents.length} source document${documents.length !== 1 ? "s" : ""} ingested${docSources.length > 0 ? " from " + docSources.join(", ") : ""}.`);
-    }
+
     if (financialSignals.length > 0) {
-      parts.push(`${financialSignals.length} financial signal${financialSignals.length !== 1 ? "s" : ""} detected across source materials.`);
+      const topSignal = financialSignals[0];
+      const amt = topSignal.amountDisplay ?? topSignal.amountRaw ?? null;
+      if (amt && topSignal.entityName) {
+        parts.push(`Lead financial signal: ${amt} associated with ${topSignal.entityName}. ${financialSignals.length} total financial indicator${financialSignals.length !== 1 ? "s" : ""} detected.`);
+      } else {
+        parts.push(`${financialSignals.length} financial signal${financialSignals.length !== 1 ? "s" : ""} detected across source materials.`);
+      }
     }
+
+    if (documents.length > 0) {
+      const docSources = [...new Set(documents.map(d => d.source).filter(Boolean))].slice(0, 2);
+      const sourceStr = docSources.length > 0 ? ` from ${docSources.join(", ")}` : "";
+      parts.push(`Evidence base: ${documents.length} source document${documents.length !== 1 ? "s" : ""}${sourceStr}, ${timeline.length} timeline event${timeline.length !== 1 ? "s" : ""}, ${entities.length} confirmed entity/entities.`);
+    }
+
     if (entities.length === 0) {
-      parts.push("No entities confirmed. Ingest additional documents and complete entity review to develop intelligence picture.");
+      parts.push("No entities confirmed — complete document ingestion and entity triage to develop the intelligence picture.");
     }
     return parts.join(" ");
   };
@@ -299,25 +324,154 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   // SECTION 11 — Why This Matters (narrative)
   const buildWhyItMatters = (): string => {
     const parts: string[] = [];
-    if (topOrgs[0] && financialSignals.length > 0) {
-      parts.push(`${topOrgs[0].name} is implicated in ${financialSignals.length} financial signal${financialSignals.length !== 1 ? "s" : ""} that may indicate misuse, misallocation, or undisclosed flows of public funds.`);
+
+    // Lead with most critical data point
+    const bigMoney = financialSignals.find(f => f.normalizedAmount && f.normalizedAmount >= 1_000_000);
+    const anyMoney = financialSignals[0];
+
+    if (bigMoney && bigMoney.entityName) {
+      const amt = bigMoney.amountDisplay ?? bigMoney.amountRaw;
+      parts.push(`${bigMoney.entityName} is associated with ${amt} in financial signals — at this scale, misallocation or undisclosed flows represent a significant public accountability concern.`);
+    } else if (topOrgs[0] && financialSignals.length > 0) {
+      const amt = anyMoney?.amountDisplay ?? anyMoney?.amountRaw ?? "undisclosed amounts";
+      parts.push(`${topOrgs[0].name} is implicated in financial signals involving ${amt}. Without independent audit, the flow of these funds cannot be verified.`);
     } else if (topOrgs[0]) {
-      parts.push(`${topOrgs[0].name} is a key institutional actor in this investigation.`);
+      parts.push(`${topOrgs[0].name} is a central institutional actor in this investigation.`);
     }
+
     if (topPersons[0]) {
-      parts.push(`${topPersons[0].name} is the primary individual subject with appearances across ${entityDocSupport.get(topPersons[0].id)?.size ?? 0} source${(entityDocSupport.get(topPersons[0].id)?.size ?? 0) !== 1 ? "s" : ""}.`);
+      const docCount = entityDocSupport.get(topPersons[0].id)?.size ?? 0;
+      if (docCount >= 3) {
+        parts.push(`${topPersons[0].name} appears across ${docCount} independent sources — this cross-document corroboration elevates their investigative significance.`);
+      } else if (docCount > 0) {
+        parts.push(`${topPersons[0].name} is the primary individual subject of interest in this case.`);
+      }
     }
+
+    // Intent-specific framing
     if (seedIntent === "housing_homelessness")
-      parts.push("Public accountability for homelessness spending is low — unaudited contracts and opaque service delivery create conditions for waste and fraud.");
+      parts.push("Homelessness service contracts frequently lack competitive bidding requirements and outcome metrics — conditions favorable to waste, fraud, and political favoritism.");
     else if (seedIntent === "crime_corruption")
-      parts.push("Alleged misconduct at this level can implicate systemic institutional failures rather than individual actors alone.");
+      parts.push("Alleged misconduct at an institutional level implicates systemic failures of oversight, not merely individual bad actors.");
     else if (seedIntent === "finance_funding")
-      parts.push("Funding flows without adequate disclosure or audit trails represent a structural accountability gap with potential for exploitation.");
+      parts.push("Public grant and contract flows without adequate transparency mechanisms represent a recurring accountability gap — tracing these flows is the core of this investigation.");
+    else if (seedIntent === "legal_lawsuit")
+      parts.push("Civil or criminal proceedings create a public record that often surfaces relationships and financial flows otherwise hidden from view.");
+    else if (seedIntent === "policy_government")
+      parts.push("Policy decisions at this level can redirect significant public resources — identifying who benefits and who controls the decision chain is essential.");
+    else if (cleanRelationships.length > 0 || financialSignals.length > 0)
+      parts.push("The intersection of confirmed relationships and financial signals in this case warrants continued investigative scrutiny.");
+
     if (parts.length === 0)
-      parts.push(`This case targets ${caseData.title}. Continued investigation is warranted to establish the full scope of actors, flows, and decisions involved.`);
+      parts.push(`This case targets ${caseData.title}. Evidence development is ongoing — continued investigation is warranted to establish the full scope of actors, flows, and decisions involved.`);
+
     return parts.join(" ");
   };
   const whyItMatters = buildWhyItMatters();
+
+  // ─── POWER STRUCTURE ───────────────────────────────────────────────────────
+  const buildPowerStructure = (): string => {
+    const parts: string[] = [];
+    if (entities.length === 0) return "No confirmed entities — power structure cannot be assessed until entity triage is complete.";
+
+    const persons = entities.filter(e => ["person", "individual"].includes(e.type.toLowerCase()));
+    const orgs = entities.filter(e => ["organization", "government_agency", "government_body", "company", "legal_entity"].includes(e.type.toLowerCase()));
+    const topPerson = persons[0];
+    const topOrg = orgs[0];
+
+    if (topPerson && topOrg) {
+      const rel = cleanRelationships.find(r =>
+        (r.entityAId === topPerson.id && r.entityBId === topOrg.id) ||
+        (r.entityAId === topOrg.id && r.entityBId === topPerson.id)
+      );
+      if (rel) {
+        parts.push(`${topPerson.name} is linked to ${topOrg.name} via a confirmed ${rel.relationshipType?.replace(/_/g, " ") ?? "association"}.`);
+      } else {
+        parts.push(`${topPerson.name} and ${topOrg.name} appear in the same case context but no direct relationship has been confirmed.`);
+      }
+    }
+
+    if (cleanRelationships.length > 0) {
+      const highConf = cleanRelationships.filter(r => (r.confidence ?? 0) >= 0.75);
+      if (highConf.length > 0) {
+        parts.push(`${highConf.length} high-confidence relationship${highConf.length !== 1 ? "s" : ""} mapped in the entity graph.`);
+      }
+    }
+
+    if (financialSignals.length > 0) {
+      const controlled = financialSignals.filter(f => f.controlledBy);
+      if (controlled.length > 0) {
+        parts.push(`Control relationships over financial flows identified: ${controlled.slice(0, 2).map(f => f.controlledBy).filter(Boolean).join(", ")}.`);
+      }
+    }
+
+    if (parts.length === 0) {
+      parts.push(`${entities.length} entity/entities confirmed. Relationship mapping pending — build the entity graph to surface control chains.`);
+    }
+    return parts.join(" ");
+  };
+  const powerStructure = buildPowerStructure();
+
+  // ─── RISK FLAGS ─────────────────────────────────────────────────────────────
+  const riskFlags: string[] = [];
+  if (financialSignals.some(f => !f.inferred && (f.normalizedAmount ?? 0) >= 1_000_000)) {
+    riskFlags.push("HIGH-VALUE financial signal detected (≥$1M) — priority verification required.");
+  }
+  if (financialSignals.some(f => f.signalType === "contract_award" || f.signalType === "procurement")) {
+    riskFlags.push("Contract award or procurement signal present — check for sole-source authorization or bid waiver.");
+  }
+  if (cleanRelationships.some(r => r.confidence && r.confidence < 0.4)) {
+    riskFlags.push("Low-confidence relationship detected — corroboration from additional sources required before inclusion.");
+  }
+  if (documents.some(d => !d.source)) {
+    riskFlags.push("Undated or unattributed source documents in evidence set — verify provenance before relying on content.");
+  }
+  const dupNames = entities.filter((e, i) =>
+    entities.findIndex(x => x.name.toLowerCase() === e.name.toLowerCase()) !== i
+  );
+  if (dupNames.length > 0) {
+    riskFlags.push("Possible duplicate entity entries detected — review entity registry for consolidation.");
+  }
+  if (timeline.length > 0 && financialSignals.length > 0) {
+    riskFlags.push("Timeline and financial signals present — cross-reference dates to identify suspicious timing patterns.");
+  }
+  if (entities.length > 0 && cleanRelationships.length === 0) {
+    riskFlags.push("Entities confirmed but no relationships mapped — link analysis gap; run graph build to surface associations.");
+  }
+
+  // ─── RECOMMENDED ACTIONS ────────────────────────────────────────────────────
+  const buildRecommendedActions = (): string[] => {
+    const actions: string[] = [];
+    if (financialSignals.length > 0) {
+      actions.push(`File FOIA request for contract/grant records tied to: ${financialSignals.slice(0, 2).map(f => f.entityName).join(", ")}.`);
+    }
+    if (cleanRelationships.length === 0 && entities.length >= 2) {
+      actions.push("Build entity relationship graph — identify associations, control chains, and shared affiliations.");
+    }
+    if (timeline.length === 0) {
+      actions.push("Ingest dated press releases, regulatory filings, or court records to reconstruct event chronology.");
+    }
+    if (documents.length < 5) {
+      actions.push(`Expand source coverage — current ${documents.length} document(s) insufficient for strong evidentiary base. Target government databases, litigation records, and news archives.`);
+    }
+    const topPerson = entities.find(e => e.type.toLowerCase() === "person");
+    if (topPerson) {
+      actions.push(`Run background check and public records search on ${topPerson.name} — court filings, professional licenses, corporate registrations.`);
+    }
+    const topOrg = entities.find(e => ["organization", "government_agency", "government_body"].includes(e.type.toLowerCase()));
+    if (topOrg) {
+      actions.push(`Review ${topOrg.name}'s audit history, inspector general reports, and any OIG referrals.`);
+    }
+    if (seedIntent === "housing_homelessness") {
+      actions.push("Request HUD compliance documentation and shelter provider contracts via state public records law.");
+    } else if (seedIntent === "crime_corruption") {
+      actions.push("Identify whistleblowers or complainants referenced in public court records or grand jury proceedings.");
+    } else if (seedIntent === "finance_funding") {
+      actions.push("Cross-reference grant recipients against campaign finance disclosures and lobbying registrations.");
+    }
+    return actions.slice(0, 6);
+  };
+  const recommendedActions = buildRecommendedActions();
 
   return res.json({
     caseId,
@@ -337,6 +491,9 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
       knownGaps,
       whyItMatters,
       confidenceNote,
+      powerStructure,
+      riskFlags,
+      recommendedActions,
     },
     meta: {
       entityCount: entities.length,

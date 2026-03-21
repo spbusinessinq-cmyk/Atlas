@@ -382,21 +382,22 @@ function CaseDetailInner({
       }
     });
 
-    // Type compatibility bonus: certain type pairs have higher investigative relevance
+    // Type compatibility bonus: graduated values based on investigative relevance
+    // Institutional cross-links (person↔agency, org↔agency) are highest value
     const typeCompatibilityBonus = (typeA: string, typeB: string): number => {
-      const HIGH_VALUE_PAIRS: [string, string][] = [
-        ["person", "organization"],
-        ["person", "government_agency"],
-        ["organization", "government_agency"],
-        ["person", "company"],
-        ["organization", "company"],
-        ["government_agency", "company"],
-      ];
-      const sorted = [typeA, typeB].sort();
-      for (const [a, b] of HIGH_VALUE_PAIRS) {
-        const ps = [a, b].sort();
-        if (ps[0] === sorted[0] && ps[1] === sorted[1]) return 1;
-      }
+      const sorted = [typeA, typeB].sort().join("|");
+      // Tier 1 — core investigative pairs (person linked to institution)
+      if (sorted === "government_agency|person") return 2.0;
+      if (sorted === "company|person") return 1.5;
+      if (sorted === "organization|person") return 1.5;
+      // Tier 2 — institutional pairs (two organizations)
+      if (sorted === "company|government_agency") return 1.5;
+      if (sorted === "government_agency|organization") return 1.0;
+      if (sorted === "company|organization") return 1.0;
+      // Tier 3 — same-type pairs (lower value without institutional anchor)
+      if (sorted === "person|person") return -0.5; // slight penalty — person-person needs doc support
+      if (sorted === "organization|organization") return 0.5;
+      if (sorted === "company|company") return 0.5;
       return 0;
     };
 
@@ -410,11 +411,20 @@ function CaseDetailInner({
         entityBId: p.entityBId,
         documentTitle: p.docTitle,
         sharedDocCount: p.docCount,
-        score: effectiveScore >= 3 ? "HIGH" : effectiveScore >= 2 ? "MEDIUM" : "LOW",
+        score: effectiveScore >= 3.5 ? "HIGH" : effectiveScore >= 2 ? "MEDIUM" : "LOW",
       };
     }).filter((e) => {
-      // Suppress LOW-score pairs with low doc count to prevent graph explosion
+      // Suppress LOW pairs with only 1 shared doc for person-person (too noisy)
+      const eA = entities.find(en => en.id === e.entityAId);
+      const eB = entities.find(en => en.id === e.entityBId);
+      if (e.score === "LOW" && e.sharedDocCount <= 1) {
+        // Keep institutional links even at LOW, suppress person-person
+        if (eA?.type === "person" && eB?.type === "person") return false;
+      }
       return e.sharedDocCount >= 1;
+    }).sort((a, b) => {
+      const scoreOrder: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+      return (scoreOrder[a.score ?? "LOW"] ?? 2) - (scoreOrder[b.score ?? "LOW"] ?? 2);
     });
   }, [approvedMentions, relationships, entities, documents]);
 
@@ -1606,16 +1616,37 @@ function OverviewPanel({
                   <div className="atlas-empty-sub">Ingest docs with budget, contract, grant or appropriation language to detect signals</div>
                 </div>
               ) : (
-                financialSignals.slice(0, 5).map((sig: any, i: number) => (
-                  <div key={sig.id ?? i} className="px-3 py-2 border-b border-[#ffffff04] flex items-center gap-2">
-                    <span className="font-mono text-[9px] font-bold text-green-400 flex-shrink-0">{sig.amountRaw}</span>
-                    <span className="font-mono text-[7px] text-neutral-700 border border-[#ffffff08] px-1 flex-shrink-0">
-                      {sig.signalType?.replace(/_/g, " ") || "SIGNAL"}
-                    </span>
-                    {sig.entityName && <span className="font-mono text-[8px] text-cyan-500 truncate">{sig.entityName}</span>}
-                    <span className="font-mono text-[8px] text-neutral-600 truncate flex-1">{sig.eventSummary?.slice(0, 60)}</span>
-                  </div>
-                ))
+                financialSignals.slice(0, 5).map((sig: any, i: number) => {
+                  const isNonNumeric = sig.signalType?.startsWith("NON_NUMERIC") || sig.amountDisplay === "NON-NUMERIC";
+                  const conf = sig.financialConfidence ?? 0;
+                  const isInferred = sig.inferredSignal;
+                  const displayAmt = sig.amountDisplay ?? sig.amountRaw;
+                  return (
+                    <div key={sig.id ?? i} className="px-3 py-2 border-b border-[#ffffff04]">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("font-mono text-[9px] font-bold flex-shrink-0",
+                          isNonNumeric ? "text-amber-700" : conf >= 0.7 ? "text-green-400" : "text-green-600"
+                        )}>
+                          {isNonNumeric ? "NON-NUMERIC" : displayAmt}
+                        </span>
+                        <span className="font-mono text-[7px] text-neutral-700 border border-[#ffffff08] px-1 flex-shrink-0">
+                          {sig.signalType?.replace(/^NON_NUMERIC_/, "").replace(/_/g, " ") || "SIGNAL"}
+                        </span>
+                        {isInferred && (
+                          <span className="font-mono text-[7px] text-cyan-800 border border-cyan-900/30 px-1 flex-shrink-0">INFERRED</span>
+                        )}
+                        {sig.entityName && (
+                          <span className="font-mono text-[8px] text-cyan-500 truncate flex-1">{sig.entityName}</span>
+                        )}
+                      </div>
+                      {(sig.programName || sig.eventSummary) && (
+                        <div className="font-mono text-[7.5px] text-neutral-700 mt-0.5 truncate">
+                          {sig.programName ? `[${sig.programName}] ` : ""}{sig.eventSummary?.slice(0, 70)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -3462,11 +3493,42 @@ function DefaultInspector({
                           </div>
                         )}
 
+                        {/* POWER STRUCTURE */}
+                        {s.powerStructure && (
+                          <div className="space-y-0.5" style={{ borderLeft: "2px solid rgba(6,182,212,0.2)", paddingLeft: "6px" }}>
+                            <div className="text-[7px] text-cyan-800 uppercase tracking-[0.2em]">POWER STRUCTURE</div>
+                            <p className="text-neutral-600 leading-relaxed text-[7.5px]">{s.powerStructure}</p>
+                          </div>
+                        )}
+
+                        {/* RISK FLAGS */}
+                        {(s.riskFlags?.length ?? 0) > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-1 h-1 rounded-full bg-orange-700" />
+                              <span className="text-[7px] text-orange-800 uppercase tracking-[0.2em]">RISK FLAGS</span>
+                            </div>
+                            {s.riskFlags.slice(0, 4).map((flag: string, i: number) => (
+                              <div key={i} className="text-[7.5px] text-orange-900/80 pl-2.5 leading-relaxed">⚠ {flag}</div>
+                            ))}
+                          </div>
+                        )}
+
                         {/* WHY THIS MATTERS */}
                         {s.whyItMatters && (
                           <div className="space-y-0.5" style={{ borderLeft: "2px solid rgba(239,68,68,0.25)", paddingLeft: "6px" }}>
                             <div className="text-[7px] text-red-700 uppercase tracking-[0.2em]">WHY THIS MATTERS</div>
                             <p className="text-neutral-500 leading-relaxed text-[8px]">{s.whyItMatters}</p>
+                          </div>
+                        )}
+
+                        {/* RECOMMENDED ACTIONS */}
+                        {(s.recommendedActions?.length ?? 0) > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="text-[7px] text-green-800 uppercase tracking-[0.2em]">RECOMMENDED ACTIONS</div>
+                            {s.recommendedActions.slice(0, 4).map((action: string, i: number) => (
+                              <div key={i} className="text-[7.5px] text-green-900/70 pl-2.5 leading-relaxed">→ {action}</div>
+                            ))}
                           </div>
                         )}
 

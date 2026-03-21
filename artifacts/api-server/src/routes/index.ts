@@ -13,6 +13,7 @@ import relationshipEvidenceRouter from "./relationship_evidence";
 import webIngestRouter from "./web_ingest";
 import systemLogRouter from "./system_log";
 import dossierRouter from "./dossier";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(notesRouter);
 router.use(moneyFlowsRouter);
 router.use(systemLogRouter);
 router.use(dossierRouter);
+router.use(adminRouter);
 
 export default router;

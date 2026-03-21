@@ -30,6 +30,9 @@ export interface PrintDossierParams {
     knownGaps?: string[];
     whyItMatters?: string;
     confidenceNote?: string;
+    powerStructure?: string;
+    riskFlags?: string[];
+    recommendedActions?: string[];
   };
 }
 
@@ -610,9 +613,42 @@ export function openPrintDossier(params: PrintDossierParams): void {
   `).join("") : `<div class="empty-note">No timeline events mapped. Ingest chronological source material.</div>`}
 </div>
 
-<!-- PAGE 8: INTELLIGENCE GAPS -->
+<!-- PAGE 8: POWER STRUCTURE + RISK FLAGS -->
 <div class="page">
   <div class="section-number">SECTION 07</div>
+  <div class="section-header">
+    <div class="section-title">Power Structure &amp; Risk</div>
+    <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>
+  </div>
+
+  ${s.powerStructure ? `
+  <div class="actor-group-label">Power Structure Analysis</div>
+  <div style="font-size:11pt;line-height:1.7;color:#222;margin-bottom:24px;max-width:5.5in">
+    ${escapeHtml(s.powerStructure)}
+  </div>` : ""}
+
+  ${(s.riskFlags ?? []).length > 0 ? `
+  <div class="actor-group-label" style="color:#c00;border-color:#f0c0c0">Risk Flags</div>
+  ${(s.riskFlags ?? []).map(flag => `
+    <div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #f5e5e5;align-items:baseline">
+      <span style="color:#c00;font-size:11pt;flex-shrink:0">⚠</span>
+      <span style="font-size:10.5pt;color:#444">${escapeHtml(flag)}</span>
+    </div>
+  `).join("")}` : `<div class="empty-note">No risk flags detected at current confidence level.</div>`}
+
+  ${(s.recommendedActions ?? []).length > 0 ? `
+  <div class="actor-group-label" style="margin-top:36px">Recommended Actions</div>
+  ${(s.recommendedActions ?? []).map((action, i) => `
+    <div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #f0f0f0;align-items:baseline">
+      <span style="font-family:'Courier New',monospace;color:#888;font-size:9pt;flex-shrink:0">${(i + 1).toString().padStart(2, "0")}</span>
+      <span style="font-size:10.5pt;color:#222">${escapeHtml(action)}</span>
+    </div>
+  `).join("")}` : ""}
+</div>
+
+<!-- PAGE 9: INTELLIGENCE GAPS -->
+<div class="page">
+  <div class="section-number">SECTION 08</div>
   <div class="section-header">
     <div class="section-title">Intelligence Gaps</div>
     <div class="section-case-ref">CASE-${String(caseId).padStart(6, "0")}</div>

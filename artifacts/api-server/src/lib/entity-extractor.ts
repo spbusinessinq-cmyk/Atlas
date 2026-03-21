@@ -259,10 +259,21 @@ const CELEBRITY_PERSON_NAMES = new Set([
   "Arnold Schwarzenegger", "Bruce Willis", "Samuel Jackson", "Morgan Freeman",
   "Clint Eastwood", "Robin Williams", "Jim Carrey", "Adam Sandler",
   "Kevin Hart", "Chris Rock", "Dave Chappelle", "Eddie Murphy",
+  "Margot Robbie", "Ryan Reynolds", "Blake Lively", "Hugh Jackman",
+  "Jake Gyllenhaal", "Andrew Garfield", "Robert Pattinson", "Kristen Stewart",
+  "Mila Kunis", "Ashton Kutcher", "Demi Moore", "Bruce Willis",
+  "Viola Davis", "Halle Berry", "Angela Bassett", "Lupita Nyong'o",
+  "Idris Elba", "Michael B. Jordan", "Chadwick Boseman", "John Boyega",
+  "Mark Wahlberg", "Mel Gibson", "Nicolas Cage", "Al Pacino", "Robert De Niro",
+  "Jack Nicholson", "Dustin Hoffman", "Gene Hackman", "Anthony Hopkins",
+  "Helena Bonham Carter", "Keira Knightley", "Kate Winslet",
   // Reality TV / Social Media
   "Kim Kardashian", "Khloé Kardashian", "Kourtney Kardashian", "Kris Jenner",
   "Kylie Jenner", "Kendall Jenner", "Cardi B", "Nicki Minaj",
-  "Paris Hilton", "Lindsay Lohan", "Britney Spears",
+  "Paris Hilton", "Lindsay Lohan", "Britney Spears", "Amanda Bynes",
+  "Tana Mongeau", "Logan Paul", "Jake Paul", "MrBeast", "PewDiePie",
+  "Addison Rae", "Charli D'Amelio", "Dixie D'Amelio", "Emma Chamberlain",
+  "Jeffree Star", "James Charles", "David Dobrik", "Shane Dawson",
   // Musicians
   "Taylor Swift", "Beyoncé", "Rihanna", "Ariana Grande", "Billie Eilish",
   "Lady Gaga", "Katy Perry", "Miley Cyrus", "Selena Gomez",
@@ -270,21 +281,45 @@ const CELEBRITY_PERSON_NAMES = new Set([
   "Bruno Mars", "The Weeknd", "Post Malone", "Travis Scott",
   "Ed Sheeran", "Adele", "Harry Styles", "Dua Lipa",
   "Michael Jackson", "Prince", "Elvis Presley", "Madonna",
+  "Lizzo", "Olivia Rodrigo", "Doja Cat", "Megan Thee Stallion",
+  "Lil Nas X", "Bad Bunny", "J Balvin", "Daddy Yankee",
+  "Luke Bryan", "Blake Shelton", "Carrie Underwood", "Miranda Lambert",
+  "Garth Brooks", "Kenny Chesney", "Tim McGraw", "Faith Hill",
+  "Justin Timberlake", "NSYNC", "Backstreet Boys", "One Direction",
+  "Bon Jovi", "Bruce Springsteen", "Billy Joel", "Elton John",
+  "Paul McCartney", "Mick Jagger", "Keith Richards",
   // Athletes
   "LeBron James", "Michael Jordan", "Kobe Bryant", "Stephen Curry",
   "Tom Brady", "Aaron Rodgers", "Patrick Mahomes", "Peyton Manning",
   "Tiger Woods", "Phil Mickelson", "Roger Federer", "Rafael Nadal",
   "Novak Djokovic", "Serena Williams", "Simone Biles",
-  "Cristiano Ronaldo", "Lionel Messi", "Neymar",
+  "Cristiano Ronaldo", "Lionel Messi", "Neymar", "Kylian Mbappé",
   "Floyd Mayweather", "Conor McGregor", "Mike Tyson",
   "Shaquille O'Neal", "Magic Johnson", "Larry Bird",
   "Manny Pacquiao", "Oscar De La Hoya",
-  // Media personalities
+  "Kevin Durant", "Giannis Antetokounmpo", "Nikola Jokic",
+  "Josh Allen", "Lamar Jackson", "Joe Burrow", "Jalen Hurts",
+  "Lebron James", "Russell Westbrook", "Chris Paul",
+  "Alex Rodriguez", "Derek Jeter", "Mike Trout", "Shohei Ohtani",
+  "Naomi Osaka", "Coco Gauff", "Emma Raducanu",
+  "Usain Bolt", "Carl Lewis", "Florence Griffith-Joyner",
+  "Michael Phelps", "Mark Spitz", "Ryan Lochte",
+  // Media personalities / Podcasters / Influencers
   "Oprah Winfrey", "Ellen DeGeneres", "Jimmy Fallon", "Jimmy Kimmel",
   "Jay Leno", "David Letterman", "Conan O'Brien", "Stephen Colbert",
   "Trevor Noah", "John Oliver", "Bill Maher",
   "Ryan Seacrest", "Simon Cowell", "Gordon Ramsay",
   "Steve Harvey", "Tyra Banks",
+  "Joe Rogan", "Howard Stern", "Alex Jones", "Tucker Carlson",
+  "Rachel Maddow", "Anderson Cooper", "Don Lemon", "Sean Hannity",
+  "Glenn Beck", "Rush Limbaugh", "Mark Levin", "Laura Ingraham",
+  "Megyn Kelly", "Greta Van Susteren", "Wolf Blitzer", "Chris Cuomo",
+  "Erin Burnett", "Jake Tapper", "Chuck Todd", "George Stephanopoulos",
+  "Kelly Ripa", "Regis Philbin", "Kathie Lee Gifford", "Hoda Kotb",
+  "Savannah Guthrie", "Lester Holt", "David Muir", "Norah O'Donnell",
+  // Tech/Business celebrities (who appear in entertainment contexts — not investigations)
+  "Kim Dotcom", "Dan Bilzerian", "Grant Cardone", "Gary Vaynerchuk",
+  "Tony Robbins", "Dean Graziosi",
 ]);
 
 // Foreign countries and non-investigative geographies that drift into
@@ -888,9 +923,22 @@ export function computeTopicRelevance(
     if (onTopic || queryRatio >= 0.3) return "MEDIUM";
     return "LOW";
   }
-  // General
+  // General — stronger OFF_TOPIC gate for celebrity/sports/entertainment drift
   if (isSportsCtx && queryRatio < 0.2) return "OFF_TOPIC";
   if (isEntCtx && queryRatio < 0.2) return "OFF_TOPIC";
+
+  // Additional celebrity-context signal: if name is in celebrity set and no investigative context, reject
+  const isCelebName = CELEBRITY_PERSON_NAMES.has(name);
+  if (isCelebName && !isInvCtx && queryRatio < 0.35) return "OFF_TOPIC";
+
+  // Hard OFF_TOPIC for pure gossip / lifestyle / entertainment contexts with no investigative hook
+  const isPureGossip = /\b(relationship|dating|marriage|divorce|baby|pregnant|wedding|engagement|breakup|affair|cheating|paparazzi|red.carpet|fashion|outfit|dress|hairstyle|makeover|plastic.surgery|weight.loss|fitness.journey|celebrity.home|mansion|yacht|vacation|holiday)\b/i.test(combined);
+  if (isPureGossip && !isInvCtx && queryRatio < 0.25) return "OFF_TOPIC";
+
+  // Hard OFF_TOPIC for sports stats / game results with no investigative hook
+  const isSportsStats = /\b(scored|points|rebounds|assists|yards|touchdowns|batting.average|ERA|home.runs|standings|championship|trophy|medal|world.cup|super.bowl|playoffs|bracket)\b/i.test(combined);
+  if (isSportsStats && !isInvCtx && queryRatio < 0.2) return "OFF_TOPIC";
+
   if (queryRatio >= 0.6) return "HIGH";
   if (queryRatio >= 0.3 || isInvCtx) return "MEDIUM";
   return "LOW";
@@ -1863,13 +1911,22 @@ const DOC_PR_WIRE_TERMS = [
 ];
 
 const DOC_QUALITY_DOMAINS = [
+  // Government / primary source (highest trust)
+  ".gov", ".ca.gov", "senate.gov", "house.gov", "congress.gov",
+  "lacounty.gov", "lacity.gov", "lacontroller.org",
+  "pacer.gov", "courtlistener.com", "documentcloud.org", "recap.law",
+  // National investigative / wire (high trust)
   "latimes.com", "nytimes.com", "washingtonpost.com", "propublica.org",
-  ".gov", ".ca.gov", "apnews.com", "reuters.com",
-  "nbcnews.com", "cbsnews.com", "abcnews.go.com",
+  "apnews.com", "reuters.com", "bloomberg.com", "wsj.com",
   "theatlantic.com", "politico.com", "theintercept.com",
-  "documentcloud.org", "courtlistener.com", "pacer.gov",
+  "theguardian.com", "npr.org", "pbs.org",
+  // TV / broadcast news
+  "nbcnews.com", "cbsnews.com", "abcnews.go.com", "cnn.com",
+  // Local CA investigative
   "calmatters.org", "laist.com", "kpcc.org", "kcrw.com",
   "voiceofsandiego.org", "sfchronicle.com", "sacbee.com",
+  "abc7.com", "nbcla.com", "ktla.com",
+  // Text signals (path-based audit docs)
   "inspector", "audit", "oversight",
 ];
 

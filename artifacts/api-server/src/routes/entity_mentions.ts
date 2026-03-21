@@ -208,6 +208,23 @@ router.get("/entity-mentions", async (req, res) => {
   res.json(rows.map(formatMention));
 });
 
+// PATCH /entity-mentions/:id — update status directly (confirm/rejected for triage)
+router.patch("/entity-mentions/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { status } = req.body;
+  if (!["pending", "approved", "rejected"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status. Use: pending, approved, rejected" });
+  }
+  const rows = await db
+    .update(entityMentionsTable)
+    .set({ status })
+    .where(eq(entityMentionsTable.id, id))
+    .returning();
+  if (!rows.length) return res.status(404).json({ error: "Mention not found" });
+  await logEvent("mention_status_updated", `Mention ${id} → ${status}`, { caseId: rows[0].caseId });
+  res.json(formatMention(rows[0]));
+});
+
 // Approve a mention — creates entity in registry
 router.post("/entity-mentions/:id/approve", async (req, res) => {
   const id = parseInt(req.params.id);

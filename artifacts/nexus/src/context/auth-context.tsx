@@ -9,19 +9,22 @@ export interface Operator {
 interface AuthContextValue {
   operator: Operator | null;
   isAuthenticated: boolean;
-  login: (operatorId: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (code: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const SESSION_KEY = "atlas-auth-session";
-const VALID_OPERATOR_ID = (import.meta.env.VITE_ATLAS_OPERATOR_ID ?? "ATLAS").toUpperCase();
-const VALID_PASSWORD    = import.meta.env.VITE_ATLAS_OPERATOR_PASS ?? "atlas2024";
+
+const VALID_CODES: string[] = [
+  import.meta.env.VITE_ATLAS_ACCESS_CODE ?? "4451",
+  import.meta.env.VITE_ATLAS_OPERATOR_PASS ?? "",
+].filter(Boolean);
 
 function loadSession(): Operator | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Operator;
     if (!parsed.id || !parsed.lastAuth) return null;
@@ -32,26 +35,24 @@ function loadSession(): Operator | null {
 }
 
 function saveSession(op: Operator) {
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(op)); } catch { /* ignore */ }
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(op)); } catch { /* ignore */ }
 }
 
 function clearSession() {
-  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [operator, setOperator] = useState<Operator | null>(() => loadSession());
 
-  const login = useCallback(async (operatorId: string, password: string) => {
-    await new Promise(r => setTimeout(r, 420)); // brief auth delay
-    const idMatch  = operatorId.trim().toUpperCase() === VALID_OPERATOR_ID;
-    const pwMatch  = password === VALID_PASSWORD;
-    if (!idMatch || !pwMatch) {
-      return { ok: false, error: "INVALID CREDENTIALS — ACCESS DENIED" };
+  const login = useCallback(async (code: string) => {
+    await new Promise(r => setTimeout(r, 420));
+    if (!VALID_CODES.includes(code.trim())) {
+      return { ok: false, error: "INVALID ACCESS CODE — ENTRY DENIED" };
     }
     const op: Operator = {
-      id: operatorId.trim().toUpperCase(),
-      displayName: operatorId.trim().toUpperCase(),
+      id: "ATLAS",
+      displayName: "ATLAS",
       lastAuth: new Date().toISOString(),
     };
     saveSession(op);

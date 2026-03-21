@@ -13,6 +13,7 @@ import EntityList from "@/pages/entities";
 import EntityProfile from "@/pages/entity-profile";
 import DocumentLibrary from "@/pages/documents";
 import SystemLog from "@/pages/logs";
+import TriagePage from "@/pages/triage";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 
@@ -66,6 +67,11 @@ function Router() {
       <Route path="/logs">
         <AuthGate>
           <Layout><SystemLog /></Layout>
+        </AuthGate>
+      </Route>
+      <Route path="/triage">
+        <AuthGate>
+          <Layout><TriagePage /></Layout>
         </AuthGate>
       </Route>
       <Route component={NotFound} />

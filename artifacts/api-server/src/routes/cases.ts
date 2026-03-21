@@ -393,6 +393,9 @@ router.post("/cases/:caseId/mentions/bulk-approve", async (req, res) => {
 // - auto-reject:  obviously junk (noise, off-topic, low-confidence bleed)
 // - auto-hold:    ambiguous middle (needs analyst review)
 // - keep pending: edge cases requiring full analyst attention
+// Celebrity names that should be auto-rejected in non-entertainment mentions
+const CELEB_AUTO_REJECT_RE = /\b(Taylor Swift|Beyoncé|Beyonce|Kim Kardashian|Kanye West|LeBron James|Tom Brady|Drake|Rihanna|Ariana Grande|Justin Bieber|Selena Gomez|Lady Gaga|Cardi B|Nicki Minaj|Dua Lipa|Billie Eilish|Olivia Rodrigo|Harry Styles|Kylie Jenner|Kris Jenner|Logan Paul|Jake Paul|MrBeast|Cristiano Ronaldo|Lionel Messi|Patrick Mahomes|Joe Rogan|Elon Musk|Jeff Bezos|Mark Zuckerberg|Tim Cook|Oprah Winfrey|Ellen DeGeneres|Jimmy Fallon|Stephen Colbert|Trevor Noah|Gordon Ramsay|Ryan Reynolds|Dwayne Johnson|Kevin Hart|Chris Rock|Adam Sandler)\b/i;
+
 router.post("/cases/:caseId/mentions/auto-triage", async (req, res) => {
   const caseId = parseInt(req.params.caseId);
   if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
@@ -400,6 +403,20 @@ router.post("/cases/:caseId/mentions/auto-triage", async (req, res) => {
   const pending = await db.select().from(entityMentionsTable).where(
     and(eq(entityMentionsTable.caseId, caseId), eq(entityMentionsTable.status, "pending"))
   );
+
+  // Build cross-doc entity name → Set<documentId> from all mentions (any status)
+  const allMentions = await db.select({
+    entityName: entityMentionsTable.entityName,
+    documentId: entityMentionsTable.documentId,
+  }).from(entityMentionsTable).where(eq(entityMentionsTable.caseId, caseId));
+
+  const entityDocCounts = new Map<string, Set<number>>();
+  for (const am of allMentions) {
+    if (!am.documentId) continue;
+    const key = am.entityName.toLowerCase().trim();
+    if (!entityDocCounts.has(key)) entityDocCounts.set(key, new Set());
+    entityDocCounts.get(key)!.add(am.documentId);
+  }
 
   const toPromote: number[] = [];
   const toReject: number[]  = [];
@@ -424,7 +441,15 @@ router.post("/cases/:caseId/mentions/auto-triage", async (req, res) => {
     const isMedTopic      = topic === "MEDIUM";
     const isLowTopic      = topic === "LOW";
 
+    // Cross-doc support for this entity name (across all mentions)
+    const docSupportCount = entityDocCounts.get(nameL)?.size ?? 1;
+    const isSingleDocOnly = docSupportCount <= 1;
+
     // ── AUTO-REJECT criteria ─────────────────────────────────────────────
+    // Celebrity name in non-investigative context
+    if (CELEB_AUTO_REJECT_RE.test(m.entityName) && !(/\b(fraud|corruption|lawsuit|contract|indictment|investigation|probe|grant|award|procurement)\b/i.test(ctx))) {
+      toReject.push(m.id); continue;
+    }
     // Already-flagged junk: off-topic, blocklist, boilerplate
     if (/BLOCKLIST|TOPIC_MISMATCH|BOILERPLATE|NAV_RESIDUE|CROSS_STORY/.test(ctx) && conf < 0.60) {
       toReject.push(m.id); continue;
@@ -453,21 +478,29 @@ router.post("/cases/:caseId/mentions/auto-triage", async (req, res) => {
     }
 
     // ── AUTO-PROMOTE criteria ────────────────────────────────────────────
+    // Cross-doc requirement: single-doc-only entities are held, not promoted
+    // unless they have a GOVERNMENT_AGENCY/COMMITTEE role and very high confidence
+    const crossDocMet = !isSingleDocOnly || (role === "GOVERNMENT_AGENCY" || role === "COMMITTEE");
+
     // Title/dek/lead + HIGH topic + real role + high confidence
-    if (inTitleDekLead && isHighTopic && hasRealRole && conf >= 0.72) {
+    if (crossDocMet && inTitleDekLead && isHighTopic && hasRealRole && conf >= 0.72) {
       toPromote.push(m.id); continue;
     }
     // HIGH topic + real role + very high confidence (any zone)
-    if (isHighTopic && hasRealRole && conf >= 0.85) {
+    if (crossDocMet && isHighTopic && hasRealRole && conf >= 0.85) {
       toPromote.push(m.id); continue;
     }
     // MEDIUM topic + real role + high confidence + premium zone
-    if (isMedTopic && hasRealRole && conf >= 0.78 && inTitleDekLead) {
+    if (crossDocMet && isMedTopic && hasRealRole && conf >= 0.78 && inTitleDekLead) {
       toPromote.push(m.id); continue;
     }
     // GOVERNMENT_AGENCY or COMMITTEE role + HIGH/MEDIUM topic + decent confidence
     if ((role === "GOVERNMENT_AGENCY" || role === "COMMITTEE" || role === "OFFICIAL") && (isHighTopic || isMedTopic) && conf >= 0.70) {
       toPromote.push(m.id); continue;
+    }
+    // Single-doc entity with otherwise good signals: hold for analyst review
+    if (isSingleDocOnly && isHighTopic && hasRealRole && conf >= 0.72) {
+      toHold.push(m.id); continue;
     }
 
     // ── AUTO-HOLD criteria ───────────────────────────────────────────────

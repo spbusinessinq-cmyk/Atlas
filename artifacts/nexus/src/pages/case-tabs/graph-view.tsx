@@ -91,10 +91,10 @@ interface GraphCanvasProps {
   onToggleSuggested?: (v: boolean) => void;
 }
 
-const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: number; label: string }> = {
-  HIGH:   { stroke: "#06b6d4", opacity: 0.60, width: 1.8, label: "HIGH CO-OCCUR" },
-  MEDIUM: { stroke: "#06b6d4", opacity: 0.40, width: 1.2, label: "CO-MENTION"    },
-  LOW:    { stroke: "#06b6d4", opacity: 0.22, width: 1.0, label: "POSSIBLE ASSOC" },
+const SCORE_STYLE: Record<string, { stroke: string; opacity: number; width: number; label: string; dashed?: boolean }> = {
+  HIGH:   { stroke: "#22c55e", opacity: 0.70, width: 2.0, label: "HIGH CO-OCCUR"  },
+  MEDIUM: { stroke: "#06b6d4", opacity: 0.45, width: 1.3, label: "CO-MENTION"     },
+  LOW:    { stroke: "#06b6d4", opacity: 0.18, width: 1.0, label: "POSSIBLE ASSOC", dashed: true },
 };
 
 function buildNodeStyle(color: string, isSelected: boolean) {
@@ -281,7 +281,7 @@ export default function GraphCanvas({
           style: {
             stroke: s.stroke,
             strokeWidth: s.width,
-            strokeDasharray: "5 4",
+            strokeDasharray: s.dashed ? "3 6" : se.score === "MEDIUM" ? "5 4" : "none",
             opacity: s.opacity,
           },
           labelStyle: {

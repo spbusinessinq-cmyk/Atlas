@@ -10,6 +10,7 @@ import {
   Database,
   Menu,
   LogOut,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
@@ -66,10 +67,11 @@ export function Layout({ children }: LayoutProps) {
   const flagCount = pendingMentions?.length ?? 0;
 
   const navItems = [
-    { icon: Briefcase, label: "CASE CONTROL",    href: "/" },
-    { icon: Database,  label: "ENTITY REGISTRY", href: "/entities" },
-    { icon: Files,     label: "DOCUMENT VAULT",  href: "/documents" },
-    { icon: Activity,  label: "SYSTEM LOG",      href: "/logs" },
+    { icon: Briefcase, label: "CASE CONTROL",    href: "/",          badge: null },
+    { icon: Database,  label: "ENTITY REGISTRY", href: "/entities",  badge: null },
+    { icon: Files,     label: "DOCUMENT VAULT",  href: "/documents", badge: null },
+    { icon: Cpu,       label: "TRIAGE QUEUE",    href: "/triage",    badge: flagCount > 0 ? flagCount : null },
+    { icon: Activity,  label: "SYSTEM LOG",      href: "/logs",      badge: null },
   ];
 
   return (
@@ -125,7 +127,15 @@ export function Layout({ children }: LayoutProps) {
                       !isCollapsed && "mr-2.5",
                       isActive ? "atlas-nav-icon text-red-500 drop-shadow-[0_0_4px_rgba(220,38,38,0.4)]" : "text-neutral-700 group-hover:text-neutral-400"
                     )} />
-                    {!isCollapsed && <span>{item.label}</span>}
+                    {!isCollapsed && <span className="flex-1">{item.label}</span>}
+                    {!isCollapsed && item.badge != null && (
+                      <span className="ml-1 px-1 py-0.5 bg-amber-500/20 border border-amber-600/40 font-mono text-[7px] text-amber-500 rounded-sm tabular-nums">
+                        {item.badge}
+                      </span>
+                    )}
+                    {isCollapsed && item.badge != null && (
+                      <span className="absolute right-1 top-1 w-2 h-2 bg-amber-500 rounded-full" />
+                    )}
                   </div>
                 </Link>
               );

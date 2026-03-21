@@ -10,7 +10,7 @@ import {
   CaseStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronRight, LayoutGrid, List, Briefcase, Database, Files, Cpu, Zap, Search, CheckCircle, AlertTriangle, Trash2 } from "lucide-react";
+import { Plus, ChevronRight, LayoutGrid, List, Briefcase, Database, Files, Cpu, Zap, Search, CheckCircle, AlertTriangle, Trash2, ShieldAlert, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -317,6 +317,8 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      <SystemWipePanel />
     </div>
   );
 }
@@ -485,6 +487,125 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function SystemWipePanel() {
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "confirm" | "wiping" | "done" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const handleWipe = async () => {
+    setPhase("wiping");
+    try {
+      const resp = await fetch("/api/admin/wipe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "WIPE_ALL_DATA" }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+      setPhase("done");
+      await queryClient.invalidateQueries();
+    } catch (err) {
+      setErrorMsg(String(err));
+      setPhase("error");
+    }
+  };
+
+  return (
+    <div className="mt-5 border border-red-950/40 bg-red-950/[0.02]">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-red-950/10 transition-colors"
+      >
+        <div className="flex items-center gap-2 font-mono text-[8px] text-red-900 uppercase tracking-widest">
+          <ShieldAlert className="w-3 h-3" />
+          SYSTEM CONTROLS — RESTRICTED
+        </div>
+        <ChevronDown className={`w-3 h-3 text-red-900 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="px-4 py-3 border-t border-red-950/30 space-y-3">
+          <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-widest">
+            ATLAS DATABASE — FULL WIPE
+          </div>
+          <p className="font-mono text-[9px] text-neutral-700 leading-relaxed">
+            Permanently deletes ALL cases, entities, documents, relationships, financial signals, and system logs.
+            This action is <span className="text-red-700">irreversible</span> and cannot be undone.
+          </p>
+
+          {phase === "idle" && (
+            <button
+              onClick={() => setPhase("confirm")}
+              className="flex items-center gap-2 px-3 py-1.5 border border-red-800/40 bg-red-950/10 text-red-700 hover:text-red-400 hover:border-red-700/60 hover:bg-red-950/20 font-mono text-[9px] uppercase tracking-widest transition-all"
+            >
+              <ShieldAlert className="w-3 h-3" />
+              INITIATE SYSTEM WIPE
+            </button>
+          )}
+
+          {phase === "confirm" && (
+            <div className="border border-red-800/60 bg-red-950/20 p-3 space-y-2">
+              <div className="font-mono text-[9px] text-red-400 uppercase tracking-widest">
+                ⚠ FINAL CONFIRMATION REQUIRED
+              </div>
+              <p className="font-mono text-[8px] text-neutral-500">
+                This will destroy all investigation data permanently. There is no recovery option.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleWipe}
+                  className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
+                >
+                  CONFIRM — WIPE ALL DATA
+                </button>
+                <button
+                  onClick={() => setPhase("idle")}
+                  className="px-3 py-1.5 border border-neutral-700 text-neutral-500 hover:text-white font-mono text-[9px] uppercase tracking-widest transition-colors"
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )}
+
+          {phase === "wiping" && (
+            <div className="flex items-center gap-2 font-mono text-[9px] text-amber-500 uppercase tracking-widest animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+              PURGING ALL DATA...
+            </div>
+          )}
+
+          {phase === "done" && (
+            <div className="flex items-center gap-2 font-mono text-[9px] text-green-500 uppercase tracking-widest">
+              <CheckCircle className="w-3 h-3" />
+              WIPE COMPLETE — ALL DATA PURGED
+            </div>
+          )}
+
+          {phase === "error" && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 font-mono text-[9px] text-red-500 uppercase tracking-widest">
+                <AlertTriangle className="w-3 h-3" />
+                WIPE FAILED
+              </div>
+              {errorMsg && <p className="font-mono text-[8px] text-neutral-600">{errorMsg}</p>}
+              <button
+                onClick={() => setPhase("idle")}
+                className="font-mono text-[8px] text-neutral-600 hover:text-neutral-400 uppercase tracking-widest underline"
+              >
+                RESET
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

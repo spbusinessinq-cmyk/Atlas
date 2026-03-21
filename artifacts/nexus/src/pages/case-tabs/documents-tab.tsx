@@ -121,6 +121,43 @@ const SIGNAL_BADGE: Record<"HIGH" | "MEDIUM" | "LOW", { text: string; cls: strin
   LOW:    { text: "LOW",    cls: "text-neutral-700 border-[#ffffff0d] bg-transparent" },
 };
 
+type SourceCredTier = "GOV" | "LEGAL" | "QUALITY-NEWS" | "LOCAL-NEWS" | "BLOG" | "PR-WIRE" | "LOW-SRC";
+const SOURCE_CRED_BADGE: Record<SourceCredTier, { cls: string }> = {
+  "GOV":          { cls: "text-red-400 border-red-500/35 bg-red-500/04" },
+  "LEGAL":        { cls: "text-purple-400 border-purple-500/35 bg-purple-500/04" },
+  "QUALITY-NEWS": { cls: "text-cyan-500 border-cyan-500/30 bg-cyan-500/04" },
+  "LOCAL-NEWS":   { cls: "text-sky-600 border-sky-500/25 bg-sky-500/04" },
+  "BLOG":         { cls: "text-neutral-600 border-[#ffffff0a]" },
+  "PR-WIRE":      { cls: "text-amber-700 border-amber-800/25 bg-amber-500/03" },
+  "LOW-SRC":      { cls: "text-neutral-800 border-[#ffffff07]" },
+};
+
+function getSourceCredibility(domain: string | null | undefined, ingestMethod: string | null | undefined, rawText: string | null | undefined): SourceCredTier | null {
+  if (!domain && ingestMethod !== "web") return null;
+  const d = (domain || "").toLowerCase();
+
+  if (d.endsWith(".gov") || d.includes(".ca.gov") || d.includes(".state.") || d.includes("congress.") || d.includes("senate.gov") || d.includes("house.gov")) return "GOV";
+  if (d.includes("pacer.gov") || d.includes("courtlistener.com") || d.includes("documentcloud.org") || d.includes("recap.law")) return "LEGAL";
+
+  const QUALITY_NEWS = ["latimes.com","nytimes.com","washingtonpost.com","propublica.org","apnews.com","reuters.com","nbcnews.com","cbsnews.com","abcnews.go.com","theatlantic.com","politico.com","theintercept.com","calmatters.org","laist.com","kpcc.org","kcrw.com","voiceofsandiego.org","sfchronicle.com","sacbee.com","theguardian.com","bloomberg.com","wsj.com"];
+  if (QUALITY_NEWS.some(q => d.includes(q))) return "QUALITY-NEWS";
+
+  const LOCAL_NEWS = ["patch.com","dailynews.com","pasadenastarnews.com","sgvtribune.com","presstelegram.com","ocregister.com","dailybulletin.com","inland","signal","tribune","herald","gazette","observer","abc7.com","nbcla.com","kcal9.com","fox11.com","ktla.com"];
+  if (LOCAL_NEWS.some(l => d.includes(l))) return "LOCAL-NEWS";
+
+  const PR_WIRE = ["prnewswire.com","businesswire.com","globenewswire.com","prweb.com","accesswire.com","einpresswire.com"];
+  if (PR_WIRE.some(p => d.includes(p))) return "PR-WIRE";
+  if (rawText) {
+    const firstPara = rawText.slice(0, 400).toLowerCase();
+    if (firstPara.includes("press release") || firstPara.includes("for immediate release") || firstPara.includes("media contact")) return "PR-WIRE";
+  }
+
+  const LOW_SRC = ["reddit.com","twitter.com","x.com","facebook.com","instagram.com","tmz.com","buzzfeed.com","dailymail.co.uk","nypost.com","pagesix.com","tmzone.com","yelp.com"];
+  if (LOW_SRC.some(l => d.includes(l))) return "LOW-SRC";
+
+  return "BLOG";
+}
+
 function DocumentRow({
   doc,
   caseId,
@@ -139,6 +176,8 @@ function DocumentRow({
   const diag = extDoc.rawText ? (() => { try { return parseAtlasDiag(extDoc.rawText!); } catch { return null; } })() : null;
   const signalScore = computeDocSignalScore(extDoc.rawText, diag?.entities);
   const signalBadge = SIGNAL_BADGE[signalScore];
+  const credTier = getSourceCredibility(extDoc.sourceDomain, extDoc.ingestMethod, extDoc.rawText);
+  const credBadge = credTier ? SOURCE_CRED_BADGE[credTier] : null;
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -224,6 +263,12 @@ function DocumentRow({
             <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${signalBadge.cls}`}>
               {signalBadge.text}
             </span>
+            {/* Source credibility badge */}
+            {credBadge && credTier && credTier !== "BLOG" && (
+              <span className={`flex-shrink-0 px-1 py-px border font-mono text-[7px] uppercase tracking-widest ${credBadge.cls}`}>
+                {credTier}
+              </span>
+            )}
             {diag?.priority && (() => {
               const tierMap: Record<string, string> = {
                 "TIER-1": "text-red-400 border-red-500/35 bg-red-500/04",

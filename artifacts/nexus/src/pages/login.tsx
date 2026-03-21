@@ -31,11 +31,10 @@ export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
 
-  const [operatorId, setOperatorId] = useState("");
-  const [password, setPassword]     = useState("");
-  const [status, setStatus]         = useState<"idle" | "checking" | "error" | "ok">("idle");
-  const [errorMsg, setErrorMsg]     = useState<string | null>(null);
-  const [blink, setBlink]           = useState(true);
+  const [code, setCode]         = useState("");
+  const [status, setStatus]     = useState<"idle" | "checking" | "error" | "ok">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [blink, setBlink]       = useState(true);
 
   useEffect(() => {
     if (isAuthenticated) navigate("/");
@@ -48,10 +47,10 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!operatorId.trim() || !password) return;
+    if (!code.trim()) return;
     setStatus("checking");
     setErrorMsg(null);
-    const result = await login(operatorId, password);
+    const result = await login(code);
     if (result.ok) {
       setStatus("ok");
       setTimeout(() => navigate("/"), 600);
@@ -123,35 +122,15 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="space-y-1">
                 <label className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest block">
-                  OPERATOR ID
-                </label>
-                <input
-                  type="text"
-                  value={operatorId}
-                  onChange={e => { setOperatorId(e.target.value); setStatus("idle"); setErrorMsg(null); }}
-                  placeholder="ENTER OPERATOR ID"
-                  autoComplete="username"
-                  autoFocus
-                  disabled={status === "checking" || status === "ok"}
-                  className={cn(
-                    "w-full bg-[#080c15] border font-mono text-[11px] text-white placeholder:text-neutral-800 px-3 py-2 focus:outline-none transition-colors uppercase tracking-wider",
-                    status === "error"
-                      ? "border-red-800/50 focus:border-red-700/60"
-                      : "border-[#ffffff10] focus:border-cyan-800/50"
-                  )}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-mono text-[8px] text-neutral-600 uppercase tracking-widest block">
                   ACCESS CODE
                 </label>
                 <input
                   type="password"
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setStatus("idle"); setErrorMsg(null); }}
+                  value={code}
+                  onChange={e => { setCode(e.target.value); setStatus("idle"); setErrorMsg(null); }}
                   placeholder="••••••••••••"
                   autoComplete="current-password"
+                  autoFocus
                   disabled={status === "checking" || status === "ok"}
                   className={cn(
                     "w-full bg-[#080c15] border font-mono text-[11px] text-white placeholder:text-neutral-700 px-3 py-2 focus:outline-none transition-colors",
@@ -170,7 +149,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={!operatorId.trim() || !password || status === "checking" || status === "ok"}
+                disabled={!code.trim() || status === "checking" || status === "ok"}
                 className={cn(
                   "w-full font-mono text-[10px] uppercase tracking-[0.25em] py-2.5 border transition-all duration-200 mt-1",
                   status === "ok"
@@ -199,20 +178,6 @@ export default function LoginPage() {
             <span className="font-mono text-[7px] text-neutral-800 uppercase tracking-widest">
               SESSION ENCRYPTED
             </span>
-          </div>
-        </div>
-
-        {/* Alpha dev credentials hint */}
-        <div className="mt-3 border border-amber-900/30 bg-amber-950/10 px-4 py-2.5">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="w-1 h-1 rounded-full bg-amber-600 inline-block" />
-            <span className="font-mono text-[7px] text-amber-700/80 uppercase tracking-widest">Alpha Build — Dev Credentials</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider">OPERATOR ID</div>
-            <div className="font-mono text-[8px] text-amber-600/70 tracking-wider">ATLAS</div>
-            <div className="font-mono text-[8px] text-neutral-700 uppercase tracking-wider">ACCESS CODE</div>
-            <div className="font-mono text-[8px] text-amber-600/70 tracking-wider">atlas2024</div>
           </div>
         </div>
 
