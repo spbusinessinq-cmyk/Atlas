@@ -15,9 +15,15 @@ import {
 import { eq, and, or, sql, ilike, inArray } from "drizzle-orm";
 import { logEvent } from "../lib/log-event";
 import {
+  extractEntities,
   extractTimelineEvents,
   extractFinancialSignals,
+  normalizeEntityName,
+  classifySeedIntent,
+  INSTITUTION_PATTERN,
+  type SeedIntent,
 } from "../lib/entity-extractor";
+import { cleanRawText, WRAPPER_ENTITY_BLOCKLIST } from "./web_ingest";
 import { compileCaseBrief, saveCaseBrief, loadCaseBrief } from "../lib/case-compiler";
 
 const router: IRouter = Router();
@@ -837,6 +843,319 @@ router.post("/cases/:caseId/backfill-signals", async (req, res) => {
 });
 
 // ── Case Compiler ─────────────────────────────────────────────────────────────
+
+// ── Run Full Analysis — analyze all case docs, promote entities, compile ──────
+// POST /api/cases/:caseId/run-analysis
+// Called by the frontend ANALYZE button. Runs the full pipeline:
+// 1. Extract entities/timeline/financial from any unanalyzed docs
+// 2. Run auto-triage on all pending mentions (approve/reject/hold)
+// 3. Create entity records in entitiesTable for promoted mentions
+// 4. Compile and save the case brief
+router.post("/cases/:caseId/run-analysis", async (req, res) => {
+  const caseId = parseInt(req.params.caseId, 10);
+  if (isNaN(caseId)) return res.status(400).json({ error: "Invalid case ID" });
+
+  try {
+    // ── Load case for seedIntent ──────────────────────────────────────────────
+    const caseRows = await db.select().from(casesTable).where(eq(casesTable.id, caseId));
+    if (!caseRows.length) return res.status(404).json({ error: "Case not found" });
+    const theCase = caseRows[0];
+    const seedIntent: SeedIntent = classifySeedIntent(theCase.title ?? "");
+
+    // ── Step 1: Analyze unanalyzed docs ──────────────────────────────────────
+    const docs = await db.select().from(documentsTable)
+      .where(eq(documentsTable.caseId, caseId));
+
+    // Get doc IDs that already have mentions (T002 debounce)
+    const existingMentionDocIds = new Set<number>(
+      (await db.select({ documentId: entityMentionsTable.documentId })
+        .from(entityMentionsTable)
+        .where(eq(entityMentionsTable.caseId, caseId)))
+        .map(r => r.documentId!)
+        .filter(Boolean)
+    );
+
+    let newMentions = 0;
+    let newTimeline = 0;
+    let newFinancial = 0;
+
+    for (const doc of docs) {
+      if (!doc.rawText || doc.rawText.trim().length < 10) continue;
+      const rawText = doc.rawText;
+      const isSkipped = rawText.includes("[WRAPPER_BLOCKED]")
+        || rawText.includes("[EXTRACTION_FAILED]")
+        || rawText.includes("[FETCH_FAILED]");
+      if (isSkipped) continue;
+
+      const cleanText = cleanRawText(rawText)
+        .replace(/^\[EXTRACTION_INCOMPLETE\]\n?/, "")
+        .replace(/^\[WRAPPER_BLOCKED\]\n?/, "")
+        .trim();
+      if (cleanText.length < 10) continue;
+
+      // T002: Skip entity extraction if already done for this doc
+      if (!existingMentionDocIds.has(doc.id)) {
+        // Pass seedIntent for better topicRelevance classification
+        const entities = extractEntities(cleanText, undefined, seedIntent);
+        for (const m of entities) {
+          if (WRAPPER_ENTITY_BLOCKLIST.has(m.entityName)) continue;
+          if (!m.admitted) continue;
+          try {
+            const encodedCtx = `[A:r=${m.role}|t=${m.topicRelevance}|z=${m.zone}] ${m.context}`;
+            await db.insert(entityMentionsTable).values({
+              documentId: doc.id,
+              caseId,
+              entityName: m.entityName,
+              entityType: m.entityType,
+              confidence: m.confidence,
+              status: "pending",
+              context: encodedCtx,
+              startPos: m.startPos,
+              endPos: m.endPos,
+            });
+            newMentions++;
+          } catch { /* skip duplicates */ }
+        }
+      }
+
+      // Timeline extraction (always run — idempotent via try/catch on duplicates)
+      try {
+        const timelineEvents = extractTimelineEvents(cleanText);
+        const docYear = doc.publishDate ? new Date(doc.publishDate).getFullYear() : null;
+        const JUNK_TL_RE = /\b(episode|season|recap|film|movie|concert|game\s+result|tournament)\b/i;
+        for (const ev of timelineEvents) {
+          if (JUNK_TL_RE.test(ev.summary)) continue;
+          if (docYear && ev.eventDate) {
+            const evYear = new Date(ev.eventDate).getFullYear();
+            if (Math.abs(evYear - docYear) > 2) continue;
+          }
+          try {
+            await db.insert(timelineEntriesTable).values({
+              title: ev.eventType.replace(/_/g, " ") + ": " + ev.summary.slice(0, 80),
+              description: ev.summary,
+              eventDate: ev.eventDate,
+              linkedDocumentId: doc.id,
+              caseId,
+            });
+            newTimeline++;
+          } catch { /* skip duplicates */ }
+        }
+      } catch { /* don't crash */ }
+
+      // Financial extraction
+      try {
+        const signals = extractFinancialSignals(cleanText);
+        for (const sig of signals) {
+          if ((sig.financialConfidence ?? 0) < 0.55) continue;
+          try {
+            await db.insert(financialSignalsTable).values({
+              amountRaw: sig.amountRaw,
+              amountDisplay: sig.amountDisplay ?? null,
+              normalizedAmount: sig.normalizedAmount ?? undefined,
+              currency: sig.currency ?? "USD",
+              signalType: sig.signalType,
+              eventSummary: sig.eventSummary ?? null,
+              entityName: sig.entityName ?? null,
+              controlledBy: (sig as any).controlledBy ?? null,
+              receivedBy: (sig as any).receivedBy ?? null,
+              programName: (sig as any).programName ?? null,
+              financialConfidence: sig.financialConfidence ?? null,
+              documentId: doc.id,
+              documentTitle: doc.title,
+              caseId,
+            });
+            newFinancial++;
+          } catch { /* skip duplicates */ }
+        }
+      } catch { /* don't crash */ }
+    }
+
+    // ── Step 2: Auto-triage pending mentions ─────────────────────────────────
+    const pending = await db.select().from(entityMentionsTable)
+      .where(and(eq(entityMentionsTable.caseId, caseId), eq(entityMentionsTable.status, "pending")));
+
+    // Build cross-doc entity support map
+    const allMentions = await db.select({
+      entityName: entityMentionsTable.entityName,
+      documentId: entityMentionsTable.documentId,
+    }).from(entityMentionsTable).where(eq(entityMentionsTable.caseId, caseId));
+
+    const entityDocCounts = new Map<string, Set<number>>();
+    for (const am of allMentions) {
+      if (!am.documentId) continue;
+      const key = am.entityName.toLowerCase().trim();
+      if (!entityDocCounts.has(key)) entityDocCounts.set(key, new Set());
+      entityDocCounts.get(key)!.add(am.documentId);
+    }
+
+    interface PromotionEntry {
+      mentionId: number;
+      entityName: string;
+      entityType: string;
+      confidence: number;
+      docCount: number;
+    }
+    const toPromote: PromotionEntry[] = [];
+    const toRejectIds: number[] = [];
+    const toHoldIds: number[] = [];
+
+    const CELEB_RE = /\b(Taylor Swift|Beyoncé|Kim Kardashian|Kanye West|LeBron James|Tom Brady|Drake|Rihanna|Ariana Grande|Justin Bieber|Selena Gomez|Lady Gaga|Elon Musk|Jeff Bezos|Mark Zuckerberg)\b/i;
+
+    for (const m of pending) {
+      const ctx = m.context ?? "";
+      const conf = m.confidence ?? 0;
+      const nameL = m.entityName.toLowerCase().trim();
+      const roleMatch = ctx.match(/\[A:r=([^|]+)\|/);
+      const role = roleMatch ? roleMatch[1] : "UNKNOWN";
+      const topicMatch = ctx.match(/\|t=([^|]+)\|/);
+      const topic = topicMatch ? topicMatch[1] : "LOW";
+      const zoneMatch = ctx.match(/\|z=([^\]]+)/);
+      const zone = zoneMatch ? zoneMatch[1] : "body";
+
+      const inTitleDekLead = zone === "title" || zone === "dek" || zone === "lead";
+      const hasRealRole = role !== "UNKNOWN" && role !== "PERSON";
+      const isHighTopic = topic === "HIGH";
+      const isMedTopic = topic === "MEDIUM";
+      const docSupportCount = entityDocCounts.get(nameL)?.size ?? 1;
+
+      // Auto-reject criteria
+      if (CELEB_RE.test(m.entityName) && !(/\b(fraud|corruption|lawsuit|contract|investigation|grant)\b/i.test(ctx))) {
+        toRejectIds.push(m.id); continue;
+      }
+      if (conf < 0.50) { toRejectIds.push(m.id); continue; }
+      if ((zone === "sidebar" || zone === "footer" || zone === "related") && conf < 0.70) {
+        toRejectIds.push(m.id); continue;
+      }
+      if (zone === "tail" && topic === "LOW" && role === "UNKNOWN") {
+        toRejectIds.push(m.id); continue;
+      }
+      if (/^[A-Z]{1,4}$/.test(m.entityName.trim()) && role === "UNKNOWN") {
+        toRejectIds.push(m.id); continue;
+      }
+
+      const isGovtOrInstitution = role === "GOVERNMENT_AGENCY" || role === "COMMITTEE"
+        || INSTITUTION_PATTERN.test(m.entityName) || m.entityType === "government_agency";
+      const crossDocMet = docSupportCount >= 2 || isGovtOrInstitution;
+
+      // Auto-promote criteria
+      if (crossDocMet && inTitleDekLead && isHighTopic && hasRealRole && conf >= 0.70) {
+        toPromote.push({ mentionId: m.id, entityName: m.entityName, entityType: m.entityType, confidence: conf, docCount: docSupportCount });
+        continue;
+      }
+      if (crossDocMet && isHighTopic && hasRealRole && conf >= 0.82) {
+        toPromote.push({ mentionId: m.id, entityName: m.entityName, entityType: m.entityType, confidence: conf, docCount: docSupportCount });
+        continue;
+      }
+      // Government agencies/institutions: promote even with LOW topic if high confidence + non-tail zone
+      if (isGovtOrInstitution && conf >= 0.65 && zone !== "tail" && zone !== "sidebar" && zone !== "footer") {
+        toPromote.push({ mentionId: m.id, entityName: m.entityName, entityType: m.entityType, confidence: conf, docCount: docSupportCount });
+        continue;
+      }
+      if ((role === "GOVERNMENT_AGENCY" || role === "COMMITTEE" || isGovtOrInstitution)
+          && (isHighTopic || isMedTopic) && conf >= 0.62) {
+        toPromote.push({ mentionId: m.id, entityName: m.entityName, entityType: m.entityType, confidence: conf, docCount: docSupportCount });
+        continue;
+      }
+      if (crossDocMet && isMedTopic && hasRealRole && conf >= 0.75 && inTitleDekLead) {
+        toPromote.push({ mentionId: m.id, entityName: m.entityName, entityType: m.entityType, confidence: conf, docCount: docSupportCount });
+        continue;
+      }
+      // Multi-doc entities: hold for review even if topic is low
+      if (docSupportCount >= 2 && conf >= 0.62 && hasRealRole) {
+        toPromote.push({ mentionId: m.id, entityName: m.entityName, entityType: m.entityType, confidence: conf, docCount: docSupportCount });
+        continue;
+      }
+
+      // Hold ambiguous
+      if (isMedTopic && conf >= 0.58) { toHoldIds.push(m.id); continue; }
+      if (topic === "LOW" && hasRealRole && conf >= 0.65) { toHoldIds.push(m.id); continue; }
+
+      // Default: reject
+      toRejectIds.push(m.id);
+    }
+
+    // ── Step 3: Create entity records for promoted mentions ───────────────────
+    let entitiesCreated = 0;
+    const promotedNames: string[] = [];
+
+    // Group by normalized name to avoid duplicate entity inserts
+    const promotionByName = new Map<string, PromotionEntry>();
+    for (const p of toPromote) {
+      const normKey = normalizeEntityName(p.entityName).toLowerCase();
+      const existing = promotionByName.get(normKey);
+      if (!existing || p.confidence > existing.confidence) {
+        promotionByName.set(normKey, p);
+      }
+    }
+
+    for (const [, entry] of promotionByName) {
+      if (promotedNames.length >= 8) break; // hard cap
+      if (WRAPPER_ENTITY_BLOCKLIST.has(entry.entityName)) continue;
+
+      // Check if entity already exists for this case
+      const existingEntity = await db.select({ id: entitiesTable.id })
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.caseId, caseId),
+          eq(entitiesTable.name, entry.entityName)));
+      if (existingEntity.length > 0) { promotedNames.push(entry.entityName); continue; }
+
+      try {
+        await db.insert(entitiesTable).values({
+          name: entry.entityName,
+          type: entry.entityType,
+          caseId,
+          aliases: [],
+        });
+        promotedNames.push(entry.entityName);
+        entitiesCreated++;
+      } catch { /* entity may already exist */ }
+    }
+
+    // Mark all promoted mentions as approved
+    const allPromoteMentionIds = toPromote.map(p => p.mentionId);
+    if (allPromoteMentionIds.length > 0) {
+      await db.update(entityMentionsTable)
+        .set({ status: "approved" })
+        .where(inArray(entityMentionsTable.id, allPromoteMentionIds));
+    }
+    if (toRejectIds.length > 0) {
+      await db.update(entityMentionsTable)
+        .set({ status: "rejected" })
+        .where(inArray(entityMentionsTable.id, toRejectIds));
+    }
+    if (toHoldIds.length > 0) {
+      await db.update(entityMentionsTable)
+        .set({ status: "held" })
+        .where(inArray(entityMentionsTable.id, toHoldIds));
+    }
+
+    // ── Step 4: Compile case brief ────────────────────────────────────────────
+    const brief = await compileCaseBrief(caseId);
+    await saveCaseBrief(caseId, brief);
+
+    await logEvent(
+      "run_analysis_complete",
+      `Full analysis: ${newMentions} new detections, ${newTimeline} timeline, ${newFinancial} financial, ${entitiesCreated} entities promoted, quality=${brief.dataQuality}`,
+      { caseId }
+    );
+
+    return res.json({
+      ok: true,
+      newMentions,
+      newTimeline,
+      newFinancial,
+      entitiesCreated,
+      autoPromoted: allPromoteMentionIds.length,
+      autoRejected: toRejectIds.length,
+      autoHeld: toHoldIds.length,
+      quality: brief.dataQuality,
+      brief,
+    });
+  } catch (err) {
+    console.error("[ATLAS RUN-ANALYSIS]", err);
+    return res.status(500).json({ error: String(err) });
+  }
+});
 
 router.post("/cases/:caseId/compile", async (req, res) => {
   const caseId = parseInt(req.params.caseId, 10);

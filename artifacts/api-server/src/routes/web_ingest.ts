@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { compileCaseBrief } from "../lib/case-compiler";
+import { compileCaseBrief, saveCaseBrief } from "../lib/case-compiler";
 import { db } from "@workspace/db";
 import {
   documentsTable,
@@ -841,6 +841,79 @@ router.post("/web-ingest", async (req, res) => {
         `Auto-analysis on "${title}": ${mentionsCreated} entity detection${mentionsCreated !== 1 ? "s" : ""} generated`,
         { caseId: doc.caseId, documentId: doc.id }
       );
+    }
+
+    // T001: Auto-extract timeline events
+    let timelineInserted = 0;
+    try {
+      const textForTimeline = cleanRawText(rawText || title);
+      const timelineEvents = extractTimelineEvents(textForTimeline);
+      const docDateRaw = publishDate || null;
+      const docYear = docDateRaw ? new Date(docDateRaw).getFullYear() : null;
+      const JUNK_TIMELINE_RE = /\b(episode|season|recap|watch|documentary|film|movie|concert|game\s+result|match\s+result|tournament|playoff|bracket|stream\s+now|box\s+office)\b/i;
+      const JUNK_TIMELINE_TYPES = new Set(["SPORTS", "ENTERTAINMENT", "CELEBRITY", "GAME"]);
+      for (const ev of timelineEvents) {
+        if (ev.eventType && JUNK_TIMELINE_TYPES.has(ev.eventType.toUpperCase())) continue;
+        if (JUNK_TIMELINE_RE.test(ev.summary)) continue;
+        if (docYear && ev.eventDate) {
+          const evYear = new Date(ev.eventDate).getFullYear();
+          if (Math.abs(evYear - docYear) > 2) continue;
+        }
+        try {
+          await db.insert(timelineEntriesTable).values({
+            title: ev.eventType.replace(/_/g, " ") + ": " + ev.summary.slice(0, 80),
+            description: ev.summary,
+            eventDate: ev.eventDate,
+            linkedDocumentId: doc.id,
+            caseId: doc.caseId,
+          });
+          timelineInserted++;
+        } catch { /* skip duplicates */ }
+      }
+    } catch { /* don't crash ingest on timeline failure */ }
+
+    // T001: Auto-extract financial signals
+    let financialInserted = 0;
+    try {
+      const textForFinancial = cleanRawText(rawText || title);
+      const financialSignals = extractFinancialSignals(textForFinancial);
+      for (const sig of financialSignals) {
+        if ((sig.financialConfidence ?? 0) < 0.55) continue;
+        try {
+          await db.insert(financialSignalsTable).values({
+            amountRaw: sig.amountRaw,
+            amountDisplay: sig.amountDisplay ?? null,
+            normalizedAmount: sig.normalizedAmount ?? undefined,
+            currency: sig.currency ?? "USD",
+            signalType: sig.signalType,
+            eventSummary: sig.eventSummary ?? null,
+            entityName: sig.entityName ?? null,
+            controlledBy: (sig as any).controlledBy ?? null,
+            receivedBy: (sig as any).receivedBy ?? null,
+            programName: (sig as any).programName ?? null,
+            financialConfidence: sig.financialConfidence ?? null,
+            documentId: doc.id,
+            documentTitle: doc.title,
+            caseId: doc.caseId,
+          });
+          financialInserted++;
+        } catch { /* skip duplicates */ }
+      }
+    } catch { /* don't crash ingest on financial failure */ }
+
+    if ((timelineInserted + financialInserted) > 0) {
+      await logEvent(
+        "signals_extracted",
+        `Web-ingest signals from "${title}": ${timelineInserted} timeline, ${financialInserted} financial`,
+        { caseId: doc.caseId, documentId: doc.id }
+      );
+    }
+
+    // T003: Async case compile — update brief after new signals arrive
+    if (doc.caseId) {
+      compileCaseBrief(doc.caseId)
+        .then((brief) => saveCaseBrief(doc.caseId!, brief))
+        .catch((err) => console.error("[ATLAS] Post-ingest compile error:", err));
     }
   } else {
     await logEvent(

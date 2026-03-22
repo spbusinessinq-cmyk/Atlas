@@ -99,6 +99,13 @@ The project is structured as a pnpm monorepo using Node.js and TypeScript, empha
         *   **T011 — Fail-Safe Mode:** `insufficientData` flag added to dossier response when both entities AND financials are absent. SYSTEM NOTICE block displayed in workspace.
         *   **T012 — Final Validation:** Confirmed against cases 37 and 38. Entities capped, profiles generated, relationships clean, timeline ≤8, summary 4-paragraph, power structure structured.
 
+17. **AUTO-ANALYZE TRIGGER PASS (T001-T005):**
+    *   **T001 — Auto-analyze on ingest:** `web_ingest.ts` now runs `extractTimelineEvents` and `extractFinancialSignals` inline after entity extraction. Both table writes happen in the same ingest request.
+    *   **T002 — Debounce duplicate analysis:** `run-analysis` endpoint fetches existing mention doc IDs before the extraction loop. Docs that already have mentions are skipped (entity extraction) but still re-analyzed for timeline/financial signals.
+    *   **T003 — Post-analysis case refresh:** `compileCaseBrief`/`saveCaseBrief` is called asynchronously (fire-and-forget) after both `web-ingest` and `/documents/:id/analyze` endpoints complete, so the compiled brief stays current.
+    *   **T004 — ANALYZE DOCUMENTS button:** `POST /cases/:caseId/run-analysis` endpoint executes the full pipeline (extract → triage → promote entities → compile brief). Frontend calls this endpoint with `ctrlMsg` status display while the operation runs.
+    *   **T005 — seedIntent context in run-analysis:** `run-analysis` now loads the case title, calls `classifySeedIntent()`, and passes the resulting `SeedIntent` to `extractEntities()` so topic relevance classification reflects the case domain. Auto-triage extended with government agency / institution promotion rules: entities with `isGovtOrInstitution=true` and confidence ≥0.65 in non-tail zones are promoted even with LOW topic. Multi-doc entities (≥2 docs) with confidence ≥0.62 and real role are also promoted.
+
 **API Routes:**
 *   Comprehensive RESTful API routes under `/api` for CRUD operations across all core data models, including specific endpoints for document upload, analysis, web search/ingestion, and entity mention management.
 

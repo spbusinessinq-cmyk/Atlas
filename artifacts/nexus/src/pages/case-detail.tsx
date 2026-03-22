@@ -3554,7 +3554,32 @@ function DefaultInspector({
           <div style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
             <button
               className="atlas-next-action-box w-full text-left group"
-              onClick={() => onNavigate(nextAction.navigate)}
+              onClick={async () => {
+                if (nextAction.cta === "ANALYZE DOCUMENTS") {
+                  setCtrlWorking(true);
+                  setCtrlMsg("Running full analysis pipeline...");
+                  try {
+                    const r = await fetch(`/api/cases/${caseId}/run-analysis`, { method: "POST" });
+                    const data = await r.json();
+                    if (r.ok) {
+                      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
+                      queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/brief`] });
+                      const entMsg = data.entitiesCreated > 0 ? ` — ${data.entitiesCreated} entities promoted` : "";
+                      const tlMsg = data.newTimeline > 0 ? `, ${data.newTimeline} timeline events` : "";
+                      const finMsg = data.newFinancial > 0 ? `, ${data.newFinancial} financial signals` : "";
+                      setCtrlMsg(`Analysis complete${entMsg}${tlMsg}${finMsg}. Quality: ${data.quality ?? "—"}`);
+                    } else {
+                      setCtrlMsg(`Analysis error: ${data.error}`);
+                    }
+                  } catch (e) {
+                    setCtrlMsg("Analysis failed — check server logs.");
+                  } finally {
+                    setCtrlWorking(false);
+                  }
+                } else {
+                  onNavigate(nextAction.navigate);
+                }
+              }}
             >
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-1 h-1 rounded-full bg-red-500" style={{ boxShadow: "0 0 4px rgba(220,38,38,0.8)" }} />
@@ -3568,6 +3593,15 @@ function DefaultInspector({
                 <nextAction.icon className="w-3 h-3 text-neutral-700 group-hover:text-neutral-400 transition-colors" />
               </div>
             </button>
+          </div>
+        )}
+
+        {/* ══ CTRL MSG: Analysis status feedback ══ */}
+        {(ctrlMsg || ctrlWorking) && (
+          <div style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", padding: "8px 12px" }}>
+            <div className="font-mono text-[8px] uppercase tracking-wide" style={{ color: ctrlWorking ? "#60a5fa" : "#22c55e" }}>
+              {ctrlWorking ? "● " : "✓ "}{ctrlMsg}
+            </div>
           </div>
         )}
 

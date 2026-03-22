@@ -9,6 +9,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { extractTextFromFile, extractEntities, extractTimelineEvents, extractFinancialSignals, isBudgetDocument, extractBudgetRows } from "../lib/entity-extractor";
+import { compileCaseBrief, saveCaseBrief } from "../lib/case-compiler";
 import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
@@ -225,6 +226,13 @@ router.post("/documents/:id/analyze", async (req, res) => {
     `Analysis completed on "${doc.title || `DOC-${docId}`}": ${inserted.length} entity detections, ${timelineInserted} timeline events, ${signalInserted} financial signals`,
     { caseId: doc.caseId, documentId: docId }
   );
+
+  // T003: Async case compile — update brief after new signals arrive
+  if (doc.caseId) {
+    compileCaseBrief(doc.caseId)
+      .then((brief) => saveCaseBrief(doc.caseId!, brief))
+      .catch((err) => console.error("[ATLAS] Post-analyze compile error:", err));
+  }
 
   res.json({
     documentId: docId,
