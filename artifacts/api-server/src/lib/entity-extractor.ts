@@ -1855,6 +1855,136 @@ export function extractFinancialSignals(text: string, anchorTokens: string[] = [
   return signals;
 }
 
+// ── Budget Document Detection ─────────────────────────────────────────────────
+
+const BUDGET_VOCABULARY_RE = /\b(fiscal\s+year|adopted\s+budget|approved\s+budget|operating\s+budget|capital\s+budget|budget\s+summary|budget\s+detail|budget\s+report|municipal\s+budget|government\s+budget|fy\s*\d{2,4}|appropriation|expenditure|encumbrance|general\s+fund|special\s+revenue|department\s+budget|budget\s+appropriation)\b/i;
+const BUDGET_COLUMN_MULTI_RE = /\b(adopted|revised|actual|proposed|variance|budgeted|appropriated)\b.*\b(adopted|revised|actual|proposed|variance|budgeted|appropriated)\b/i;
+
+/**
+ * Returns true if the document text looks like a budget/fiscal report.
+ * Requires both budget vocabulary AND significant density of bare comma-formatted numbers.
+ */
+export function isBudgetDocument(text: string): boolean {
+  if (!text || text.length < 100) return false;
+  const bareNumbers = (text.match(/\b\d{1,3}(?:,\d{3})+\b/g) || []).length;
+  if (bareNumbers < 5) return false;
+  return BUDGET_VOCABULARY_RE.test(text) || BUDGET_COLUMN_MULTI_RE.test(text);
+}
+
+// ── Budget Table Row Extraction ───────────────────────────────────────────────
+
+const JUNK_LABEL_RE = /^[\d\s.,\-–—:;|\/\\%]+$|^\s*(total|subtotal|grand total|net|net total|less|plus|add|deduct|balance|carry|rollover|reserve|contingency|unallocated|fund balance)\b/i;
+const ACCOUNT_CODE_RE = /^\d{2,}[-.\s]\d{2,}([-.\s]\d+)*\s*/;
+const BUDGET_FY_RE = /\b(?:FY|Fiscal Year|F\.Y\.)\s*(\d{2,4}(?:[–\-\/]\d{2,4})?)\b/i;
+const BUDGET_COL_ORDER_RE = /\b(adopted|approved|proposed|revised|amended|actual|variance|estimated|budgeted)\b/gi;
+
+function parseBudgetLine(line: string): { label: string; amounts: { raw: string; value: number }[] } | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 4) return null;
+
+  const amounts: { raw: string; value: number; idx: number }[] = [];
+  const re = /\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?)\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(trimmed)) !== null) {
+    const val = parseFloat(m[1].replace(/,/g, ""));
+    if (val >= 1000) amounts.push({ raw: m[1], value: val, idx: m.index });
+  }
+  if (amounts.length === 0) return null;
+
+  // Label = everything before the first number
+  let label = trimmed.slice(0, amounts[0].idx).trim();
+  label = label.replace(ACCOUNT_CODE_RE, "").trim(); // strip account codes
+  label = label.replace(/[:\-–—|]+$/, "").trim();   // strip trailing punctuation
+  if (label.length < 2) return null;
+  if (JUNK_LABEL_RE.test(label)) return null;
+
+  return { label, amounts: amounts.map(a => ({ raw: a.raw, value: a.value })) };
+}
+
+/**
+ * Extracts structured financial rows from budget/fiscal documents.
+ * Returns signals with signalType = "ALLOCATION" — bypasses standard sentence gates.
+ */
+export function extractBudgetRows(text: string, docTitle = ""): ExtractedFinancialSignal[] {
+  if (!text || text.trim().length < 50) return [];
+
+  const signals: ExtractedFinancialSignal[] = [];
+  const seen = new Set<string>();
+
+  // Detect fiscal year from document header (first 500 chars)
+  const fyMatch = BUDGET_FY_RE.exec(text.slice(0, 500));
+  const fiscalYear = fyMatch ? fyMatch[1] : null;
+
+  // Detect primary column label (Adopted, Approved, etc.)
+  let primaryColLabel = "ALLOCATION";
+  const headerLines = text.split("\n").slice(0, 30).join("\n");
+  const colMatches = Array.from(headerLines.matchAll(BUDGET_COL_ORDER_RE));
+  if (colMatches.length > 0) primaryColLabel = colMatches[0][1].toUpperCase();
+
+  const lines = text.split("\n");
+  let currentSection = "";
+  let currentDept = "";
+
+  for (let i = 0; i < lines.length && signals.length < 60; i++) {
+    const line = lines[i];
+    const parsed = parseBudgetLine(line);
+
+    if (!parsed) {
+      // Track section headers (non-numeric lines)
+      const trimmed = line.trim();
+      if (trimmed.length >= 3 && trimmed.length <= 80) {
+        // ALL CAPS and mostly letters → major section
+        if (/^[A-Z][A-Z &\-\/]{4,}$/.test(trimmed)) {
+          currentSection = trimmed;
+        // Title case (starts with capital, 5-50 chars, no leading digits) → department
+        } else if (/^[A-Z][a-zA-Z &\-\/]{4,49}$/.test(trimmed) && !/^\d/.test(trimmed)) {
+          currentDept = trimmed;
+        }
+      }
+      continue;
+    }
+
+    const { label, amounts } = parsed;
+    // Skip total/subtotal rows
+    if (/^(total|subtotal|grand total|net|net total)\b/i.test(label)) continue;
+
+    // Primary entity: use specific label; use dept or section as context
+    const entityName = (label.length > 4 ? label : (currentDept || currentSection || label)).slice(0, 80);
+    const primaryAmount = amounts[0];
+    const dedupeKey = `${entityName}|${primaryAmount.raw}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const { amount, currency, display } = normalizeAmount(primaryAmount.raw);
+    if (amount === null || amount < 1000) continue;
+
+    // Build contextual event summary
+    const summaryParts = [
+      fiscalYear ? `FY ${fiscalYear}` : null,
+      currentSection ? currentSection.slice(0, 40) : null,
+      currentDept && currentDept !== label ? currentDept.slice(0, 40) : null,
+      label,
+      `${primaryColLabel}: ${display}`,
+    ].filter(Boolean);
+
+    signals.push({
+      amountRaw: primaryAmount.raw,
+      amountDisplay: display,
+      normalizedAmount: amount,
+      currency,
+      signalType: "ALLOCATION",
+      eventSummary: summaryParts.join(" · ").slice(0, 250),
+      entityName,
+      controlledBy: (currentDept || currentSection || null),
+      receivedBy: null,
+      programName: label !== entityName ? label.slice(0, 80) : null,
+      financialConfidence: 0.85,
+    });
+  }
+
+  return signals;
+}
+
 /**
  * Non-numeric signal extraction (P4): detects funding language WITHOUT a dollar amount.
  * Creates NON_NUMERIC_SIGNAL entries — no amount, confidence capped at 0.5.

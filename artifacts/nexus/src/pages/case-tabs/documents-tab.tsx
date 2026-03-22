@@ -739,11 +739,13 @@ export function DocumentInspector({
   caseId,
   onClose,
   onView,
+  moneyHits = [],
 }: {
   doc: Document;
   caseId: number;
   onClose: () => void;
   onView?: () => void;
+  moneyHits?: any[];
 }) {
   const queryClient = useQueryClient();
   const extDoc = doc as ExtendedDoc;
@@ -1133,6 +1135,40 @@ export function DocumentInspector({
                   >
                     {m.entityType.replace(/_/g, " ")}
                   </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── MONEY HITS (T008) — per-document financial signals ─────────── */}
+        {moneyHits.length > 0 && (
+          <div className="space-y-2">
+            <div className="font-mono text-[9px] uppercase tracking-widest flex items-center gap-1.5" style={{ color: "rgba(16,185,129,0.7)" }}>
+              <span className="w-1 h-1 rounded-full inline-block" style={{ background: "rgba(16,185,129,0.7)" }} />
+              MONEY HITS — {moneyHits.length}
+            </div>
+            <div className="space-y-1">
+              {moneyHits.map((sig: any, i: number) => (
+                <div key={i} className="px-2 py-1.5" style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(16,185,129,0.1)" }}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-mono text-[9px] font-semibold truncate" style={{ color: "rgba(200,200,200,0.9)" }}>
+                      {sig.entityName ?? sig.programName ?? "UNKNOWN"}
+                    </span>
+                    <span className="font-mono text-[11px] font-bold flex-shrink-0 tabular-nums" style={{ color: "rgba(16,185,129,0.9)" }}>
+                      {sig.amountDisplay ?? sig.amountRaw}
+                    </span>
+                  </div>
+                  {sig.signalType && (
+                    <div className="font-mono text-[7px] uppercase tracking-wider mt-0.5" style={{ color: "rgba(16,185,129,0.4)" }}>
+                      {sig.signalType.replace(/_/g, " ")}
+                    </div>
+                  )}
+                  {sig.eventSummary && (
+                    <div className="font-mono text-[8px] mt-0.5 leading-snug" style={{ color: "rgba(130,130,130,0.7)" }}>
+                      {sig.eventSummary.slice(0, 120)}{sig.eventSummary.length > 120 ? "…" : ""}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

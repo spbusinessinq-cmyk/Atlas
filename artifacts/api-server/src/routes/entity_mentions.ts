@@ -8,7 +8,7 @@ import {
   financialSignalsTable,
 } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
-import { extractTextFromFile, extractEntities, extractTimelineEvents, extractFinancialSignals } from "../lib/entity-extractor";
+import { extractTextFromFile, extractEntities, extractTimelineEvents, extractFinancialSignals, isBudgetDocument, extractBudgetRows } from "../lib/entity-extractor";
 import { logEvent } from "../lib/log-event";
 
 const router: IRouter = Router();
@@ -142,17 +142,36 @@ router.post("/documents/:id/analyze", async (req, res) => {
   }
 
   // ── Financial signal extraction ──────────────────────────────────────────────
+  // Clear old signals for this document (re-analysis produces fresh extraction)
+  await db.delete(financialSignalsTable).where(eq(financialSignalsTable.documentId, docId));
+
+  // Detect budget mode
+  const budgetMode = isBudgetDocument(cleanText);
+
+  // Normal sentence-level extraction (prose/news documents)
   const financialSignals = extractFinancialSignals(cleanText);
+
+  // Budget table extraction (for fiscal/budget documents — bypasses sentence gates)
+  const budgetSignals = budgetMode ? extractBudgetRows(cleanText, doc.title ?? "") : [];
+
+  // Merge: budget signals first (higher confidence), then prose signals
+  const allSignals = [...budgetSignals, ...financialSignals];
+
   let signalInserted = 0;
-  for (const sig of financialSignals) {
+  for (const sig of allSignals) {
     try {
       await db.insert(financialSignalsTable).values({
         amountRaw: sig.amountRaw,
+        amountDisplay: sig.amountDisplay ?? null,
         normalizedAmount: sig.normalizedAmount ?? undefined,
         currency: sig.currency,
         signalType: sig.signalType,
         eventSummary: sig.eventSummary,
-        entityName: sig.entityName,
+        entityName: sig.entityName ?? null,
+        controlledBy: sig.controlledBy ?? null,
+        receivedBy: sig.receivedBy ?? null,
+        programName: sig.programName ?? null,
+        financialConfidence: sig.financialConfidence ?? null,
         documentId: docId,
         documentTitle: doc.title,
         caseId: doc.caseId,

@@ -1,0 +1,252 @@
+ATLAS FINAL INTELLIGENCE CORE REBUILD — REAL MONEY EXTRACTION
+
+MISSION
+The UI is complete.
+The dossier system is complete.
+
+The intelligence engine is failing on real documents.
+
+A real fiscal budget document produced ZERO financial flows.
+
+This is unacceptable.
+
+We are replacing signal-based inference with document-based extraction.
+
+This pass rebuilds ATLAS into a true financial intelligence system.
+
+Implement fully. Verify with real uploaded document. Return proof.
+
+━━━━━━━━━━━━━━━━━━
+T001 — FORCE BUDGET MODE DETECTION
+━━━━━━━━━━━━━━━━━━
+
+When a document is ingested:
+
+If it contains:
+- “budget”
+- “appropriation”
+- “expenditure”
+- “fund”
+- “department”
+- “fiscal year”
+- “adopted / revised / actual”
+- tables with money columns
+
+→ set:
+documentMode = "budget"
+
+Route it AWAY from normal signal extraction.
+
+━━━━━━━━━━━━━━━━━━
+T002 — HARD MONEY EXTRACTION ENGINE
+━━━━━━━━━━━━━━━━━━
+
+Extract ALL monetary values from documents.
+
+Detect:
+- $750,000
+- $1.2M
+- $3 billion
+- 750000
+- 14,000,000
+- table cells
+
+Normalize:
+- store normalizedAmount (number)
+- store amountDisplay (string)
+
+Example:
+"$1.2M" → 1200000
+
+Reject:
+- empty
+- malformed
+- zero
+
+━━━━━━━━━━━━━━━━━━
+T003 — TABLE PARSING (CRITICAL FIX)
+━━━━━━━━━━━━━━━━━━
+
+Budget docs are TABLES — not sentences.
+
+Implement row extraction:
+
+For each row:
+capture:
+- row label (program / department)
+- column label (adopted / actual / etc.)
+- amount
+- fiscal year if present
+
+Build structured rows:
+
+{
+  entityName,
+  programName,
+  amountDisplay,
+  normalizedAmount,
+  fiscalYear,
+  sourceDoc
+}
+
+Do NOT summarize — STORE rows.
+
+━━━━━━━━━━━━━━━━━━
+T004 — CASE MONEY LEDGER (NEW CORE FEATURE)
+━━━━━━━━━━━━━━━━━━
+
+Create new section:
+
+CASE MONEY LEDGER
+
+This replaces “guesswork flows”.
+
+Display:
+- Amount
+- Entity / Department
+- Program
+- Fiscal Year
+- Source
+
+Sort:
+largest → smallest
+
+Add:
+- TOTAL EXTRACTED $
+- ROW COUNT
+- UNIQUE ENTITIES
+
+If empty:
+→ show extraction failed warning (not “no flows”)
+
+━━━━━━━━━━━━━━━━━━
+T005 — FLOW TRACE FIX (WHY YOU SEE 0 NOW)
+━━━━━━━━━━━━━━━━━━
+
+Current issue:
+Flow trace requires “money transfer language”.
+
+Fix:
+
+For budget docs:
+ALLOW:
+
+CLASS = BUDGET ALLOCATION
+
+Even if:
+- no source/destination pair exists
+
+Show:
+- entity/program
+- amount
+- classification: ALLOCATION / APPROPRIATION / EXPENDITURE
+
+Result:
+Flow trace NEVER shows zero if money exists.
+
+━━━━━━━━━━━━━━━━━━
+T006 — EXEC SUMMARY MUST USE REAL NUMBERS
+━━━━━━━━━━━━━━━━━━
+
+For budget cases:
+
+Summary MUST include:
+- total extracted $
+- largest amount
+- number of rows
+- top entities
+
+Example:
+
+"ATLAS extracted 42 confirmed monetary rows totaling $184,000,000. The largest allocation is $52,000,000 assigned to [entity]."
+
+NO numbers → NO summary claims.
+
+━━━━━━━━━━━━━━━━━━
+T007 — ENTITY CLEAN ATTACHMENT
+━━━━━━━━━━━━━━━━━━
+
+Attach money ONLY to:
+
+- departments
+- agencies
+- funds
+- programs
+
+BLOCK:
+- “March Madness”
+- “With Amy…”
+- random phrases
+
+If unsure:
+→ label as UNRESOLVED LINE ITEM
+
+━━━━━━━━━━━━━━━━━━
+T008 — DOCUMENT VIEW MONEY PANEL
+━━━━━━━━━━━━━━━━━━
+
+Add side panel:
+
+MONEY HITS
+
+Shows:
+- amount
+- label
+- entity
+- excerpt
+
+Click → jump to source
+
+━━━━━━━━━━━━━━━━━━
+T009 — HARD FAIL IF EXTRACTION BREAKS
+━━━━━━━━━━━━━━━━━━
+
+If:
+documentMode = budget
+AND extracted rows = 0
+
+→ show:
+
+⚠️ “BUDGET PARSING FAILED — NO MONETARY ROWS DETECTED”
+
+NOT:
+“No financial flows”
+
+This prevents silent failure.
+
+━━━━━━━━━━━━━━━━━━
+T010 — TEST WITH REAL BUDGET DOC (MANDATORY)
+━━━━━━━━━━━━━━━━━━
+
+Use the SAME document that returned zero.
+
+Return:
+
+- number of rows extracted
+- total $ extracted
+- top 5 amounts
+- example ledger rows
+- flow trace entries now visible
+
+If still zero:
+STOP and report failure.
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+
+ATLAS must now:
+
+- extract REAL money from documents
+- build a ledger
+- populate flow trace
+- generate numeric-based summaries
+
+NO MORE:
+- fake signals
+- empty flows on real budgets
+- narrative-only intelligence
+
+Return:
+"ATLAS FINANCIAL CORE FIX COMPLETE"
++ real extracted data proof

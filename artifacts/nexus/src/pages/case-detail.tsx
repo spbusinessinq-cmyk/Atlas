@@ -771,6 +771,7 @@ function CaseDetailInner({
             caseId={caseId}
             onClose={onDocClose}
             onView={() => onViewDoc(selectedDoc)}
+            moneyHits={financialSignals.filter((sig: any) => sig.documentId === selectedDoc.id && (sig.normalizedAmount ?? 0) > 0 && !sig.signalType?.startsWith("NON_NUMERIC"))}
           />
         )}
         {!(activeSection === "graph" && (selectedRel || selectedEntity)) &&
@@ -4218,6 +4219,66 @@ function DefaultInspector({
                     </p>
                   ) : null}
                 </div>
+
+                {/* MONEY LEDGER — all numeric signals sorted by amount */}
+                {(() => {
+                  const ledger = s.moneyLedger;
+                  if (!ledger || ledger.signalCount === 0) return null;
+                  return (
+                    <div>
+                      {wsLabel("MONEY LEDGER", "rgba(16,185,129,0.8)")}
+                      <div className="mb-3">
+                        {/* Header stats */}
+                        <div className="flex gap-4 mb-3 pl-3" style={{ borderLeft: "2px solid rgba(16,185,129,0.3)" }}>
+                          <div>
+                            <div className="font-mono text-[16px] font-bold tabular-nums" style={{ color: "rgba(16,185,129,0.95)" }}>{ledger.totalDisplay ?? "—"}</div>
+                            <div className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(100,180,140,0.5)" }}>TOTAL EXTRACTED</div>
+                          </div>
+                          <div>
+                            <div className="font-mono text-[16px] font-bold tabular-nums" style={{ color: "rgba(180,180,180,0.9)" }}>{ledger.signalCount}</div>
+                            <div className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(100,100,100,0.5)" }}>SIGNALS</div>
+                          </div>
+                          <div>
+                            <div className="font-mono text-[16px] font-bold tabular-nums" style={{ color: "rgba(180,180,180,0.9)" }}>{ledger.uniqueEntityCount}</div>
+                            <div className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(100,100,100,0.5)" }}>ENTITIES</div>
+                          </div>
+                        </div>
+                        {ledger.isBudgetCase && (
+                          <div className="mb-2 px-2 py-1 font-mono text-[8px] uppercase tracking-widest" style={{ background: "rgba(16,185,129,0.06)", color: "rgba(16,185,129,0.6)", border: "1px solid rgba(16,185,129,0.12)" }}>
+                            BUDGET MODE — {ledger.rows.filter((r: any) => r.signalType === "ALLOCATION").length} ALLOCATION ROWS EXTRACTED
+                          </div>
+                        )}
+                        {/* Ledger table */}
+                        <div className="space-y-0">
+                          {/* Column header */}
+                          <div className="flex items-center gap-2 px-2 py-0.5 font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(80,80,80,0.8)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                            <span className="flex-1">ENTITY / PROGRAM</span>
+                            <span className="flex-shrink-0 w-20 text-right">AMOUNT</span>
+                          </div>
+                          {ledger.rows.map((row: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 px-2 py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.025)", background: i % 2 === 0 ? "rgba(0,0,0,0.15)" : "transparent" }}>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-mono text-[9px] font-semibold truncate" style={{ color: "rgba(210,210,210,0.9)" }}>{row.entityName ?? row.programName ?? "—"}</div>
+                                {row.controlledBy && row.controlledBy !== row.entityName && (
+                                  <div className="font-mono text-[7px] truncate" style={{ color: "rgba(100,100,100,0.7)" }}>{row.controlledBy}</div>
+                                )}
+                                {row.signalType === "ALLOCATION" && row.eventSummary && (
+                                  <div className="font-mono text-[7px] truncate" style={{ color: "rgba(60,140,100,0.6)" }}>{row.eventSummary.split("·").pop()?.trim()}</div>
+                                )}
+                              </div>
+                              <div className="flex-shrink-0 text-right">
+                                <div className="font-mono text-[10px] font-bold tabular-nums" style={{ color: "rgba(16,185,129,0.85)" }}>{row.amountDisplay}</div>
+                                {row.signalType === "ALLOCATION" && (
+                                  <div className="font-mono text-[6px] uppercase" style={{ color: "rgba(16,185,129,0.35)" }}>ALLOC</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* FINANCIAL FLOWS */}
                 <div>

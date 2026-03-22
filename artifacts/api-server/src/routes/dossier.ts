@@ -555,6 +555,48 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     ? numericFinancialSignals
     : financialSignals.filter(f => (f.signalType?.startsWith("NON_NUMERIC") || f.amountDisplay === "NON-NUMERIC") && f.eventSummary).slice(0, 3);
 
+  // ── MONEY LEDGER (T004) ────────────────────────────────────────────────────
+  // All numeric signals sorted by amount (largest first). Used for the MONEY LEDGER panel.
+  const allNumeric = financialSignals.filter(f => (f.normalizedAmount ?? 0) > 0 && !(f.signalType?.startsWith("NON_NUMERIC")));
+  const totalExtracted = allNumeric.reduce((acc, f) => acc + (f.normalizedAmount ?? 0), 0);
+  const uniqueEntities = [...new Set(allNumeric.map(f => f.entityName).filter(Boolean))];
+  const uniqueDocs = [...new Set(allNumeric.map(f => f.docId).filter(Boolean))];
+  const allocationCount = allNumeric.filter(f => f.signalType === "ALLOCATION").length;
+  const isBudgetCase = allocationCount > 0 && allocationCount >= allNumeric.length * 0.5;
+
+  // Format a dollar amount for display
+  const fmtDollar = (n: number): string => {
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+    return `$${n.toLocaleString()}`;
+  };
+
+  const moneyLedger = {
+    totalExtracted,
+    totalDisplay: totalExtracted > 0 ? fmtDollar(totalExtracted) : null,
+    signalCount: allNumeric.length,
+    uniqueEntityCount: uniqueEntities.length,
+    uniqueDocCount: uniqueDocs.length,
+    isBudgetCase,
+    budgetParseFailure: isBudgetCase && allocationCount === 0 && rawFinancialSignals.some(s => s.signalType === "ALLOCATION"),
+    rows: allNumeric
+      .sort((a, b) => (b.normalizedAmount ?? 0) - (a.normalizedAmount ?? 0))
+      .slice(0, 30)
+      .map(f => ({
+        entityName: f.entityName ?? null,
+        programName: f.programName ?? null,
+        controlledBy: f.controlledBy ?? null,
+        amountDisplay: f.amountDisplay ?? fmtDollar(f.normalizedAmount ?? 0),
+        normalizedAmount: f.normalizedAmount ?? 0,
+        signalType: f.signalType,
+        eventSummary: f.eventSummary ?? null,
+        documentTitle: (rawFinancialSignals.find(r => r.normalizedAmount === f.normalizedAmount && r.entityName === f.entityName)?.documentTitle ?? null),
+        docId: f.docId ?? null,
+        confidence: f.confidence ?? null,
+      })),
+  };
+
   return res.json({
     caseId,
     caseTitle: caseData.title,
@@ -568,6 +610,7 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
       documentEvidence,
       timelineSignals,
       financialSignals: outputFinancialSignals,
+      moneyLedger,
       investigativeAngles,
       nextQueries,
       knownGaps,
