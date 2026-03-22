@@ -9,7 +9,7 @@ router.get("/notes", async (req, res) => {
   const caseId = req.query.caseId ? parseInt(req.query.caseId as string) : undefined;
   if (!caseId) return res.status(400).json({ error: "caseId is required" });
   const rows = await db.select().from(notesTable).where(eq(notesTable.caseId, caseId));
-  res.json(rows.map(formatNote));
+  return res.json(rows.map(formatNote));
 });
 
 router.post("/notes", async (req, res) => {
@@ -30,7 +30,7 @@ router.put("/notes/:id", async (req, res) => {
     .where(eq(notesTable.id, id))
     .returning();
   if (!rows.length) return res.status(404).json({ error: "Not found" });
-  res.json(formatNote(rows[0]));
+  return res.json(formatNote(rows[0]));
 });
 
 router.delete("/notes/:id", async (req, res) => {

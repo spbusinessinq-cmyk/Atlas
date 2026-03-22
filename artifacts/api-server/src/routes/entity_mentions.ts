@@ -234,7 +234,7 @@ router.post("/documents/:id/analyze", async (req, res) => {
       .catch((err) => console.error("[ATLAS] Post-analyze compile error:", err));
   }
 
-  res.json({
+  return res.json({
     documentId: docId,
     mentionsCreated: inserted.length,
     timelineEventsCreated: timelineInserted,
@@ -282,7 +282,7 @@ router.patch("/entity-mentions/:id", async (req, res) => {
     .returning();
   if (!rows.length) return res.status(404).json({ error: "Mention not found" });
   await logEvent("mention_status_updated", `Mention ${id} → ${status}`, { caseId: rows[0].caseId });
-  res.json(formatMention(rows[0]));
+  return res.json(formatMention(rows[0]));
 });
 
 // Approve a mention — creates entity in registry
@@ -324,7 +324,7 @@ router.post("/entity-mentions/:id/approve", async (req, res) => {
     { caseId: resolvedCaseId, entityId: entityRows[0].id }
   );
 
-  res.json({
+  return res.json({
     id: entityRows[0].id,
     name: entityRows[0].name,
     type: entityRows[0].type,
@@ -352,7 +352,7 @@ router.post("/entity-mentions/:id/reject", async (req, res) => {
     { caseId: mention.caseId }
   );
 
-  res.json(formatMention(mention));
+  return res.json(formatMention(mention));
 });
 
 function formatMention(m: typeof entityMentionsTable.$inferSelect) {

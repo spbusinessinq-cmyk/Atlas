@@ -767,7 +767,7 @@ function buildCurrentState(
 
   // Entity state
   const promotedEntities = entities?.filter(e => e.isPrimary) ?? [];
-  if (promotedEntities.length === 0 && quality !== "EMPTY") {
+  if (promotedEntities.length === 0) {
     parts.push("No entities cleared for promotion — manual review or re-ingest recommended.");
   }
 
@@ -776,7 +776,7 @@ function buildCurrentState(
     parts.push("Early indicators suggest this subject has investigative relevance but confirmation signals are absent.");
   }
 
-  if (quality === "WEAK" || quality === "EMPTY") {
+  if (quality === "WEAK") {
     if (financial.some(f => f.signalType?.startsWith("NON_NUMERIC"))) {
       parts.push("Non-numeric funding language detected — hard dollar figures not yet confirmed.");
     }
@@ -1005,7 +1005,7 @@ function buildSuggestedQueries(
         queries.push(`"${o.name}" audit OR lawsuit OR regulatory action`);
       }
       for (const p of topPersons) {
-        queries.push(`"${p.name}" "${o?.name ?? ""}" board OR salary OR conflict`);
+        queries.push(`"${p.name}" "${topOrgs[0]?.name ?? ""}" board OR salary OR conflict`);
       }
       break;
 

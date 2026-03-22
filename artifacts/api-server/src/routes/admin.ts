@@ -46,10 +46,10 @@ router.delete("/admin/wipe", async (req, res) => {
 
     await logEvent("system_wipe", "SYSTEM WIPE EXECUTED — All case data purged from ATLAS", {});
 
-    res.json({ ok: true, message: "All data purged. ATLAS system wiped." });
+    return res.json({ ok: true, message: "All data purged. ATLAS system wiped." });
   } catch (err: any) {
     console.error("[ADMIN WIPE] Error:", err);
-    res.status(500).json({ error: "Wipe failed: " + err.message });
+    return res.status(500).json({ error: "Wipe failed: " + err.message });
   }
 });
 

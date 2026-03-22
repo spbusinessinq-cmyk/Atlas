@@ -25,7 +25,7 @@ router.get("/relationship-evidence", async (req, res) => {
     docs.forEach((d) => { docMap[d.id] = d.title; });
   }
 
-  res.json(
+  return res.json(
     rows.map((r) => ({
       id: r.id,
       relationshipId: r.relationshipId,

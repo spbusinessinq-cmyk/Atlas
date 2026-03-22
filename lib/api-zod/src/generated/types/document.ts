@@ -14,4 +14,6 @@ export interface Document {
   publishDate?: string;
   uploadedAt: string;
   caseId?: number;
+  rawText?: string;
+  sourceDomain?: string;
 }

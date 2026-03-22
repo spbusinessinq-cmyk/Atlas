@@ -953,10 +953,10 @@ router.post("/web-search", async (req, res) => {
     const xml = await resp.text();
     const results = parseRssItems(xml, query.trim());
 
-    res.json({ query: query.trim(), results, provider: "google-news-rss", count: results.length });
+    return res.json({ query: query.trim(), results, provider: "google-news-rss", count: results.length });
   } catch (err) {
     console.error("Web search error:", err);
-    res.status(502).json({ error: "Search failed", message: String(err) });
+    return res.status(502).json({ error: "Search failed", message: String(err) });
   }
 });
 
@@ -1170,7 +1170,7 @@ router.post("/web-ingest", async (req, res) => {
     );
   }
 
-  res.status(201).json({
+  return res.status(201).json({
     document: formatDoc(doc),
     mentionsCreated,
     analysisRan: canAnalyze,
@@ -1208,7 +1208,7 @@ router.post("/cases/seed", async (req, res) => {
   }
   // Reject pure noise tokens (e.g. "aaa", "asdf", "xxxxxxxxxxx")
   const wordLike = seedTarget.replace(/[^a-zA-Z\s]/g, "").trim().split(/\s+/);
-  const allWordsShort = wordLike.every(w => w.length < 3);
+  const allWordsShort = wordLike.every((w: string) => w.length < 3);
   if (wordLike.length <= 1 && allWordsShort) {
     return res.status(400).json({ error: "Seed target is too vague to produce a meaningful investigation." });
   }
@@ -1226,7 +1226,7 @@ router.post("/cases/seed", async (req, res) => {
   const theCase = caseRows[0];
   await logEvent("case_created", `Case created via seed launcher: "${seedTarget}"`, { caseId: theCase.id });
 
-  res.status(201).json({ caseId: theCase.id, status: "seeding", title: theCase.title });
+  return res.status(201).json({ caseId: theCase.id, status: "seeding", title: theCase.title });
 
   runSeedPipeline(theCase.id, seedTarget).catch((err) =>
     console.error("[ATLAS SEED] Pipeline error:", err)
@@ -1273,7 +1273,7 @@ async function ingestAnalystInputs(
         })
         .returning();
       const doc = docRows[0];
-      await logEvent("document_added", `Analyst notes ingested for case ${caseId}`, { caseId, docId: doc.id });
+      await logEvent("document_added", `Analyst notes ingested for case ${caseId}`, { caseId, documentId: doc.id });
       // Run inline entity extraction on notes
       try {
         const textForAnalysis = cleanRawText(rawText);
@@ -1357,7 +1357,7 @@ async function ingestAnalystInputs(
         })
         .returning();
       const doc = docRows[0];
-      await logEvent("document_added", `Analyst URL ingested: ${url}`, { caseId, docId: doc.id });
+      await logEvent("document_added", `Analyst URL ingested: ${url}`, { caseId, documentId: doc.id });
       // Inline entity extraction for analyst URL
       try {
         const textForAnalysis = cleanRawText(rawText);
@@ -1556,7 +1556,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
   await logEvent(
     "seed_intent_classified",
     `Target mode: ${targetMode} (${(targetClassification.confidence * 100).toFixed(0)}% conf) | Intent: ${seedIntent} | Target: "${target}"`,
-    { caseId, targetMode, seedIntent, confidence: targetClassification.confidence }
+    { caseId }
   );
 
   // ── Generate 8–12 investigative query variations (Pass 28) ───────────────
@@ -1812,8 +1812,7 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
       }
 
       // ── Auto-extract timeline events (anchor-filtered + soft fallback) ────
-      if (relevance.priority !== "NOISE") {
-        try {
+      try {
           const rawTimelineEvents = extractTimelineEvents(textForAnalysis);
           const timelineEvents = filterTimelineByAnchor(rawTimelineEvents, caseAnchor);
           let strictInserted = 0;
@@ -1845,14 +1844,12 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
               } catch { /* skip duplicates */ }
             }
           }
-        } catch {
-          // don't let timeline extraction crash the pipeline
-        }
+      } catch {
+        // don't let timeline extraction crash the pipeline
       }
 
       // ── Auto-extract financial signals (anchor-filtered, confidence-gated) ──
-      if (relevance.priority !== "NOISE") {
-        try {
+      try {
           const rawSignals = extractFinancialSignals(textForAnalysis, caseAnchor.anchorTokens);
           const signals = filterFinancialByAnchor(rawSignals, caseAnchor);
           let financialInserted = 0;
@@ -1885,21 +1882,19 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
           if (financialRejected > 0) {
             console.log(`[ATLAS-FINANCIAL] doc=${doc.id} inserted=${financialInserted} rejected_low_conf=${financialRejected}`);
           }
-        } catch {
-          // don't let financial extraction crash the pipeline
-        }
+      } catch {
+        // don't let financial extraction crash the pipeline
       }
 
       // ── Non-numeric signal extraction (runs after numeric pass) ───────────
-      if (relevance.priority !== "NOISE") {
-        try {
+      try {
           const nonNumericSignals = extractNonNumericSignals(textForAnalysis, caseAnchor.anchorTokens);
           for (const sig of nonNumericSignals) {
             if ((sig.financialConfidence ?? 0) < 0.25) continue;
             try {
               await db.insert(financialSignalsTable).values({
                 caseId,
-                linkedDocumentId: doc.id,
+                documentId: doc.id,
                 amountRaw: sig.amountRaw,
                 amountDisplay: sig.amountDisplay,
                 normalizedAmount: sig.normalizedAmount,
@@ -1915,9 +1910,8 @@ async function runSeedPipeline(caseId: number, target: string): Promise<void> {
               });
             } catch { /* skip duplicates */ }
           }
-        } catch {
-          // don't crash the pipeline
-        }
+      } catch {
+        // don't crash the pipeline
       }
 
       // Track contamination counts

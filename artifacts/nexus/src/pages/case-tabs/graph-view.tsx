@@ -712,11 +712,11 @@ export default function GraphCanvas({
       });
 
     // Financial link edges — green dashed arrows between actors in financial signals
-    const financialLinks: typeof confirmed = [];
+    const financialLinks: Edge[] = [];
     if (showFinancialLinksLocal && financialSignals.length > 0) {
       const existingPairs = new Set([
         ...relationships.map(r => `${Math.min(r.entityAId, r.entityBId)}-${Math.max(r.entityAId, r.entityBId)}`),
-        ...suggested.map(se => `${Math.min(se.entityAId, se.entityBId)}-${Math.max(se.entityAId, se.entityBId)}`),
+        ...suggested.map(se => `${Math.min(parseInt(se.source), parseInt(se.target))}-${Math.max(parseInt(se.source), parseInt(se.target))}`),
       ]);
       const finPairs = new Set<string>();
 

@@ -438,7 +438,7 @@ function CaseDetailInner({
         entityBId: p.entityBId,
         documentTitle: p.docTitle,
         sharedDocCount: p.docCount,
-        score: effectiveScore >= 3.5 ? "HIGH" : effectiveScore >= 2 ? "MEDIUM" : "LOW",
+        score: (effectiveScore >= 3.5 ? "HIGH" : effectiveScore >= 2 ? "MEDIUM" : "LOW") as "HIGH" | "MEDIUM" | "LOW",
       };
     }).filter((e) => {
       // Suppress LOW pairs with only 1 shared doc for person-person (too noisy)
@@ -3228,7 +3228,7 @@ function DefaultInspector({
 
   // T001: Auto-seed connection items from dossier on first edit mode entry
   React.useEffect(() => {
-    if (dossierEditMode && connectionItems.length === 0 && dossier?.sections?.entityRelationships?.length > 0) {
+    if (dossierEditMode && connectionItems.length === 0 && dossier != null && (dossier.sections?.entityRelationships?.length ?? 0) > 0) {
       seedConnectionItems(dossier.sections.entityRelationships);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

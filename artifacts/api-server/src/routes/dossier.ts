@@ -164,15 +164,17 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   // Doc support per entity
   const entityDocSupport = new Map<number, Set<number>>();
   for (const m of approvedOnly) {
-    if (!m.entityId || !m.documentId) continue;
-    if (!entityDocSupport.has(m.entityId)) entityDocSupport.set(m.entityId, new Set());
-    entityDocSupport.get(m.entityId)!.add(m.documentId);
+    if (!m.documentId) continue;
+    const matched = allEntities.find(e => e.name.toLowerCase() === m.entityName.toLowerCase());
+    if (!matched) continue;
+    if (!entityDocSupport.has(matched.id)) entityDocSupport.set(matched.id, new Set());
+    entityDocSupport.get(matched.id)!.add(m.documentId);
   }
 
   // Average confidence per entity from mentions
   const entityMentionConf = new Map<number, number>();
   for (const e of allEntities) {
-    const mentsForEntity = approvedOnly.filter(m => m.entityId === e.id);
+    const mentsForEntity = approvedOnly.filter(m => m.entityName.toLowerCase() === e.name.toLowerCase());
     if (mentsForEntity.length > 0) {
       const avg = mentsForEntity.reduce((acc, m) => acc + (Number(m.confidence) || 0), 0) / mentsForEntity.length;
       entityMentionConf.set(e.id, avg);
@@ -394,26 +396,28 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
 
   const timelineSignals = timeline
     .filter((t) => {
-      if (!t.date) return false;
-      if (t.eventType && t.eventType.trim()) {
-        const et = t.eventType.trim().toUpperCase();
-        if (!ACCOUNTABILITY_EVENT_TYPES.has(et)) return false;
-      }
+      if (!t.eventDate) return false;
+      const titleMatch = t.title?.match(/^\[([A-Z_]+)\]/);
+      const eventType = titleMatch ? titleMatch[1] : null;
+      if (eventType && !ACCOUNTABILITY_EVENT_TYPES.has(eventType)) return false;
       const text = `${t.title ?? ""} ${t.description ?? ""}`;
       if (JUNK_KEYWORDS.test(text)) return false;
-      if (t.eventType && !ACCOUNTABILITY_KEYWORDS.test(text)) {
-        if (!ACCOUNTABILITY_EVENT_TYPES.has(t.eventType.trim().toUpperCase())) return false;
+      if (eventType && !ACCOUNTABILITY_KEYWORDS.test(text)) {
+        if (!ACCOUNTABILITY_EVENT_TYPES.has(eventType)) return false;
       }
       return true;
     })
-    .sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
+    .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())
     .slice(0, 8)  // T007: Hard cap at 8 events
-    .map((t) => ({
-      date: t.date,
-      title: t.title,
-      description: t.description,
-      eventType: t.eventType,
-    }));
+    .map((t) => {
+      const titleMatch = t.title?.match(/^\[([A-Z_]+)\]/);
+      return {
+        date: t.eventDate,
+        title: t.title,
+        description: t.description,
+        eventType: titleMatch ? titleMatch[1] : null,
+      };
+    });
 
   // ── T011: Fail-safe mode check ───────────────────────────────────────────────
   const hasRealEntities = entities.length > 0;
@@ -559,7 +563,7 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     const docCount = entityDocSupport.get(e.id)?.size ?? 0;
     const eName = e.name;
     const eType = normalizeEntityType(e.type);
-    const entityMents = approvedOnly.filter(m => m.entityId === e.id);
+    const entityMents = approvedOnly.filter(m => m.entityName.toLowerCase() === e.name.toLowerCase());
     const entityFinancials = financialSignals.filter(
       f => f.entityName?.toLowerCase() === eName.toLowerCase()
     );

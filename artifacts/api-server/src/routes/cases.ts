@@ -58,7 +58,7 @@ router.get("/cases/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   const rows = await db.select().from(casesTable).where(eq(casesTable.id, id));
   if (!rows.length) return res.status(404).json({ error: "Not found" });
-  res.json(formatCase(rows[0]));
+  return res.json(formatCase(rows[0]));
 });
 
 router.get("/cases/:id/summary", async (req, res) => {
@@ -88,7 +88,7 @@ router.get("/cases/:id/summary", async (req, res) => {
     (r) => entityIds.includes(r.entityAId) || entityIds.includes(r.entityBId)
   );
 
-  res.json({
+  return res.json({
     case: formatCase(rows[0], entities.length, documents.length, timeline.length, relationships.length),
     entities: entities.map(formatEntity),
     documents: documents.map(formatDocument),
@@ -101,6 +101,7 @@ router.get("/cases/:id/summary", async (req, res) => {
     pendingMentions: pendingMentionsRows.length,
   });
 });
+
 
 router.post("/cases", async (req, res) => {
   const { title, description, status, tags } = req.body;
@@ -120,7 +121,7 @@ router.put("/cases/:id", async (req, res) => {
     .where(eq(casesTable.id, id))
     .returning();
   if (!rows.length) return res.status(404).json({ error: "Not found" });
-  res.json(formatCase(rows[0]));
+  return res.json(formatCase(rows[0]));
 });
 
 router.delete("/cases/:id", async (req, res) => {
@@ -164,7 +165,7 @@ router.delete("/cases/:caseId/entities/:entityId", async (req, res) => {
     { caseId, entityId }
   );
 
-  res.status(204).send();
+  return res.status(204).send();
 });
 
 // ── Reject all pending mentions for an entity name in a case ───────────────
@@ -191,7 +192,7 @@ router.post("/cases/:caseId/entities/:entityId/reject-mentions", async (req, res
     { caseId, entityId }
   );
 
-  res.json({ rejected: result.length });
+  return res.json({ rejected: result.length });
 });
 
 // ── Purge failed / wrapper documents from a case ───────────────────────────
@@ -551,7 +552,7 @@ router.post("/cases/:caseId/mentions/auto-triage", async (req, res) => {
     { caseId }
   );
 
-  res.json({
+  return res.json({
     autoPromoted: toPromote.length,
     autoRejected: toReject.length,
     autoHeld: toHold.length,

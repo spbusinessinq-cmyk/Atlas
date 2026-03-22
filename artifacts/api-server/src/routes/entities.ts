@@ -39,7 +39,7 @@ router.get("/entities", async (req, res) => {
     docCountMap.get(key)!.add(m.documentId);
   }
 
-  res.json(
+  return res.json(
     rows.map((e) => {
       const key = e.name.toLowerCase();
       return {
@@ -147,7 +147,7 @@ router.get("/entities/:id", async (req, res) => {
     if (r.evidenceDocumentId) docIdSet.add(r.evidenceDocumentId);
   });
 
-  res.json({
+  return res.json({
     entity: formatEntity(entity),
     financialSignals: financialSignals.map((s) => ({
       id: s.id,
@@ -230,7 +230,7 @@ router.post("/entities", async (req, res) => {
     .insert(entitiesTable)
     .values({ name, type, description, aliases: aliases || [], caseId })
     .returning();
-  res.status(201).json(formatEntity(rows[0]));
+  return res.status(201).json(formatEntity(rows[0]));
 });
 
 router.put("/entities/:id", async (req, res) => {
@@ -242,7 +242,7 @@ router.put("/entities/:id", async (req, res) => {
     .where(eq(entitiesTable.id, id))
     .returning();
   if (!rows.length) return res.status(404).json({ error: "Not found" });
-  res.json(formatEntity(rows[0]));
+  return res.json(formatEntity(rows[0]));
 });
 
 router.delete("/entities/:id", async (req, res) => {
@@ -263,7 +263,7 @@ router.delete("/entities/:id", async (req, res) => {
     { caseId: entity.caseId ?? undefined, entityId: id }
   );
 
-  res.status(204).send();
+  return res.status(204).send();
 });
 
 function formatEntity(e: typeof entitiesTable.$inferSelect) {

@@ -46,7 +46,7 @@ router.get("/documents/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   const rows = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
   if (!rows.length) return res.status(404).json({ error: "Not found" });
-  res.json(formatDoc(rows[0]));
+  return res.json(formatDoc(rows[0]));
 });
 
 /**
@@ -66,7 +66,7 @@ router.get("/documents/:id/file", async (req, res) => {
     return res.status(404).json({ error: "File not found on disk" });
   }
 
-  res.sendFile(absPath);
+  return res.sendFile(absPath);
 });
 
 /**
@@ -90,7 +90,7 @@ router.get("/documents/:id/download", async (req, res) => {
   const safeTitle = (doc.title || "document").replace(/[^a-zA-Z0-9_\-. ]/g, "_");
   const downloadName = `${safeTitle}${ext}`;
 
-  res.download(absPath, downloadName);
+  return res.download(absPath, downloadName);
 });
 
 router.post("/documents", async (req, res) => {
@@ -129,7 +129,7 @@ router.post("/documents/upload", upload.single("file"), async (req, res) => {
     { caseId: parsedCaseId, documentId: doc.id }
   );
 
-  res.status(201).json(formatDoc(doc));
+  return res.status(201).json(formatDoc(doc));
 });
 
 router.delete("/documents/:id", async (req, res) => {
@@ -147,7 +147,7 @@ router.delete("/documents/:id", async (req, res) => {
     { caseId: doc.caseId ?? undefined, documentId: id }
   );
 
-  res.status(204).send();
+  return res.status(204).send();
 });
 
 function formatDoc(d: typeof documentsTable.$inferSelect) {

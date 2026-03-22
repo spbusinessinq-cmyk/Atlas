@@ -13,7 +13,7 @@ router.post("/system-log", async (req, res) => {
     .values({ eventType, message, caseId: caseId || null, entityId: entityId || null, documentId: documentId || null })
     .returning();
   const r = rows[0];
-  res.status(201).json({
+  return res.status(201).json({
     id: r.id,
     eventType: r.eventType,
     message: r.message,

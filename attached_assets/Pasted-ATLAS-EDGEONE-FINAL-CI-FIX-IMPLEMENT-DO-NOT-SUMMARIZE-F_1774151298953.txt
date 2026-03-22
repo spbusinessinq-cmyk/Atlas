@@ -1,0 +1,147 @@
+ATLAS EDGEONE FINAL CI FIX — IMPLEMENT, DO NOT SUMMARIZE FIRST
+
+Goal:
+Make full workspace build pass on EdgeOne.
+Deploy config is already fixed.
+Current blocker is strict TypeScript inside artifacts/api-server only.
+
+You must fix the actual type errors now and verify with:
+pnpm build
+
+Do not give me a package-only check.
+Do not stop at tsc for one package.
+I need full workspace build green.
+
+━━━━━━━━━━━━━━━━━━
+T001 — CASE COMPILER UNION FIXES
+━━━━━━━━━━━━━━━━━━
+
+In artifacts/api-server/src/lib/case-compiler.ts:
+
+Fix impossible comparisons flagged by TS2367.
+
+Current errors show code is comparing unions that no longer include:
+- "EMPTY"
+- "NOISE"
+
+Audit the status/strength unions and align the conditionals with the real allowed values.
+
+If EMPTY / NOISE are legacy values:
+- remove those comparisons
+- or widen the source union type only if those states are truly still valid in runtime
+
+Do not fake-cast.
+Make the types and logic match reality.
+
+Also fix:
+- src/lib/case-compiler.ts(1008,38): Cannot find name 'o'
+This is likely a typo / stray variable / broken callback parameter.
+Repair it properly.
+
+━━━━━━━━━━━━━━━━━━
+T002 — ROUTE HANDLER RETURN DISCIPLINE
+━━━━━━━━━━━━━━━━━━
+
+Files:
+- src/routes/admin.ts
+- src/routes/cases.ts
+- src/routes/documents.ts
+- src/routes/entities.ts
+- src/routes/entity_mentions.ts
+- src/routes/notes.ts
+- src/routes/relationship_evidence.ts
+- src/routes/system_log.ts
+- src/routes/web_ingest.ts
+
+Fix all TS7030 “Not all code paths return a value”.
+
+Standardize every route handler:
+- if res.status(...).json(...) or res.json(...) is called, immediately `return`
+- all catch blocks must `return res.status(...).json(...)`
+- all success branches must end with a return
+- no fallthrough branches
+
+Do not change behavior.
+Just make route control flow explicit and type-safe.
+
+━━━━━━━━━━━━━━━━━━
+T003 — DOSSIER FIELD NAME RECONCILIATION
+━━━━━━━━━━━━━━━━━━
+
+File:
+- artifacts/api-server/src/routes/dossier.ts
+
+The code is reading fields that do not exist on the typed objects.
+Fix by reconciling to actual schema names.
+
+Confirmed mismatches from CI:
+- entityId does not exist
+- date does not exist
+- eventType does not exist
+
+Likely real names:
+- eventDate instead of date
+- entity mention rows may only have entityName/entityType/documentId/etc.
+- if entityId is needed, fetch/join it properly or stop referencing it
+
+Do not cast to any.
+Use the actual typed properties or change the query shape so the needed fields are selected.
+
+━━━━━━━━━━━━━━━━━━
+T004 — WEB INGEST TYPE CLEANUP
+━━━━━━━━━━━━━━━━━━
+
+File:
+- artifacts/api-server/src/routes/web_ingest.ts
+
+Fix:
+- implicit any on parameter `w`
+- object literals using unknown keys:
+  - docId → likely documentId
+  - targetMode → only keep if actual type supports it
+  - linkedDocumentId / caseId insert mismatch in financial signal insert
+
+Reconcile every object literal to the actual target type.
+If the DB insert shape does not include those fields, either:
+- remove them
+- or add them only if schema actually supports them and type generation is stale
+
+No any-casting.
+
+Also fix impossible comparisons against "NOISE" if union no longer includes it.
+
+━━━━━━━━━━━━━━━━━━
+T005 — INSERT PAYLOAD / SCHEMA ALIGNMENT
+━━━━━━━━━━━━━━━━━━
+
+Find the failing insert in web_ingest.ts where TS2769 says object literal includes:
+- linkedDocumentId
+- caseId
+
+Compare against the actual insert type for that table.
+Then do one of:
+1. rename to the real columns
+2. remove unsupported props
+3. update the typed schema if those columns truly exist but types are stale
+
+This must be real alignment, not workaround casting.
+
+━━━━━━━━━━━━━━━━━━
+T006 — FULL WORKSPACE BUILD VERIFICATION
+━━━━━━━━━━━━━━━━━━
+
+You must verify with:
+pnpm build
+
+Not:
+- package-only tsc
+- partial filter checks
+- isolated package success
+
+I need the full workspace build to pass in the same way EdgeOne runs it.
+
+Return only:
+1. exact files changed
+2. exact real fixes made
+3. confirmation that `pnpm build` passes fully
+4. any remaining blocker if and only if one still exists
