@@ -3928,6 +3928,42 @@ function DefaultInspector({
                           </div>
                         )}
 
+                        {/* T008: CASE QUALITY SCORE */}
+                        {(dossier as any).caseQualityLabel && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[7px] text-neutral-600 uppercase tracking-[0.2em]">CASE QUALITY</span>
+                            <span style={{
+                              fontSize: "7px",
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                              letterSpacing: "0.15em",
+                              padding: "1px 5px",
+                              borderRadius: "2px",
+                              background: (dossier as any).caseQualityLabel === "OPERATOR-READY" ? "rgba(34,197,94,0.15)"
+                                : (dossier as any).caseQualityLabel === "COMPILED" ? "rgba(6,182,212,0.12)"
+                                : (dossier as any).caseQualityLabel === "DEVELOPING" ? "rgba(245,158,11,0.12)"
+                                : "rgba(239,68,68,0.10)",
+                              color: (dossier as any).caseQualityLabel === "OPERATOR-READY" ? "rgb(34,197,94)"
+                                : (dossier as any).caseQualityLabel === "COMPILED" ? "rgb(6,182,212)"
+                                : (dossier as any).caseQualityLabel === "DEVELOPING" ? "rgb(245,158,11)"
+                                : "rgb(239,68,68)",
+                              border: `1px solid ${(dossier as any).caseQualityLabel === "OPERATOR-READY" ? "rgba(34,197,94,0.2)"
+                                : (dossier as any).caseQualityLabel === "COMPILED" ? "rgba(6,182,212,0.2)"
+                                : (dossier as any).caseQualityLabel === "DEVELOPING" ? "rgba(245,158,11,0.2)"
+                                : "rgba(239,68,68,0.2)"}`,
+                            }}>{(dossier as any).caseQualityLabel}</span>
+                            <span className="text-[6.5px] text-neutral-700 font-mono">{(dossier as any).caseQualityScore}/100</span>
+                          </div>
+                        )}
+
+                        {/* T006: MAIN ACCOUNTABILITY CONCERN */}
+                        {s.mainAccountabilityConcern && (
+                          <div className="space-y-0.5" style={{ borderLeft: "2px solid rgba(239,68,68,0.35)", paddingLeft: "6px" }}>
+                            <div className="text-[7px] uppercase tracking-[0.2em]" style={{ color: "rgba(220,38,38,0.85)" }}>MAIN ACCOUNTABILITY CONCERN</div>
+                            <p className="text-neutral-500 leading-relaxed text-[7.5px]">{s.mainAccountabilityConcern}</p>
+                          </div>
+                        )}
+
                         {/* POWER STRUCTURE */}
                         {s.powerStructure && (
                           <div className="space-y-0.5" style={{ borderLeft: "2px solid rgba(6,182,212,0.2)", paddingLeft: "6px" }}>
@@ -4248,15 +4284,55 @@ function DefaultInspector({
             <div className="flex-1 overflow-y-auto" style={{ padding: "28px 40px" }}>
               <div style={{ maxWidth: "900px", margin: "0 auto" }} className="space-y-8">
 
-                {/* T011: FAIL-SAFE MODE */}
+                {/* T008: CASE QUALITY SCORE BADGE (workspace header) */}
+                {(dossier as any).caseQualityLabel && (
+                  <div className="flex items-center gap-3 px-0 pb-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <span className="font-mono text-[8px] text-neutral-600 uppercase tracking-[0.25em]">INTELLIGENCE GRADE</span>
+                    <span style={{
+                      fontFamily: "monospace",
+                      fontSize: "8px",
+                      fontWeight: 800,
+                      letterSpacing: "0.2em",
+                      padding: "2px 8px",
+                      borderRadius: "2px",
+                      background: (dossier as any).caseQualityLabel === "OPERATOR-READY" ? "rgba(34,197,94,0.12)"
+                        : (dossier as any).caseQualityLabel === "COMPILED" ? "rgba(6,182,212,0.10)"
+                        : (dossier as any).caseQualityLabel === "DEVELOPING" ? "rgba(245,158,11,0.10)"
+                        : "rgba(239,68,68,0.08)",
+                      color: (dossier as any).caseQualityLabel === "OPERATOR-READY" ? "rgb(34,197,94)"
+                        : (dossier as any).caseQualityLabel === "COMPILED" ? "rgb(6,182,212)"
+                        : (dossier as any).caseQualityLabel === "DEVELOPING" ? "rgb(245,158,11)"
+                        : "rgb(239,68,68)",
+                      border: `1px solid ${(dossier as any).caseQualityLabel === "OPERATOR-READY" ? "rgba(34,197,94,0.25)"
+                        : (dossier as any).caseQualityLabel === "COMPILED" ? "rgba(6,182,212,0.25)"
+                        : (dossier as any).caseQualityLabel === "DEVELOPING" ? "rgba(245,158,11,0.25)"
+                        : "rgba(239,68,68,0.25)"}`,
+                    }}>{(dossier as any).caseQualityLabel}</span>
+                    <span className="font-mono text-[8px] text-neutral-600">{(dossier as any).caseQualityScore}/100</span>
+                    <span className="font-mono text-[7px] text-neutral-700 ml-auto">
+                      E:{(dossier as any).caseQualityBreakdown?.entityScore ?? 0} · R:{(dossier as any).caseQualityBreakdown?.relationshipScore ?? 0} · M:{(dossier as any).caseQualityBreakdown?.moneyScore ?? 0} · T:{(dossier as any).caseQualityBreakdown?.timelineScore ?? 0} · S:{(dossier as any).caseQualityBreakdown?.sourceScore ?? 0}
+                    </span>
+                  </div>
+                )}
+
+                {/* T001/T011: FAIL-SAFE MODE — show minimum structure, not just terse error */}
                 {(dossier as any)?.insufficientData && (
-                  <div className="px-5 py-4" style={{ border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.04)" }}>
-                    <div className="font-mono text-[8px] uppercase tracking-[0.3em] mb-2" style={{ color: "rgba(239,68,68,0.6)" }}>SYSTEM NOTICE</div>
-                    <div className="font-mono text-[11px]" style={{ color: "rgba(220,220,220,0.7)" }}>
-                      Insufficient confirmed intelligence for structured case output.
+                  <div className="px-5 py-4" style={{ border: "1px solid rgba(239,68,68,0.20)", background: "rgba(239,68,68,0.03)" }}>
+                    <div className="font-mono text-[8px] uppercase tracking-[0.3em] mb-3" style={{ color: "rgba(239,68,68,0.55)" }}>
+                      MINIMUM CASE STRUCTURE — ENTITY TRIAGE REQUIRED
                     </div>
-                    <div className="font-mono text-[9px] mt-2" style={{ color: "rgba(160,100,100,0.7)" }}>
-                      Complete entity triage and ingest financial documents to build the intelligence picture.
+                    <div className="space-y-2">
+                      {[
+                        { label: "KEY ENTITIES", value: "NOT YET CONFIRMED", color: "rgba(239,68,68,0.5)" },
+                        { label: "CONFIRMED RELATIONSHIPS", value: "RELATIONSHIP EVIDENCE INSUFFICIENT", color: "rgba(239,68,68,0.5)" },
+                        { label: "FINANCIAL SIGNALS", value: "NO VERIFIED FLOW IDENTIFIED", color: "rgba(239,68,68,0.5)" },
+                        { label: "INVESTIGATIVE TIMELINE", value: "NOT YET CONFIRMED", color: "rgba(239,68,68,0.5)" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="flex gap-3 items-baseline">
+                          <span className="font-mono text-[7px] uppercase tracking-[0.2em] flex-shrink-0 w-40" style={{ color: "rgba(120,120,130,0.7)" }}>{label}</span>
+                          <span className="font-mono text-[9px]" style={{ color }}>{value}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -4276,6 +4352,19 @@ function DefaultInspector({
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* T006: MAIN ACCOUNTABILITY CONCERN */}
+                {s.mainAccountabilityConcern && !dossierEditMode && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div style={{ width: "3px", height: "14px", background: "rgba(220,38,38,0.6)", borderRadius: "1px", flexShrink: 0 }} />
+                      <span className="font-mono text-[8px] uppercase tracking-[0.25em]" style={{ color: "rgba(220,38,38,0.7)" }}>MAIN ACCOUNTABILITY CONCERN</span>
+                    </div>
+                    <p className="font-mono text-[11px] leading-relaxed" style={{ color: "rgba(200,180,180,0.8)" }}>
+                      {s.mainAccountabilityConcern}
+                    </p>
                   </div>
                 )}
 

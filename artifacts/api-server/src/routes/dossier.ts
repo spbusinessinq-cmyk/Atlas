@@ -66,7 +66,17 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     });
   }
   const dec = (v?: string): string => { try { return v ? decodeURIComponent(v) : ""; } catch { return v ?? ""; } };
-  const seedIntent = kv.seed_intent || "general";
+  // Fallback: detect seed intent from case title/description if not in ATLAS-SEED
+  const rawSeedIntent = kv.seed_intent || (() => {
+    const probe = (caseData.title + " " + (caseData.description ?? "")).toLowerCase();
+    if (/homeless|shelter|lahsa|housing|unhoused|service provider.*fund/i.test(probe)) return "housing_homelessness";
+    if (/corrupt|bribe|fraud|kickback|indictment|misconduct|embezzl/i.test(probe)) return "crime_corruption";
+    if (/grant|budget|appropriat|spending|contract.*fund|allocation/i.test(probe)) return "finance_funding";
+    if (/lawsuit|litigation|court|judgment|plaintiff|defendant|settle/i.test(probe)) return "legal_lawsuit";
+    if (/policy|regulation|legislature|bill|ordinance|executive order/i.test(probe)) return "policy_government";
+    return "general";
+  })();
+  const seedIntent = rawSeedIntent;
   const nextQueriesRaw = dec(kv.next_queries);
   const nextQueriesParsed = nextQueriesRaw ? nextQueriesRaw.split("||").filter(Boolean) : [];
   const autoBuildQuality = kv.auto_build_quality || null;
@@ -218,7 +228,44 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   }
 
   // T001: Score, sort, cap at 12
+  // T002: Entity Promotion Lock — entity must meet at least 1 promotion criterion:
+  //   (a) appears in 2+ documents  (b) has direct money linkage  (c) has relationship evidence
+  //   (d) is government / agency / contractor / official / program  (e) in title + body
+  //   Reject: generic nouns, one-off weak mentions, soft/cultural references
+  const GENERIC_ENTITY_NAMES = new Set([
+    "people", "person", "community", "residents", "families", "individuals", "group", "groups",
+    "women", "men", "children", "youth", "adults", "homeless", "unhoused", "others",
+    "city", "county", "state", "nation", "government", "officials", "office", "board",
+    "public", "taxpayers", "voters", "citizens", "administration",
+  ]);
+  const GOV_CONTRACTOR_TYPES = new Set([
+    "government_agency", "government_body", "government", "agency", "organization",
+    "company", "corporation", "business", "nonprofit", "ngo", "program", "department",
+  ]);
+
+  const passesPromotionLock = (e: EntityRow): boolean => {
+    const docCount = entityDocSupport.get(e.id)?.size ?? 0;
+    const nameLower = e.name.toLowerCase().trim();
+    // Reject exact generic names
+    if (GENERIC_ENTITY_NAMES.has(nameLower)) return false;
+    // Reject very short names (1 word, 3 chars or less)
+    if (nameLower.split(/\s+/).length === 1 && nameLower.length <= 3) return false;
+    // Criterion A: 2+ documents
+    if (docCount >= 2) return true;
+    // Criterion B: money linkage
+    if (financialEntityNames.has(nameLower)) return true;
+    // Criterion C: relationship evidence
+    if ((entityRelCount.get(e.id) ?? 0) > 0) return true;
+    // Criterion D: gov / agency / contractor type
+    if (GOV_CONTRACTOR_TYPES.has(e.type.toLowerCase())) return true;
+    // Criterion E: appears in document title
+    const nameWords = nameLower.split(/\s+/).filter(w => w.length > 3);
+    if (nameWords.length > 0 && nameWords.some(w => docTitleWords.has(w))) return true;
+    return false;
+  };
+
   const scoredEntities = allEntities
+    .filter(e => passesPromotionLock(e))
     .map(e => ({ ...e, _score: scoreEntityQuality(e) }))
     .sort((a, b) => b._score - a._score)
     .slice(0, 12);
@@ -327,18 +374,20 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     return new Date(b.date as string).getTime() - new Date(a.date as string).getTime();
   });
 
-  // ── SECTION 5 — Timeline Signals (T007: max 8, accountability only) ──────────
+  // ── SECTION 5 — Timeline Signals (T005: strict accountability allowlist) ─────
+  // T005: Only hard accountability events pass — no soft "EVENT" or "PROGRAM_LAUNCH" catchalls
   const ACCOUNTABILITY_EVENT_TYPES = new Set([
     "CONTRACT_AWARDED", "CONTRACT", "AUDIT", "AUDIT_FLAG", "AUDIT_FINDING",
     "APPROPRIATION", "HEARING", "ENFORCEMENT", "ENFORCEMENT_ACTION",
-    "PROGRAM_MILESTONE", "PROGRAM_CHANGE", "VIOLATION", "INDICTMENT",
+    "PROGRAM_CHANGE", "VIOLATION", "INDICTMENT",
     "SETTLEMENT", "REGULATORY_ACTION", "BUDGET_ACTION", "GRANT_AWARD",
     "FRAUD_FLAG", "WHISTLEBLOWER", "INVESTIGATION", "CONVICTION",
     "FILING", "FRAUD_MISUSE", "INSPECTION", "SUSPENSION", "DEBARMENT",
     "REFERRAL", "COMPLAINT", "SUBPOENA", "ARREST", "CHARGE",
     "AGENCY_CHANGE", "LEADERSHIP_CHANGE", "OVERSIGHT_ACTION",
-    "GOVERNMENT_ACTION", "POLITICAL_ACTION", "BUDGET", "DISBURSEMENT",
-    "EVENT", "PROGRAM_LAUNCH",
+    "BUDGET", "DISBURSEMENT",
+    // Removed: "EVENT", "GOVERNMENT_ACTION", "POLITICAL_ACTION", "PROGRAM_MILESTONE", "PROGRAM_LAUNCH"
+    // — too permissive, admitted soft media filler
   ]);
   const ACCOUNTABILITY_KEYWORDS = /\b(contract|audit|grant|fund|appropriat|legislat|budget|hearing|enforcement|program|indict|settl|compliance|investigation|fraud|oversight|inspection|debarment|conviction|award|procurement|disburs|allocat|regulator)\b/i;
   const JUNK_KEYWORDS = /\b(episode|season|recap|trailer|premiere|documentary|film|movie|concert|game|match|tournament|playoff|bracket|watch|stream|preview|sports|celebrity|entertainment)\b/i;
@@ -372,9 +421,62 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   const insufficientData = !hasRealEntities && !hasRealFinancials;
 
   // ── T008: Executive Summary — 4-paragraph intelligence brief ─────────────────
+  // T001: Minimum Output Rule — even RAW cases get the full 7-section shell
+  const buildMinimumOutputStructure = (): string => {
+    const parts: string[] = [];
+    const frame = seedIntent === "housing_homelessness"
+      ? "public accountability investigation into homelessness spending and shelter program oversight"
+      : seedIntent === "crime_corruption"
+      ? "misconduct and corruption investigation"
+      : seedIntent === "finance_funding"
+      ? "financial oversight investigation tracking public funding flows"
+      : seedIntent === "policy_government"
+      ? "government program oversight investigation"
+      : "intelligence investigation";
+    parts.push(`CASE FRAMING: This file constitutes a ${frame} targeting ${caseData.title}. ${documents.length} source document${documents.length !== 1 ? "s" : ""} ingested. Entity analysis not yet complete.`);
+    parts.push(`KEY ENTITIES: NOT YET CONFIRMED — entity triage required. Ingest primary-source documents (government records, audits, official filings) to identify principal actors.`);
+    parts.push(`CONFIRMED RELATIONSHIPS: RELATIONSHIP EVIDENCE INSUFFICIENT — no entity network established. Build actor map to surface control chains and financial connections.`);
+    parts.push(`FINANCIAL SIGNALS: NO VERIFIED FLOW IDENTIFIED — no confirmed financial signals extracted. Ingest budget documents, contract records, or audit findings to establish the money trail.`);
+    parts.push(`INVESTIGATIVE TIMELINE: NOT YET CONFIRMED — no accountability events extracted. Ingest dated source materials with appropriation, contract, or audit context.`);
+    parts.push(`MAIN ACCOUNTABILITY CONCERN: Under assessment — entity and financial mapping required before the primary oversight gap can be characterized.`);
+    const intentActions: Record<string, string[]> = {
+      housing_homelessness: [
+        "Obtain LAHSA or county homelessness agency fiscal year budget PDF.",
+        "Identify shelter and service provider vendors receiving public contracts.",
+        "Confirm which agency holds award authority for homelessness service contracts.",
+        "Request HUD compliance documentation via state public records law.",
+        "Compare official program outcome data against reported spending levels.",
+      ],
+      finance_funding: [
+        "Obtain fiscal year budget PDF for primary funding agency.",
+        "Identify recipient vendors and confirm award authority.",
+        "Compare audit findings against public claims by agency leadership.",
+        "Cross-reference grant recipients against lobbying and campaign finance disclosures.",
+        "Verify board or legislative approval date for primary appropriation.",
+      ],
+      crime_corruption: [
+        "Identify whistleblowers or complainants in public court records.",
+        "Obtain grand jury filings or indictment documents if available.",
+        "Map timeline of decisions against known complaint reports.",
+        "Identify financial benefit flowing to implicated parties.",
+        "Check for parallel civil or administrative proceedings.",
+      ],
+    };
+    const defaultActions = [
+      "Ingest primary-source documents (government filings, audits, court records).",
+      "Identify key institutional actors and their decision-making authority.",
+      "Obtain financial records for primary entities via FOIA or public records request.",
+      "Map confirmed actors to funding flows and program decisions.",
+      "Cross-reference public disclosures against media reporting.",
+    ];
+    const actions = intentActions[seedIntent] ?? defaultActions;
+    parts.push(`RECOMMENDED NEXT ACTIONS:\n${actions.map((a, i) => `  ${i + 1}. ${a}`).join("\n")}`);
+    return parts.join("\n\n");
+  };
+
   const buildCaseSummary = (): string => {
     if (insufficientData) {
-      return "Insufficient confirmed intelligence for structured case output. Complete entity triage and ingest financial documents to build the intelligence picture.";
+      return buildMinimumOutputStructure();
     }
 
     const isSeedFormat = briefText.startsWith("WHAT:") || briefText.startsWith("ATLAS:") || briefText.startsWith("[ATLAS") || briefText.startsWith("Seed investigation") || briefText.startsWith("Controlled test");
@@ -750,31 +852,225 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
   if (entities.length > 0 && cleanRelationships.length === 0)
     riskFlags.push("Entities confirmed but no relationships mapped — link analysis gap.");
 
-  // ── Recommended Actions ──────────────────────────────────────────────────────
+  // ── T007: Recommended Actions — specific, data-driven per case state ─────────
   const buildRecommendedActions = (): string[] => {
     const actions: string[] = [];
-    if (financialSignals.length > 0)
-      actions.push(`File FOIA request for contract/grant records tied to: ${financialSignals.slice(0, 2).map(f => f.entityName).filter(Boolean).join(", ")}.`);
-    if (cleanRelationships.length === 0 && entities.length >= 2)
-      actions.push("Build entity relationship graph — identify associations, control chains, and shared affiliations.");
-    if (timelineSignals.length === 0)
-      actions.push("Ingest dated press releases, regulatory filings, or court records to reconstruct event chronology.");
-    if (documents.length < 5)
-      actions.push(`Expand source coverage — current ${documents.length} document(s) insufficient for strong evidentiary base.`);
-    const topPerson = entities.find(e => e.type.toLowerCase() === "person");
+
+    // Actions from confirmed financial signals
+    const topFinSignal = financialSignals[0];
+    const topFinEntity = topFinSignal?.controlledBy ?? topFinSignal?.receivedBy ?? topFinSignal?.entityName;
+    if (financialSignals.length > 0 && topFinEntity) {
+      actions.push(`Obtain fiscal year budget PDF for ${topFinEntity} — confirm appropriation authority and disbursement chain.`);
+      const unnamedRecipients = financialSignals.filter(f => !f.controlledBy && !f.receivedBy && !f.entityName);
+      if (unnamedRecipients.length > 0)
+        actions.push(`Identify recipient vendor for ${unnamedRecipients.length} unattributed financial signal${unnamedRecipients.length !== 1 ? "s" : ""} — file FOIA for contract award documentation.`);
+    }
+
+    // Actions from confirmed entities
+    const topContractor = keyEntities.find(e =>
+      ["CONTRACTOR", "NONPROFIT"].includes(normalizeEntityType(e.rawType))
+    );
+    const topAgency = keyEntities.find(e =>
+      ["AGENCY", "GOVERNMENT"].includes(normalizeEntityType(e.rawType))
+    );
+    const topPerson = keyEntities.find(e => normalizeEntityType(e.rawType) === "PERSON");
+
+    if (topAgency && financialSignals.length > 0)
+      actions.push(`Confirm ${topAgency.name}'s award authority for contracts in this case — verify board or legislative approval date.`);
+    if (topContractor)
+      actions.push(`Map ${topContractor.name}'s contract recurrence across cases — check SAM.gov, FPDS, and USASpending for prior awards.`);
     if (topPerson)
-      actions.push(`Run background check and public records search on ${topPerson.name} — court filings, professional licenses, corporate registrations.`);
-    const topOrg = entities.find(e => ["organization", "government_agency"].includes(e.type.toLowerCase()));
-    if (topOrg)
-      actions.push(`Review ${topOrg.name}'s audit history, inspector general reports, and any OIG referrals.`);
-    if (seedIntent === "housing_homelessness")
+      actions.push(`Trace ${topPerson.name}'s decision-making role — court filings, professional licenses, and corporate registration records.`);
+
+    // Audit comparison
+    const hasAuditSignal = financialSignals.some(f =>
+      f.signalType?.includes("AUDIT") || (f.eventSummary ?? "").toLowerCase().includes("audit")
+    );
+    if (hasAuditSignal)
+      actions.push("Compare audit findings against public claims by agency leadership — identify discrepancies in reported outcomes vs. confirmed expenditures.");
+
+    // Gap-based actions
+    if (cleanRelationships.length === 0 && entities.length >= 2)
+      actions.push(`Build entity link map — ${entities.length} confirmed actors have no established relationships. Identify control chains and shared affiliations.`);
+    if (timelineSignals.length === 0)
+      actions.push("Reconstruct accountability timeline — ingest dated appropriation records, contract awards, and audit reports to establish event chronology.");
+    if (documents.length < 4)
+      actions.push(`Expand source coverage (current: ${documents.length} document${documents.length !== 1 ? "s" : ""}) — ingest official PDFs, .gov records, board agendas, or inspector general reports.`);
+
+    // Intent-specific actions
+    if (seedIntent === "housing_homelessness") {
+      if (!topContractor) actions.push("Identify shelter and service provider vendors receiving public contracts — check county contracting portal and LAHSA disclosures.");
       actions.push("Request HUD compliance documentation and shelter provider contracts via state public records law.");
-    else if (seedIntent === "crime_corruption")
+      actions.push("Compare official program outcome data against reported spending levels — identify service delivery gaps.");
+    } else if (seedIntent === "crime_corruption") {
       actions.push("Identify whistleblowers or complainants referenced in public court records or grand jury proceedings.");
-    else if (seedIntent === "finance_funding")
+      if (!topPerson) actions.push("Identify the primary individual holding decision-making authority — trace organizational chart and appointment records.");
+    } else if (seedIntent === "finance_funding") {
       actions.push("Cross-reference grant recipients against campaign finance disclosures and lobbying registrations.");
-    return actions.slice(0, 6);
+      actions.push("Verify whether primary appropriations bypassed competitive bidding — check for sole-source or emergency contract authorizations.");
+    }
+
+    // Fallback if we have nothing
+    if (actions.length === 0) {
+      actions.push("Ingest primary-source documents: government filings, audits, court records, official PDFs.");
+      actions.push("Identify key institutional actors and map their decision-making authority.");
+      actions.push("Obtain financial records for primary entities via FOIA or public records request.");
+      actions.push("Cross-reference public disclosures against media reporting for factual conflicts.");
+      actions.push("Check for inspector general reports, GAO audits, or PACER court records.");
+    }
+
+    return actions.slice(0, 5);
   };
+
+  // ── T006: Main Accountability Concern Engine ─────────────────────────────────
+  const buildMainAccountabilityConcern = (): string => {
+    if (insufficientData) {
+      return "UNDER ASSESSMENT — entity and financial mapping required before the primary oversight gap can be characterized. Ingest primary-source documents to advance case.";
+    }
+    const parts: string[] = [];
+    const topOrg = topOrgs[0];
+    const topPerson = topPersons[0];
+    const topSig = financialSignals[0];
+
+    // What the case is really about
+    if (seedIntent === "housing_homelessness") {
+      if (topSig && topOrg) {
+        const amt = topSig.amountDisplay ?? "significant public funds";
+        const actor = topSig.controlledBy ?? topSig.receivedBy ?? topOrg.name;
+        parts.push(`This case concerns the allocation and oversight of ${amt} in public homelessness funding controlled by or flowing through ${actor}.`);
+      } else if (topOrg) {
+        parts.push(`This case concerns ${topOrg.name}'s role in the administration and oversight of public homelessness funding.`);
+      } else {
+        parts.push(`This case concerns the administration of public homelessness funding in the Los Angeles region.`);
+      }
+      // Where the possible failure is
+      const noCompetitiveBid = (approvedOnly.some(m => /competi|bid|sole.source|no.bid/i.test(m.context ?? "")) ||
+        allMentions.some(m => /competi|bid|sole.source|no.bid/i.test(m.context ?? "")));
+      if (noCompetitiveBid) {
+        parts.push(`The primary accountability gap is contract award authority — evidence suggests funds may have been allocated without competitive bidding requirements or adequate program outcome tracking.`);
+      } else if (financialSignals.length > 0 && cleanRelationships.length === 0) {
+        parts.push(`The primary accountability gap is the absence of a confirmed control chain — financial signals are present but the decision path from appropriation to recipient has not been verified.`);
+      } else {
+        parts.push(`The primary accountability gap is oversight: no confirmed audit trail or independent verification of how funds reached service providers and what outcomes were achieved.`);
+      }
+    } else if (seedIntent === "crime_corruption") {
+      if (topPerson) {
+        parts.push(`This case concerns alleged misconduct by or around ${topPerson.name} and the institutional failures that may have enabled it.`);
+      } else if (topOrg) {
+        parts.push(`This case concerns alleged institutional misconduct at ${topOrg.name} and the oversight failures that allowed it to persist.`);
+      } else {
+        parts.push(`This case concerns alleged misconduct and potential corruption in the subject institution.`);
+      }
+      parts.push(`The accountability gap is whether internal oversight mechanisms functioned as designed — or whether the conduct was suppressed, ignored, or facilitated by institutional actors.`);
+    } else if (seedIntent === "finance_funding") {
+      if (topSig && topOrg) {
+        const amt = topSig.amountDisplay ?? "public funds";
+        parts.push(`This case concerns the flow and oversight of ${amt} through ${topOrg.name}. The accountability gap is whether these funds reached intended recipients and whether procurement was competitive and transparent.`);
+      } else if (topOrg) {
+        parts.push(`This case concerns the financial oversight and accountability obligations of ${topOrg.name} in connection with public funding flows.`);
+      } else {
+        parts.push(`This case concerns public funding flows where the recipient, award authority, and program outcomes have not been independently confirmed.`);
+      }
+    } else {
+      // General
+      if (topOrg && topSig) {
+        const amt = topSig.amountDisplay ?? "public funds";
+        parts.push(`This case concerns the accountability of ${topOrg.name} in connection with ${amt} in confirmed financial signals. The oversight gap is unverified: who authorized disbursements, whether procurement was competitive, and whether outcomes match reported spending.`);
+      } else if (topOrg) {
+        parts.push(`This case concerns the oversight obligations and decision-making authority of ${topOrg.name}. The accountability question is who controls the decision chain and whether that authority was exercised properly.`);
+      } else {
+        parts.push(`Case framing is underway. Confirmed entities and financial signals are required to characterize the primary accountability concern.`);
+      }
+    }
+
+    // Why it deserves investigation
+    if (financialSignals.length > 0) {
+      const totalAmt = financialSignals.reduce((acc, f) => acc + (f.normalizedAmount ?? 0), 0);
+      if (totalAmt >= 1_000_000) {
+        const fmtTotal = totalAmt >= 1e9 ? `$${(totalAmt/1e9).toFixed(2)}B` : `$${(totalAmt/1e6).toFixed(2)}M`;
+        parts.push(`At ${fmtTotal} in confirmed financial signals, the scale of public exposure justifies independent audit and continued investigative development.`);
+      } else {
+        parts.push(`Confirmed financial signals are present. Independent verification of flows, recipients, and outcomes is required before this case can be assessed as resolved.`);
+      }
+    } else if (entities.length >= 3) {
+      parts.push(`Three or more confirmed actors are present. Establishing the control and decision chain between them is the priority investigative action.`);
+    } else {
+      parts.push(`Additional source ingestion is required to characterize the full scope of accountability exposure.`);
+    }
+
+    return parts.join(" ");
+  };
+  const mainAccountabilityConcern = buildMainAccountabilityConcern();
+
+  // ── T008: Case Quality Score ──────────────────────────────────────────────────
+  // Score 0-100 across 5 dimensions, classify RAW / DEVELOPING / COMPILED / OPERATOR-READY
+  const computeCaseQualityScore = () => {
+    // 1. Entity quality (0-20): count + cross-doc coverage
+    const qualifiedEntities = keyEntities.filter(e => e.docCount >= 1);
+    const crossDocEntities = keyEntities.filter(e => e.docCount >= 2);
+    const entityScore = Math.min(20,
+      qualifiedEntities.length * 3 +
+      crossDocEntities.length * 3 +
+      (topOrgs.length > 0 ? 2 : 0) +
+      (topPersons.length > 0 ? 2 : 0)
+    );
+
+    // 2. Relationship quality (0-20): count + type quality
+    const canonicalRelCount = cleanRelationships.filter(r => {
+      const t = (r.relationshipType ?? "").toUpperCase();
+      return CANONICAL_REL_TYPES.has(t);
+    }).length;
+    const relationshipScore = Math.min(20,
+      cleanRelationships.length * 4 +
+      canonicalRelCount * 2
+    );
+
+    // 3. Money quality (0-25): numeric signals + entity attribution + high value
+    const namedSignals = financialSignals.filter(f => f.entityName || f.controlledBy || f.receivedBy);
+    const bigSignals = financialSignals.filter(f => (f.normalizedAmount ?? 0) >= 1_000_000);
+    const moneyScore = Math.min(25,
+      financialSignals.length * 5 +
+      namedSignals.length * 3 +
+      bigSignals.length * 2
+    );
+
+    // 4. Timeline quality (0-15): accountability events only
+    const timelineScore = Math.min(15, timelineSignals.length * 5);
+
+    // 5. Source quality (0-20): document count + diversity + official sources
+    const govSources = documents.filter(d =>
+      /\.gov|inspector.general|OIG|audit|GAO|county|board.of.supervisors|official/i.test(
+        (d.source ?? "") + (d.title ?? "")
+      )
+    ).length;
+    const mediaCount = documents.length - govSources;
+    const sourceScore = Math.min(20,
+      documents.length * 2 +
+      govSources * 4 +
+      (mediaCount >= 2 ? 2 : 0)
+    );
+
+    const total = entityScore + relationshipScore + moneyScore + timelineScore + sourceScore;
+
+    let label: "RAW" | "DEVELOPING" | "COMPILED" | "OPERATOR-READY";
+    if (total < 20) label = "RAW";
+    else if (total < 45) label = "DEVELOPING";
+    else if (total < 70) label = "COMPILED";
+    else label = "OPERATOR-READY";
+
+    return {
+      total,
+      label,
+      breakdown: {
+        entityScore,
+        relationshipScore,
+        moneyScore,
+        timelineScore,
+        sourceScore,
+      },
+    };
+  };
+  const caseQuality = computeCaseQualityScore();
 
   // Pull new intelligence fields from compiled brief
   let keyFindings: string[] = [];
@@ -839,13 +1135,24 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
     autoBuildQuality,
     insufficientData,
     generatedAt: new Date().toISOString(),
+    // T008: Case quality score — RAW / DEVELOPING / COMPILED / OPERATOR-READY
+    caseQualityScore: caseQuality.total,
+    caseQualityLabel: caseQuality.label,
+    caseQualityBreakdown: caseQuality.breakdown,
     sections: {
       caseSummary,
+      // T006: Main Accountability Concern — dedicated field
+      mainAccountabilityConcern,
       keyEntities,
-      entityRelationships,
+      // T003: explicit sentinel when no relationships
+      entityRelationships: cleanRelationships.length === 0 && entities.length >= 2
+        ? [{ _sentinel: "RELATIONSHIP EVIDENCE INSUFFICIENT", entityAId: null, entityBId: null, entityAName: null, entityBName: null, relationshipType: null, confidence: null }]
+        : entityRelationships,
       entityProfiles,
       documentEvidence,
-      timelineSignals,
+      timelineSignals: timelineSignals.length === 0
+        ? []
+        : timelineSignals,
       financialSignals: outputFinancialSignals,
       moneyLedger,
       investigativeAngles,
@@ -855,7 +1162,11 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
       confidenceNote,
       powerStructure,
       riskFlags,
-      recommendedActions: briefRecommendedActions.length > 0 ? briefRecommendedActions : recommendedActions,
+      // T007: T007-specific data-driven actions take priority;
+      //       brief actions only supplement if case has real data and no T007 actions generated
+      recommendedActions: recommendedActions.length > 0 ? recommendedActions
+        : briefRecommendedActions.length > 0 ? briefRecommendedActions
+        : [],
       keyFindings,
       financialRedFlags,
       powerNodes,

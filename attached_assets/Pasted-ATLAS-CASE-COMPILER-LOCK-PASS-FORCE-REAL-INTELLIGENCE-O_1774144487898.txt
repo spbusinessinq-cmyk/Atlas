@@ -1,0 +1,225 @@
+ATLAS CASE COMPILER LOCK PASS — FORCE REAL INTELLIGENCE OUTPUT
+
+ATLAS is stable again, but intelligence quality is still too weak.
+
+Current problem:
+The system ingests documents but does not reliably turn them into a real case.
+
+Symptoms:
+- docs load
+- pending queue grows
+- entities often stay at 0 or weak
+- links stay at 0
+- output feels like raw collection, not intelligence
+- case does not develop a usable theory of the file
+
+This pass is NOT about UI polish.
+This pass is about forcing ATLAS to compile every case into a minimum real intelligence product.
+
+Implement, validate, return confirmed results only.
+
+━━━━━━━━━━━━━━━━━━
+T001 — CASE COMPILER MINIMUM OUTPUT RULE
+━━━━━━━━━━━━━━━━━━
+
+Every compiled case must attempt to produce this minimum structure:
+
+1. Case framing
+2. Key entities
+3. Confirmed relationships
+4. Financial signals
+5. Investigative timeline
+6. Main accountability concern
+7. Recommended next actions
+
+If data is missing, show:
+- NOT YET CONFIRMED
+- NO VERIFIED FLOW IDENTIFIED
+- RELATIONSHIP EVIDENCE INSUFFICIENT
+
+Do NOT leave the case feeling blank or raw.
+
+━━━━━━━━━━━━━━━━━━
+T002 — ENTITY PROMOTION LOCK
+━━━━━━━━━━━━━━━━━━
+
+Promote only entities that satisfy at least one:
+
+- appears in 2+ documents
+- appears in title + body
+- has direct money linkage
+- has relationship evidence
+- is government / agency / contractor / official / program / authority
+
+Down-rank or reject:
+- generic nouns
+- one-off weak mentions
+- vague communities
+- cultural / soft references
+- weak media phrasing
+
+Hard target per case:
+surface the top 3–8 real entities only
+
+━━━━━━━━━━━━━━━━━━
+T003 — RELATIONSHIP GENERATION LOCK
+━━━━━━━━━━━━━━━━━━
+
+Only generate a confirmed relationship if one of these is true:
+
+- source overlap across 2+ docs
+- money flow connects them
+- title + body co-occurrence with clear investigative context
+- contract / oversight / audit language explicitly links them
+
+No junk relationship types.
+No filler co-mention spam.
+
+If insufficient:
+show “RELATIONSHIP EVIDENCE INSUFFICIENT”
+instead of clutter.
+
+Target:
+2–10 useful confirmed relationships max.
+
+━━━━━━━━━━━━━━━━━━
+T004 — MONEY-FIRST CASE LOGIC
+━━━━━━━━━━━━━━━━━━
+
+When case topic includes:
+- funding
+- budget
+- spending
+- contracts
+- grants
+- audit
+- homelessness
+- allocation
+- procurement
+
+Then ATLAS must prioritize:
+1. budgets
+2. audits
+3. official records
+4. contracts
+5. agency docs
+6. then high-quality reporting
+
+Not the reverse.
+
+Also add a source weighting boost for:
+- .gov
+- official PDFs
+- audits
+- board agendas
+- inspector general docs
+- county/city budget docs
+
+━━━━━━━━━━━━━━━━━━
+T005 — TIMELINE ACCOUNTABILITY FILTER
+━━━━━━━━━━━━━━━━━━
+
+Timeline must only admit:
+- appropriations
+- contracts awarded
+- audits issued
+- hearings
+- enforcement actions
+- settlements
+- major program changes
+- official budget decisions
+- inspector general findings
+
+Reject:
+- soft media recaps
+- lifestyle/news filler
+- generic local incidents
+- entertainment contamination
+- weak keyword date matches
+
+Target:
+3–8 accountability events max
+
+━━━━━━━━━━━━━━━━━━
+T006 — MAIN ACCOUNTABILITY CONCERN ENGINE
+━━━━━━━━━━━━━━━━━━
+
+Add a dedicated case field:
+
+MAIN ACCOUNTABILITY CONCERN
+
+This should be 1 tight paragraph that answers:
+- what the case is really about
+- where the possible failure / misuse / oversight gap is
+- why the case deserves more investigation
+
+No fluff.
+No “this may suggest” spam.
+Direct internal intelligence tone.
+
+━━━━━━━━━━━━━━━━━━
+T007 — RECOMMENDED ACTIONS ENGINE
+━━━━━━━━━━━━━━━━━━
+
+Every case must output 3–5 next actions, chosen from real case gaps:
+
+Examples:
+- obtain fiscal year budget PDF
+- identify recipient vendor
+- confirm award authority
+- compare audit findings against public claims
+- trace program administrator
+- verify board approval date
+- map contractor recurrence across cases
+
+Actions must be specific, not generic.
+
+━━━━━━━━━━━━━━━━━━
+T008 — CASE QUALITY SCORE
+━━━━━━━━━━━━━━━━━━
+
+Create a visible internal score based on:
+
+- entity quality
+- relationship quality
+- money quality
+- timeline quality
+- source quality
+
+Then classify case:
+- RAW
+- DEVELOPING
+- COMPILED
+- OPERATOR-READY
+
+Do not label weak cases as strong.
+
+━━━━━━━━━━━━━━━━━━
+T009 — VALIDATION AGAINST CURRENT HOMELESSNESS CASE
+━━━━━━━━━━━━━━━━━━
+
+Run against current Los Angeles Homeless Funding 2024 case.
+
+Must confirm:
+- at least 3 real entities OR clearly state why not
+- at least 1 accountability concern paragraph
+- at least 3 recommended actions
+- no junk links
+- no junk events
+- source weighting favors official/public accountability material
+
+Return exact before/after case status.
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return only:
+1. what was added to the compiler
+2. exact case minimum structure now enforced
+3. current case quality rating after validation
+4. whether this case is RAW / DEVELOPING / COMPILED / OPERATOR-READY
+
+No vague language.
+No fake victory language.
+Only confirmed results.
