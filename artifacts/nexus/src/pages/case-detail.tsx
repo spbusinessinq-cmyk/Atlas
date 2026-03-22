@@ -1792,6 +1792,33 @@ const QUALITY_CONFIG: Record<BriefQuality, { color: string; dot: string; label: 
   EMPTY:    { color: "text-neutral-600",dot: "bg-neutral-700",label: "EMPTY" },
 };
 
+const _asArr = <T,>(v: unknown): T[] => Array.isArray(v) ? v as T[] : [];
+
+function normalizeBrief(raw: unknown): CaseBriefData {
+  const d = (raw ?? {}) as Record<string, unknown>;
+  return {
+    ...(d as unknown as CaseBriefData),
+    primaryActors: _asArr(d.primaryActors),
+    primaryOrganizations: _asArr(d.primaryOrganizations),
+    primaryEntities: _asArr(d.primaryEntities),
+    secondaryEntities: _asArr(d.secondaryEntities),
+    keyEvidence: _asArr(d.keyEvidence),
+    topTimeline: _asArr(d.topTimeline),
+    topFinancial: _asArr(d.topFinancial),
+    keyRelationships: _asArr(d.keyRelationships),
+    likelyAngles: _asArr(d.likelyAngles),
+    knownGaps: _asArr(d.knownGaps),
+    suggestedNextQueries: _asArr(d.suggestedNextQueries),
+    earlySignals: d.earlySignals !== undefined ? _asArr(d.earlySignals) : undefined,
+    keyFindings: d.keyFindings !== undefined ? _asArr(d.keyFindings) : undefined,
+    financialRedFlags: d.financialRedFlags !== undefined ? _asArr(d.financialRedFlags) : undefined,
+    powerNodes: d.powerNodes !== undefined ? _asArr(d.powerNodes) : undefined,
+    oversightFailures: d.oversightFailures !== undefined ? _asArr(d.oversightFailures) : undefined,
+    recommendedActions: d.recommendedActions !== undefined ? _asArr(d.recommendedActions) : undefined,
+    stats: (d.stats as CaseBriefData["stats"]) ?? { totalDocs: 0, usableDocs: 0, totalEntities: 0, totalTimeline: 0, totalFinancial: 0 },
+  };
+}
+
 function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocument?: (id: number) => void }) {
   const [brief, setBrief] = React.useState<CaseBriefData | null>(null);
   const [loadState, setLoadState] = React.useState<"loading" | "idle" | "compiling" | "error">("loading");
@@ -1811,7 +1838,7 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
       .then(r => r.json())
       .then(d => {
         if (cancelled) return;
-        if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+        if (d.ok) { setBrief(normalizeBrief(d.brief)); setLoadState("idle"); }
         else { setBrief(null); setLoadState("idle"); }
       })
       .catch(() => { if (!cancelled) setLoadState("idle"); });
@@ -1824,7 +1851,7 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
     try {
       const r = await fetch(`/api/cases/${caseId}/compile`, { method: "POST" });
       const d = await r.json();
-      if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+      if (d.ok) { setBrief(normalizeBrief(d.brief)); setLoadState("idle"); }
       else { setErrorMsg(d.error ?? "Compilation failed"); setLoadState("error"); }
     } catch (e) {
       setErrorMsg(String(e)); setLoadState("error");
@@ -2405,7 +2432,7 @@ function DossierCenterTab({ caseId, caseTitle }: { caseId: number; caseTitle: st
       .then(r => r.json())
       .then(d => {
         if (cancelled) return;
-        if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+        if (d.ok) { setBrief(normalizeBrief(d.brief)); setLoadState("idle"); }
         else { setBrief(null); setLoadState("idle"); }
       })
       .catch(() => { if (!cancelled) setLoadState("idle"); });
@@ -2418,7 +2445,7 @@ function DossierCenterTab({ caseId, caseTitle }: { caseId: number; caseTitle: st
     try {
       const r = await fetch(`/api/cases/${caseId}/compile`, { method: "POST" });
       const d = await r.json();
-      if (d.ok) { setBrief(d.brief); setLoadState("idle"); }
+      if (d.ok) { setBrief(normalizeBrief(d.brief)); setLoadState("idle"); }
       else { setErrorMsg(d.error ?? "Compilation failed"); setLoadState("error"); }
     } catch (e) { setErrorMsg(String(e)); setLoadState("error"); }
   };
@@ -3200,7 +3227,7 @@ function DefaultInspector({
   // T001: Editable connection items — typed with status, persisted per case
   type ConnItem = { id: number; text: string; status: "SYSTEM" | "EDITED" | "NEW" };
   const [connectionItems, setConnectionItems] = React.useState<ConnItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem(`atlas_connection_items_${caseId}`) ?? "[]"); } catch { return []; }
+    try { const p = JSON.parse(localStorage.getItem(`atlas_connection_items_${caseId}`) ?? "[]"); return Array.isArray(p) ? p : []; } catch { return []; }
   });
   const saveConnectionItems = (items: ConnItem[]) => {
     setConnectionItems(items);
@@ -4511,7 +4538,7 @@ function DefaultInspector({
                         </div>
                         {ledger.isBudgetCase && (
                           <div className="mb-2 px-2 py-1 font-mono text-[8px] uppercase tracking-widest" style={{ background: "rgba(16,185,129,0.06)", color: "rgba(16,185,129,0.6)", border: "1px solid rgba(16,185,129,0.12)" }}>
-                            BUDGET MODE — {ledger.rows.filter((r: any) => r.signalType === "ALLOCATION").length} ALLOCATION ROWS EXTRACTED
+                            BUDGET MODE — {(Array.isArray(ledger.rows) ? ledger.rows.filter((r: any) => r.signalType === "ALLOCATION") : []).length} ALLOCATION ROWS EXTRACTED
                           </div>
                         )}
                         {/* Ledger table */}
@@ -4521,7 +4548,7 @@ function DefaultInspector({
                             <span className="flex-1">ENTITY / PROGRAM</span>
                             <span className="flex-shrink-0 w-20 text-right">AMOUNT</span>
                           </div>
-                          {ledger.rows.map((row: any, i: number) => (
+                          {(Array.isArray(ledger.rows) ? ledger.rows : []).map((row: any, i: number) => (
                             <div key={i} className="flex items-start gap-2 px-2 py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.025)", background: i % 2 === 0 ? "rgba(0,0,0,0.15)" : "transparent" }}>
                               <div className="flex-1 min-w-0">
                                 <div className="font-mono text-[9px] font-semibold truncate" style={{ color: "rgba(210,210,210,0.9)" }}>{row.entityName ?? row.programName ?? "—"}</div>
