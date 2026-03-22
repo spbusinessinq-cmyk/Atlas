@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { asArray } from "@/lib/as-array";
 import { useQueryClient } from "@tanstack/react-query";
 import { useListEntityMentions, useListCases, useListDocuments } from "@workspace/api-client-react";
 import { AlertTriangle, CheckCircle, XCircle, Clock, ChevronRight, Cpu, Filter, RefreshCw, X, ExternalLink, FileText, Globe, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
@@ -332,15 +333,15 @@ export default function TriagePage() {
 
   const caseMap = React.useMemo(() => {
     const m: Record<number, string> = {};
-    cases?.forEach(c => { m[c.id] = c.title; });
+    asArray(cases).forEach(c => { m[c.id] = c.title; });
     return m;
   }, [cases]);
 
-  const caseIds = React.useMemo(() => new Set((cases ?? []).map(c => c.id)), [cases]);
+  const caseIds = React.useMemo(() => new Set(asArray(cases).map(c => c.id)), [cases]);
 
   const docMap = React.useMemo(() => {
     const m: Record<number, { title?: string; sourceDomain?: string | null; sourceUrl?: string | null }> = {};
-    (documents ?? []).forEach(d => {
+    asArray(documents).forEach(d => {
       const ext = d as any;
       m[d.id] = { title: d.title, sourceDomain: ext.sourceDomain, sourceUrl: ext.sourceUrl };
     });
@@ -376,9 +377,10 @@ export default function TriagePage() {
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  const pending = mentions?.filter(m => m.status === "pending") ?? [];
-  const total = mentions?.length ?? 0;
-  const selectedMention = mentions?.find(m => m.id === selectedMentionId) ?? null;
+  const mentionsArr = asArray(mentions);
+  const pending = mentionsArr.filter(m => m.status === "pending");
+  const total = mentionsArr.length;
+  const selectedMention = mentionsArr.find(m => m.id === selectedMentionId) ?? null;
 
   return (
     <div className="space-y-0 max-w-7xl mx-auto">
@@ -435,7 +437,7 @@ export default function TriagePage() {
               <div key={i} className="h-8 bg-[#ffffff02] animate-pulse border border-[#ffffff04]" />
             ))}
           </div>
-        ) : !mentions || mentions.length === 0 ? (
+        ) : mentionsArr.length === 0 ? (
           <div className="py-16 flex flex-col items-center gap-3">
             <CheckCircle className="w-8 h-8 text-green-900" />
             <div className="font-mono text-[10px] text-neutral-600 uppercase tracking-widest">
@@ -451,7 +453,7 @@ export default function TriagePage() {
               ))}
             </div>
 
-            {mentions.map(mention => {
+            {mentionsArr.map(mention => {
               const isSelected = selectedMentionId === mention.id;
               return (
                 <div
@@ -578,11 +580,11 @@ export default function TriagePage() {
         )}
 
         {/* Footer summary */}
-        {mentions && mentions.length > 0 && (
+        {mentionsArr.length > 0 && (
           <div className="border-t border-[#ffffff06] px-4 py-2 flex items-center gap-4">
             <span className="font-mono text-[7px] text-neutral-700 uppercase tracking-widest">SUMMARY:</span>
             {(["pending", "approved", "rejected", "held"] as const).map(s => {
-              const count = mentions.filter(m => m.status === s).length;
+              const count = mentionsArr.filter(m => m.status === s).length;
               const colors: Record<string, string> = {
                 pending: "text-amber-600", approved: "text-green-600",
                 rejected: "text-red-700", held: "text-violet-500"

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { asArray } from "@/lib/as-array";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity, FileText, Globe, ScanLine, UserCheck, UserX, Link2, RefreshCw,
@@ -110,7 +111,9 @@ export default function SystemLog() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filtered = logs.filter(entry => {
+  const logsArr = asArray<SystemLogEntry>(logs);
+
+  const filtered = logsArr.filter(entry => {
     const cfg = getEventConfig(entry.eventType);
     const severityOk = severityFilter === "all" || cfg.severity === severityFilter;
     const searchOk = !searchTerm ||
@@ -119,9 +122,9 @@ export default function SystemLog() {
     return severityOk && searchOk;
   });
 
-  const errorCount   = logs.filter(e => getEventConfig(e.eventType).severity === "error").length;
-  const warnCount    = logs.filter(e => getEventConfig(e.eventType).severity === "warn").length;
-  const successCount = logs.filter(e => getEventConfig(e.eventType).severity === "success").length;
+  const errorCount   = logsArr.filter(e => getEventConfig(e.eventType).severity === "error").length;
+  const warnCount    = logsArr.filter(e => getEventConfig(e.eventType).severity === "warn").length;
+  const successCount = logsArr.filter(e => getEventConfig(e.eventType).severity === "success").length;
 
   return (
     <div className="max-w-5xl mx-auto space-y-3">
@@ -200,8 +203,8 @@ export default function SystemLog() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Activity}
-          message={logs.length === 0 ? "NO ACTIVITY RECORDED" : "NO EVENTS MATCH FILTER"}
-          sub={logs.length === 0 ? "System events will appear here as operations are performed" : undefined}
+          message={logsArr.length === 0 ? "NO ACTIVITY RECORDED" : "NO EVENTS MATCH FILTER"}
+          sub={logsArr.length === 0 ? "System events will appear here as operations are performed" : undefined}
         />
       ) : (
         <div className="border border-[#ffffff0a] atlas-panel divide-y divide-[#ffffff06]">
@@ -276,7 +279,7 @@ export default function SystemLog() {
 
       {filtered.length > 0 && (
         <div className="font-mono text-[8px] text-neutral-800 uppercase tracking-widest text-right">
-          {filtered.length} / {logs.length} EVENT{logs.length !== 1 ? "S" : ""} SHOWN
+          {filtered.length} / {logsArr.length} EVENT{logsArr.length !== 1 ? "S" : ""} SHOWN
         </div>
       )}
     </div>

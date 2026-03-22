@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { asArray } from "@/lib/as-array";
 import { Link, useLocation } from "wouter";
 import {
   useListCases,
@@ -480,11 +481,11 @@ export default function Dashboard() {
   const { data: pending } = useListEntityMentions({ status: "pending" });
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
-  const totalCases = cases?.length ?? 0;
-  const activeCases = cases?.filter((c) => c.status === "active").length ?? 0;
-  const totalEntities = entities?.length ?? 0;
-  const totalDocs = documents?.length ?? 0;
-  const pendingCount = pending?.length ?? 0;
+  const totalCases = asArray(cases).length;
+  const activeCases = asArray(cases).filter((c) => c.status === "active").length;
+  const totalEntities = asArray(entities).length;
+  const totalDocs = asArray(documents).length;
+  const pendingCount = asArray(pending).length;
 
   return (
     <div className="space-y-0 max-w-7xl mx-auto">
@@ -557,7 +558,7 @@ export default function Dashboard() {
       <div className="border-x border-b border-[#ffffff0a] bg-[#ffffff02] px-3 py-1.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="font-mono text-[9px] text-neutral-700 uppercase tracking-widest">DOSSIER REGISTRY</span>
-          <span className="font-mono text-[8px] text-neutral-800 uppercase">{cases?.length ?? 0} CASES</span>
+          <span className="font-mono text-[8px] text-neutral-800 uppercase">{totalCases} CASES</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-[#000] p-0.5 border border-[#ffffff0d] gap-0.5">
@@ -592,7 +593,7 @@ export default function Dashboard() {
             <div key={i} className="h-8 animate-pulse bg-[#ffffff02]" />
           ))}
         </div>
-      ) : !cases || cases.length === 0 ? (
+      ) : asArray(cases).length === 0 ? (
         <EmptyDossiers />
       ) : (
         <div
@@ -602,7 +603,7 @@ export default function Dashboard() {
               : "border-x border-b border-[#ffffff0a]"
           }
         >
-          {cases.map((c) => (
+          {asArray(cases).map((c) => (
             <DossierCard key={c.id} c={c} viewMode={viewMode} />
           ))}
         </div>
@@ -661,9 +662,9 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
             <span className="font-mono text-xs text-white font-semibold uppercase truncate flex-1 group-hover:text-red-300 transition-colors tracking-tight">
               {c.title}
             </span>
-            {c.tags && c.tags.length > 0 && (
+            {asArray(c.tags).length > 0 && (
               <div className="hidden md:flex items-center gap-1 flex-shrink-0">
-                {c.tags.filter((t) => t !== "auto-seeded").slice(0, 2).map((tag) => (
+                {asArray(c.tags).filter((t) => t !== "auto-seeded").slice(0, 2).map((tag) => (
                   <span key={tag} className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase">
                     {tag}
                   </span>
@@ -729,9 +730,9 @@ function DossierCard({ c, viewMode }: { c: Case; viewMode: "grid" | "list" }) {
                 {cleanDescriptionPreview(c.description)}
               </p>
             )}
-            {c.tags && c.tags.filter((t) => t !== "auto-seeded").length > 0 && (
+            {asArray(c.tags).filter((t) => t !== "auto-seeded").length > 0 && (
               <div className="flex flex-wrap gap-1 mt-0.5">
-                {c.tags.filter((t) => t !== "auto-seeded").slice(0, 3).map((tag) => (
+                {asArray(c.tags).filter((t) => t !== "auto-seeded").slice(0, 3).map((tag) => (
                   <span key={tag} className="px-1.5 py-0.5 border border-[#ffffff08] text-[8px] font-mono text-neutral-700 uppercase">
                     {tag}
                   </span>

@@ -1,4 +1,5 @@
 import React from "react";
+import { asArray } from "@/lib/as-array";
 import { useListDocuments } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Search, FileText, Globe, ArrowRight, Trash2 } from "lucide-react";
@@ -21,10 +22,9 @@ export default function DocumentLibrary() {
   const [confirmId, setConfirmId] = React.useState<number | null>(null);
   const [deleting, setDeleting] = React.useState<number | null>(null);
 
-  const filtered =
-    (documents as ExtendedDoc[] | undefined)?.filter((d) =>
-      d.title.toLowerCase().includes(search.toLowerCase())
-    ) || [];
+  const filtered = asArray<ExtendedDoc>(documents).filter((d) =>
+    d.title.toLowerCase().includes(search.toLowerCase())
+  );
 
   function handleDocClick(doc: ExtendedDoc) {
     if (doc.caseId) {

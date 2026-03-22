@@ -1,4 +1,5 @@
 import React from "react";
+import { asArray } from "@/lib/as-array";
 import { useListEntities } from "@workspace/api-client-react";
 import { Search, Trash2 } from "lucide-react";
 import { Link } from "wouter";
@@ -20,10 +21,9 @@ export default function EntityList() {
   const [confirmId, setConfirmId] = React.useState<number | null>(null);
   const [deleting, setDeleting] = React.useState<number | null>(null);
 
-  const filtered =
-    entities?.filter((e) =>
-      e.name.toLowerCase().includes(search.toLowerCase())
-    ) || [];
+  const filtered = asArray(entities).filter((e) =>
+    e.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   async function handleDelete(id: number) {
     setDeleting(id);

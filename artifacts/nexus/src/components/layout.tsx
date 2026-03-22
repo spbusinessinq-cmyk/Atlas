@@ -13,6 +13,7 @@ import {
   Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { asArray } from "@/lib/as-array";
 import { useListCases, useListDocuments, useListEntities, useListEntityMentions } from "@workspace/api-client-react";
 import { useAuth } from "@/context/auth-context";
 import { BlackdogHeaderChip } from "@/components/BlackdogStatus";
@@ -75,7 +76,7 @@ export function Layout({ children }: LayoutProps) {
   const { data: entities } = useListEntities();
   const { data: pendingMentions } = useListEntityMentions({ status: "pending" });
 
-  const activeCaseCount = cases?.filter(c => c.status === "active" || c.status === "open").length ?? 0;
+  const activeCaseCount = asArray(cases).filter(c => c.status === "active" || c.status === "open").length;
   const docCount = documents?.length ?? 0;
   const entityCount = entities?.length ?? 0;
   const flagCount = pendingMentions?.length ?? 0;
