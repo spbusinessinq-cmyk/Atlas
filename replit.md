@@ -74,6 +74,18 @@ The project is structured as a pnpm monorepo using Node.js and TypeScript, empha
 
 15. **Entity Name Normalization (Graph Source Accuracy):** `validateEntityShape()` now blocks: numeric/dollar amounts, pure numeric strings, truncated names ending in `…`, URL fragments, junk-verb-phrase starters, bare years (4-digit), and names over 60 characters. Six new constants (`DOLLAR_ENTITY_PATTERN`, `PURE_NUMERIC`, `TRUNCATED_NAME`, `URL_FRAGMENT`, `JUNK_PHRASE_STARTERS`) guard the admission pipeline.
 
+16. **ATLAS Entity/Money/Timeline Improvement Pass (T001–T013):**
+    *   **Entity Normalization (T001):** `addMention()` strips leading prepositions/articles (`of`, `the`, `a`, `from`, `in`, `by`, etc.) from entity names. Hard-rejects any mention with confidence < 0.5.
+    *   **Entity Deduplication (T003):** Before DB insert loop in entity_mentions.ts, extracted entities are deduped by lowercase name using a Map.
+    *   **Financial → Entity Linking (T005):** Financial signals with null `entityName` are retroactively linked to extracted entities via text-overlap matching against document content.
+    *   **Timeline Date Extraction Fix:** `DATE_PATTERNS` array now places "Month + 4-digit Year" patterns (e.g., "January 2024") BEFORE "Month + 1-2 digit Day" patterns to prevent "January 2024" being mis-parsed as "January 20" (yielding incorrect year 2001).
+    *   **Timeline Year Filter (T006):** Timeline events are filtered at insertion time using a ±2 year window from the document's publish date. Junk events filtered by `JUNK_TIMELINE_TYPES` set and `JUNK_TIMELINE_RE` regex (media/sports/entertainment noise). Uses JUNK blocklist (not allowlist) so "EVENT" fallback type passes through.
+    *   **rawText Extraction Fix:** `/documents/:id/analyze` endpoint now uses rawText for ALL ingest methods (not just "web"), enabling full-text extraction from manually-ingested and uploaded documents.
+    *   **"INVESTIGATIVE TIMELINE" Rename (T007):** Tab label changed from "TEMPORAL TRACE" to "INVESTIGATIVE TIMELINE" at both occurrences in case-detail.tsx.
+    *   **Connections CRUD (T008):** Dossier Connections section replaced static list with typed `ConnItem` objects (`status: SYSTEM | EDITED | NEW`), auto-seeded from `entityRelationships` on first edit-mode entry, persisted to `localStorage atlas_connection_items_{caseId}`. Full add/edit/delete operations.
+    *   **Dossier Edit Verification (T009):** All 8 dossier workspace textarea sections (caseSummary, powerStructureOverride, whyItMattersOverride, financialNote, anglesOverride, gapsOverride, actionsOverride, riskOverride) verified to correctly call `saveDossierOverride()` and persist to localStorage.
+    *   **Test Validation Doc:** Case 38, Doc 259 — synthetic MTA FY2024 Budget Audit Report with 4 named orgs, 4 dated events, 3 financial signals. Produces 5 correct timeline entries (2024-01-01, 2024-03-01 dates) after all pipeline fixes.
+
 **API Routes:**
 *   Comprehensive RESTful API routes under `/api` for CRUD operations across all core data models, including specific endpoints for document upload, analysis, web search/ingestion, and entity mention management.
 

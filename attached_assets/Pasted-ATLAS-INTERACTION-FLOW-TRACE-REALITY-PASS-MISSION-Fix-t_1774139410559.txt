@@ -1,0 +1,202 @@
+ATLAS INTERACTION + FLOW TRACE REALITY PASS
+
+MISSION
+Fix the parts that still are not actually usable:
+- connection rows still not truly editable/deletable
+- analyst note boxes not saving
+- flow trace still not producing usable real results
+- interaction claims must be proven by actual working UI behavior
+
+Do not summarize first.
+Implement -> test with a real seeded test document -> verify in UI -> return ship report.
+
+━━━━━━━━━━━━━━━━━━
+T001 — CONNECTIONS CRUD MUST ACTUALLY WORK
+━━━━━━━━━━━━━━━━━━
+
+The CONNECTIONS section is still functionally broken.
+
+Fix it so the operator can:
+- delete any existing connection row
+- add a new connection row
+- edit existing connection text
+- save changes immediately
+- see saved changes persist on refresh
+- see saved changes appear in exported PDF
+
+Requirements:
+- every visible connection row gets its own working delete control
+- add connection inserts a real editable row immediately
+- all inputs must be interactive, not just visually rendered
+- save must happen automatically on blur and also on explicit save action if present
+- if system-seeded rows are read-only until edited, convert them into editable rows when touched
+- no dead controls, no fake buttons
+
+Add visual states:
+- SYSTEM
+- EDITED
+- NEW
+- DELETED pending save, if applicable
+
+Prove it by testing:
+1. delete one existing connection
+2. add one new connection
+3. edit one existing connection
+4. refresh page
+5. export PDF
+6. confirm all 3 changes persisted into export
+
+━━━━━━━━━━━━━━━━━━
+T002 — ANALYST NOTE BOXES MUST SAVE FOR REAL
+━━━━━━━━━━━━━━━━━━
+
+The note fields like “Add analyst notes on financial flows...” must not be fake textareas.
+
+Fix all dossier note/edit fields so they:
+- accept typing
+- persist on blur
+- persist on refresh
+- appear in expanded dossier workspace
+- merge into PDF export
+
+Targets include:
+- financial notes
+- connection notes
+- angle overrides
+- risk/exposure overrides
+- why this matters
+- actions override
+- gaps override
+- executive summary override if enabled
+
+Add a visible saved state:
+- SAVED
+- SAVING...
+- UNSAVED CHANGES
+
+Prove with test:
+- type custom note into financial flows
+- refresh
+- confirm still there
+- export PDF
+- confirm note appears in PDF
+
+━━━━━━━━━━━━━━━━━━
+T003 — FLOW TRACE MUST BE REBUILT AROUND REAL MONEY
+━━━━━━━━━━━━━━━━━━
+
+Right now flow trace is not trustworthy.
+
+Rebuild/verify the pipeline so flow trace is driven by real extracted numeric financial signals only.
+
+Requirements:
+- only numeric financial signals appear in Flow Trace default view
+- every row must include:
+  - entity
+  - amount
+  - signal type
+  - source document
+  - short evidence/context snippet
+  - confidence
+- deduplicate identical entity+amount+signal pairs
+- no empty fake rows
+- no vague narrative-only rows
+- if there are zero real numeric flows, say exactly that and explain why
+
+Add two modes:
+1. NUMERIC FLOWS
+2. EARLY SIGNALS
+
+Default to NUMERIC FLOWS.
+EARLY SIGNALS can show weaker contextual finance mentions, but must be clearly separated and labeled lower confidence.
+
+Add filters:
+- by entity
+- by amount descending
+- by confidence
+- by source document
+
+━━━━━━━━━━━━━━━━━━
+T004 — TEST WITH A REAL SEEDED DOCUMENT
+━━━━━━━━━━━━━━━━━━
+
+Stop relying only on code inspection.
+
+Create or ingest one controlled test document specifically for validation.
+Use a short but realistic budget/audit style sample containing:
+- 3 to 6 named entities
+- 4 to 8 dollar amounts
+- at least 2 clear funding relationships
+- at least 2 timeline events
+- at least 2 valid connections
+- no sports/entertainment junk
+
+Then run the full pipeline on that test case:
+- ingest
+- analyze
+- entity extraction
+- financial extraction
+- timeline
+- dossier compile
+- note editing
+- connection edit/delete/add
+- export PDF
+
+This test doc should be stored as a repeatable validation asset for future regression checks.
+
+━━━━━━━━━━━━━━━━━━
+T005 — INTERACTION E2E VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Run real end-to-end validation, not just compile checks.
+
+Explicitly validate:
+- Add connection works
+- Delete connection works
+- Edit connection works
+- Financial note save works
+- Refresh persistence works
+- Flow trace shows real seeded dollar values
+- PDF export includes edited content
+- Dossier compile still works after edits
+
+If any control is non-functional in the UI, fix it before returning.
+
+━━━━━━━━━━━━━━━━━━
+T006 — FALLBACKS AND EMPTY STATES
+━━━━━━━━━━━━━━━━━━
+
+If no real flow trace exists:
+show a clean operator message:
+- “No confirmed numeric financial flows identified.”
+- “Open EARLY SIGNALS to review weaker funding references.”
+- “Ingest budget tables, contracts, or audits to populate numeric flow trace.”
+
+If no connections exist:
+- show “No confirmed relationships yet.”
+- allow immediate add without weird seed state
+
+If notes are empty:
+- show placeholder, but save as soon as operator types
+
+━━━━━━━━━━━━━━━━━━
+T007 — SHIP REPORT
+━━━━━━━━━━━━━━━━━━
+
+Return only confirmed working behavior.
+
+Include:
+- what was fixed
+- exact interaction bugs resolved
+- exact seeded test document contents used
+- extracted entities from test
+- extracted money from test
+- timeline events from test
+- final connection edit proof
+- final note save proof
+- PDF export proof
+- any remaining issue if one still exists
+
+No vague language.
+No “should.”
+Only confirmed working results.

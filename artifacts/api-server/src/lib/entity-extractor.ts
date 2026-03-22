@@ -1551,6 +1551,8 @@ const EVENT_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
 ];
 
 const DATE_PATTERNS = [
+  /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+(?:20|19)\d{2}\b/gi,
+  /\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(?:20|19)\d{2}\b/gi,
   /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?/gi,
   /\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,?\s+\d{4})?/gi,
   /\b(?:in|by|since|after|before|during|throughout|from|as\s+of)\s+(?:20|19)\d{2}\b/gi,

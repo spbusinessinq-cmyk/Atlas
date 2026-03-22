@@ -2763,6 +2763,7 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
   const [numericOnly, setNumericOnly] = React.useState(true);
   const [sortBy, setSortBy] = React.useState<"amount" | "confidence">("amount");
   const [entityFilter, setEntityFilter] = React.useState("");
+  const [sourceFilter, setSourceFilter] = React.useState("");
 
   const SIGNAL_COLOR: Record<string, string> = {
     fraud_misuse: "text-red-400",
@@ -2808,6 +2809,14 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
 
   const displaySignals = React.useMemo(() => {
     let sigs = numericOnly ? numericSignals : financialSignals;
+    // T003: dedup by entity+amount+signalType
+    const seen = new Set<string>();
+    sigs = sigs.filter((s: any) => {
+      const key = `${(s.entityName ?? "").toLowerCase()}|${s.normalizedAmount ?? s.amountRaw}|${s.signalType}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     if (entityFilter.trim()) {
       const q = entityFilter.toLowerCase();
       sigs = sigs.filter((s: any) =>
@@ -2817,13 +2826,17 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
         (s.programName ?? "").toLowerCase().includes(q)
       );
     }
+    if (sourceFilter.trim()) {
+      const q = sourceFilter.toLowerCase();
+      sigs = sigs.filter((s: any) => (s.documentTitle ?? "").toLowerCase().includes(q));
+    }
     if (sortBy === "amount") {
       sigs = [...sigs].sort((a: any, b: any) => (b.normalizedAmount ?? 0) - (a.normalizedAmount ?? 0));
     } else {
       sigs = [...sigs].sort((a: any, b: any) => (b.financialConfidence ?? 0) - (a.financialConfidence ?? 0));
     }
     return sigs;
-  }, [numericOnly, numericSignals, financialSignals, entityFilter, sortBy]);
+  }, [numericOnly, numericSignals, financialSignals, entityFilter, sourceFilter, sortBy]);
 
   const hasData = financialSignals.length > 0 || moneyFlows.length > 0;
 
@@ -2838,69 +2851,89 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
         </div>
       </div>
 
-      {/* Control bar */}
-      {hasData && (
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#ffffff06] bg-[#020406] flex-wrap">
-          <button
-            onClick={() => setNumericOnly(v => !v)}
-            className={cn("font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border transition-colors",
-              numericOnly ? "border-green-800/50 text-green-500 bg-green-500/5" : "border-[#ffffff08] text-neutral-600 hover:text-neutral-400"
-            )}
-          >
-            {numericOnly ? "NUMERIC ✓" : "ALL SIGNALS"}
-          </button>
-          <button
-            onClick={() => setSortBy(v => v === "amount" ? "confidence" : "amount")}
-            className="font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border border-[#ffffff08] text-neutral-600 hover:text-neutral-400 transition-colors"
-          >
-            SORT: {sortBy === "amount" ? "AMOUNT ↓" : "CONF ↓"}
-          </button>
-          <input
-            type="text"
-            value={entityFilter}
-            onChange={e => setEntityFilter(e.target.value)}
-            placeholder="FILTER ENTITY..."
-            className="bg-transparent border border-[#ffffff08] font-mono text-[7px] text-neutral-400 placeholder:text-neutral-800 px-2 py-0.5 focus:outline-none focus:border-neutral-700 w-28"
-          />
-          {(entityFilter || !numericOnly) && (
-            <button
-              onClick={() => { setEntityFilter(""); setNumericOnly(true); }}
-              className="font-mono text-[7px] uppercase tracking-widest text-neutral-700 hover:text-red-500 transition-colors"
-            >
-              ✕ CLEAR
-            </button>
+      {/* Control bar — mode, sort, entity/source filters */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#ffffff06] bg-[#020406] flex-wrap">
+        <button
+          onClick={() => setNumericOnly(true)}
+          className={cn("font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border transition-colors",
+            numericOnly ? "border-green-800/50 text-green-500 bg-green-500/5" : "border-[#ffffff08] text-neutral-600 hover:text-neutral-400"
           )}
-        </div>
-      )}
+        >NUMERIC FLOWS</button>
+        <button
+          onClick={() => setNumericOnly(false)}
+          className={cn("font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border transition-colors",
+            !numericOnly ? "border-amber-800/50 text-amber-500 bg-amber-500/5" : "border-[#ffffff08] text-neutral-600 hover:text-neutral-400"
+          )}
+        >EARLY SIGNALS</button>
+        <button
+          onClick={() => setSortBy(v => v === "amount" ? "confidence" : "amount")}
+          className="font-mono text-[7px] uppercase tracking-widest px-2 py-0.5 border border-[#ffffff08] text-neutral-600 hover:text-neutral-400 transition-colors"
+        >
+          SORT: {sortBy === "amount" ? "AMOUNT ↓" : "CONF ↓"}
+        </button>
+        <input
+          type="text"
+          value={entityFilter}
+          onChange={e => setEntityFilter(e.target.value)}
+          placeholder="FILTER ENTITY..."
+          className="bg-transparent border border-[#ffffff08] font-mono text-[7px] text-neutral-400 placeholder:text-neutral-800 px-2 py-0.5 focus:outline-none focus:border-neutral-700 w-24"
+        />
+        <input
+          type="text"
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          placeholder="FILTER SOURCE DOC..."
+          className="bg-transparent border border-[#ffffff08] font-mono text-[7px] text-neutral-400 placeholder:text-neutral-800 px-2 py-0.5 focus:outline-none focus:border-neutral-700 w-28"
+        />
+        {(entityFilter || sourceFilter || !numericOnly) && (
+          <button
+            onClick={() => { setEntityFilter(""); setSourceFilter(""); setNumericOnly(true); }}
+            className="font-mono text-[7px] uppercase tracking-widest text-neutral-700 hover:text-red-500 transition-colors"
+          >
+            ✕ CLEAR
+          </button>
+        )}
+      </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {!hasData ? (
-          <div className="py-12 text-center space-y-2">
+          <div className="py-12 text-center space-y-3">
             <TrendingUp className="w-6 h-6 text-neutral-800 mx-auto mb-3" />
-            <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
-              NO FINANCIAL SIGNALS DETECTED
+            <div className="font-mono text-[10px] text-neutral-600 uppercase tracking-widest">
+              No confirmed numeric financial flows identified.
             </div>
-            <div className="font-mono text-[9px] text-neutral-800 uppercase mt-1 max-w-[240px] mx-auto leading-relaxed">
-              INGEST DOCUMENTS REFERENCING BUDGETS, CONTRACTS, GRANTS OR APPROPRIATIONS TO AUTO-DETECT SIGNALS
-            </div>
-          </div>
-        ) : displaySignals.length === 0 && numericOnly ? (
-          <div className="py-12 text-center space-y-2">
-            <TrendingUp className="w-6 h-6 text-neutral-800 mx-auto mb-3" />
-            <div className="font-mono text-[10px] text-neutral-700 uppercase tracking-widest">
-              NO VALIDATED NUMERIC FLOWS DETECTED
-            </div>
-            <div className="font-mono text-[9px] text-neutral-800 uppercase mt-1 max-w-[260px] mx-auto leading-relaxed">
-              {financialSignals.length > 0
-                ? `${financialSignals.length} NON-NUMERIC SIGNAL${financialSignals.length !== 1 ? "S" : ""} FOUND — TOGGLE "ALL SIGNALS" TO VIEW`
-                : "INGEST DOCUMENTS WITH EXPLICIT DOLLAR AMOUNTS, CONTRACT VALUES OR BUDGET LINE ITEMS"}
+            <div className="font-mono text-[8px] text-neutral-800 uppercase mt-1 max-w-[260px] mx-auto leading-relaxed space-y-1">
+              <div>Open EARLY SIGNALS to review weaker funding references.</div>
+              <div>Ingest budget tables, contracts, or audits to populate numeric flow trace.</div>
             </div>
             <button
               onClick={() => setNumericOnly(false)}
-              className="mt-2 font-mono text-[8px] uppercase tracking-widest px-3 py-1 border border-[#ffffff08] text-neutral-600 hover:text-neutral-300 transition-colors"
-            >
-              SHOW ALL SIGNALS
-            </button>
+              className="mt-1 font-mono text-[8px] uppercase tracking-widest px-3 py-1 border border-amber-900/30 text-amber-700 hover:text-amber-400 transition-colors"
+            >EARLY SIGNALS</button>
+          </div>
+        ) : displaySignals.length === 0 && numericOnly ? (
+          <div className="py-12 text-center space-y-3">
+            <TrendingUp className="w-6 h-6 text-neutral-800 mx-auto mb-3" />
+            <div className="font-mono text-[10px] text-neutral-600 uppercase tracking-widest">
+              No confirmed numeric financial flows identified.
+            </div>
+            <div className="font-mono text-[8px] text-neutral-800 uppercase mt-1 max-w-[280px] mx-auto leading-relaxed space-y-1">
+              {financialSignals.length > 0 ? (
+                <>
+                  <div>Open EARLY SIGNALS to review {financialSignals.length} weaker funding reference{financialSignals.length !== 1 ? "s" : ""}.</div>
+                  <div>Ingest budget tables, contracts, or audits to populate numeric flow trace.</div>
+                </>
+              ) : (
+                <>
+                  <div>Open EARLY SIGNALS to review weaker funding references.</div>
+                  <div>Ingest budget tables, contracts, or audits to populate numeric flow trace.</div>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setNumericOnly(false)}
+              className="mt-1 font-mono text-[8px] uppercase tracking-widest px-3 py-1 border border-amber-900/30 text-amber-700 hover:text-amber-400 transition-colors"
+            >OPEN EARLY SIGNALS</button>
           </div>
         ) : displaySignals.length === 0 ? (
           <div className="py-10 text-center font-mono text-[9px] text-neutral-700 uppercase tracking-widest">
@@ -2911,8 +2944,9 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
             {displaySignals.length > 0 && (
               <div>
                 <div className="font-mono text-[9px] text-neutral-600 uppercase tracking-widest mb-2">
-                  {numericOnly ? "VALIDATED NUMERIC FLOWS" : "ALL DETECTED FINANCIAL SIGNALS"}
-                  {entityFilter && ` — FILTERED: "${entityFilter}"`}
+                  {numericOnly ? "VALIDATED NUMERIC FLOWS" : "EARLY SIGNALS — LOWER CONFIDENCE REFERENCES"}
+                  {entityFilter && ` — ENTITY: "${entityFilter}"`}
+                  {sourceFilter && ` — SOURCE: "${sourceFilter}"`}
                 </div>
                 <div className="space-y-2">
                   {displaySignals.map((sig: any, sigIdx: number) => {
@@ -3115,10 +3149,17 @@ function DefaultInspector({
   const [dossierOverrides, setDossierOverrides] = React.useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`atlas_dossier_overrides_${caseId}`) ?? "{}"); } catch { return {}; }
   });
+  // T002: Save indicator states — declared before saveDossierOverride so closure can reference them
+  const [dossierLastSaved, setDossierLastSaved] = React.useState<number | null>(null);
+  const [dossierSaving, setDossierSaving] = React.useState(false);
   const saveDossierOverride = (key: string, value: string) => {
     const next = { ...dossierOverrides, [key]: value };
     setDossierOverrides(next);
     try { localStorage.setItem(`atlas_dossier_overrides_${caseId}`, JSON.stringify(next)); } catch { /* ignore */ }
+    setDossierSaving(true);
+    setDossierLastSaved(null);
+    setTimeout(() => { setDossierSaving(false); setDossierLastSaved(Date.now()); }, 400);
+    setTimeout(() => setDossierLastSaved(null), 2600);
   };
   const resetSectionOverride = (key: string) => {
     const next = { ...dossierOverrides };
@@ -3134,21 +3175,42 @@ function DefaultInspector({
   const [autoTriageResult, setAutoTriageResult] = React.useState<{ promoted: number; rejected: number; held: number } | null>(null);
   const [autoTriageWorking, setAutoTriageWorking] = React.useState(false);
 
-  // T008: Editable connection items — persisted per case
-  const [connectionItems, setConnectionItems] = React.useState<string[]>(() => {
+  // T001: Editable connection items — typed with status, persisted per case
+  type ConnItem = { id: number; text: string; status: "SYSTEM" | "EDITED" | "NEW" };
+  const [connectionItems, setConnectionItems] = React.useState<ConnItem[]>(() => {
     try { return JSON.parse(localStorage.getItem(`atlas_connection_items_${caseId}`) ?? "[]"); } catch { return []; }
   });
-  const saveConnectionItems = (items: string[]) => {
+  const saveConnectionItems = (items: ConnItem[]) => {
     setConnectionItems(items);
     try { localStorage.setItem(`atlas_connection_items_${caseId}`, JSON.stringify(items)); } catch { /* ignore */ }
   };
-  const addConnectionItem = () => saveConnectionItems([...connectionItems, ""]);
-  const updateConnectionItem = (i: number, val: string) => {
-    const next = [...connectionItems];
-    next[i] = val;
+  const seedConnectionItems = (rels: any[]) => {
+    const seeded: ConnItem[] = rels.slice(0, 6).map((r: any, i: number) => ({
+      id: Date.now() + i,
+      text: `${r.entityAName} → ${r.entityBName}${r.relationshipType ? ` (${r.relationshipType})` : ""}`,
+      status: "SYSTEM" as const,
+    }));
+    saveConnectionItems(seeded);
+  };
+  const addConnectionItem = () => {
+    const next: ConnItem[] = [...connectionItems, { id: Date.now(), text: "", status: "NEW" }];
     saveConnectionItems(next);
   };
-  const deleteConnectionItem = (i: number) => saveConnectionItems(connectionItems.filter((_, idx) => idx !== i));
+  const updateConnectionItem = (id: number, val: string) => {
+    const next = connectionItems.map(c =>
+      c.id === id ? { ...c, text: val, status: c.status === "SYSTEM" ? "EDITED" as const : c.status } : c
+    );
+    saveConnectionItems(next);
+  };
+  const deleteConnectionItem = (id: number) => saveConnectionItems(connectionItems.filter(c => c.id !== id));
+
+  // T001: Auto-seed connection items from dossier on first edit mode entry
+  React.useEffect(() => {
+    if (dossierEditMode && connectionItems.length === 0 && dossier?.sections?.entityRelationships?.length > 0) {
+      seedConnectionItems(dossier.sections.entityRelationships);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dossierEditMode]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
@@ -3159,7 +3221,7 @@ function DefaultInspector({
     if (dossierOverrides.powerStructureOverride) mergedSections.powerStructure = dossierOverrides.powerStructureOverride;
     if (dossierOverrides.whyItMattersOverride) mergedSections.whyItMatters = dossierOverrides.whyItMattersOverride;
     if (dossierOverrides.connectionsNote) mergedSections.connectionsNote = dossierOverrides.connectionsNote;
-    if (connectionItems.length > 0) mergedSections.connectionsNote = (mergedSections.connectionsNote ?? "") + "\n" + connectionItems.filter(Boolean).join("\n");
+    if (connectionItems.length > 0) mergedSections.connectionsNote = (mergedSections.connectionsNote ?? "") + "\n" + connectionItems.filter(c => c.text?.trim()).map(c => c.text).join("\n");
     if (dossierOverrides.financialNote) mergedSections.financialNote = dossierOverrides.financialNote;
     if (dossierOverrides.anglesOverride) mergedSections.investigativeAngles = dossierOverrides.anglesOverride.split("\n").filter(Boolean).map((a: string) => ({ angle: a }));
     if (dossierOverrides.gapsOverride) mergedSections.knownGaps = dossierOverrides.gapsOverride.split("\n").filter(Boolean);
@@ -3568,6 +3630,12 @@ function DefaultInspector({
                 <span style={{ fontSize: "9px" }}>{dossierEditMode ? "✓" : "✎"}</span>
                 <span className="hidden sm:inline">{dossierEditMode ? "EDITING" : "EDIT"}</span>
               </button>
+            )}
+            {dossierSaving && (
+              <span className="font-mono text-[7px] uppercase tracking-widest flex-shrink-0 px-2" style={{ color: "rgba(251,191,36,0.5)" }}>SAVING...</span>
+            )}
+            {!dossierSaving && dossierLastSaved && (
+              <span className="font-mono text-[7px] uppercase tracking-widest flex-shrink-0 px-2" style={{ color: "rgba(34,197,94,0.55)" }}>✓ SAVED</span>
             )}
             {dossier && (
               <button
@@ -4213,56 +4281,70 @@ function DefaultInspector({
                   );
                 })()}
 
-                {/* CONNECTIONS — editable CRUD list */}
+                {/* CONNECTIONS — full CRUD with status badges */}
                 <div>
                   {wsLabel("CONNECTIONS", "rgba(59,130,246,0.7)")}
-                  {/* Seed from dossier entityRelationships if connectionItems is still empty */}
-                  {connectionItems.length === 0 && s.entityRelationships?.length > 0 && (
-                    <div className="space-y-1 mb-2">
-                      {s.entityRelationships.slice(0, 6).map((r: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2 font-mono text-[10px]">
-                          <span style={{ color: "rgba(190,190,190,0.9)" }}>{r.entityAName}</span>
-                          <span style={{ color: "rgba(100,100,120,0.7)" }}>→</span>
-                          <span style={{ color: "rgba(190,190,190,0.9)" }}>{r.entityBName}</span>
-                          {r.relationshipType && <span style={{ color: "rgba(255,255,255,0.2)" }} className="text-[8px]">({r.relationshipType})</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Editable CRUD rows */}
                   {dossierEditMode ? (
                     <div className="space-y-1.5 mt-1">
-                      {connectionItems.map((item, i) => (
-                        <div key={i} className="flex items-center gap-1.5">
-                          <input
-                            value={item}
-                            onChange={e => updateConnectionItem(i, e.target.value)}
-                            placeholder="Entity A → Entity B (relationship)"
-                            className="flex-1 font-mono text-[10px] px-2 py-1 rounded border"
-                            style={{ background: "rgba(10,10,20,0.8)", borderColor: "rgba(59,130,246,0.25)", color: "rgba(200,200,210,0.9)", outline: "none" }}
-                          />
-                          <button
-                            onClick={() => deleteConnectionItem(i)}
-                            className="text-[8px] px-1.5 py-1 rounded font-mono uppercase tracking-widest transition-colors"
-                            style={{ background: "rgba(239,68,68,0.1)", color: "rgba(239,68,68,0.7)", border: "1px solid rgba(239,68,68,0.2)" }}
-                          >✕</button>
+                      {connectionItems.length === 0 && (
+                        <div className="font-mono text-[9px] py-2" style={{ color: "rgba(100,100,120,0.6)" }}>
+                          No confirmed relationships yet. Click + ADD CONNECTION to begin.
                         </div>
-                      ))}
+                      )}
+                      {connectionItems.map((item) => {
+                        const statusColor = item.status === "NEW" ? "rgba(59,130,246,0.65)" : item.status === "EDITED" ? "rgba(251,191,36,0.65)" : "rgba(120,120,140,0.5)";
+                        return (
+                          <div key={item.id} className="flex items-center gap-1.5">
+                            <span className="font-mono text-[7px] uppercase tracking-widest flex-shrink-0 w-10 text-right" style={{ color: statusColor }}>{item.status}</span>
+                            <input
+                              value={item.text}
+                              onChange={e => updateConnectionItem(item.id, e.target.value)}
+                              onBlur={e => updateConnectionItem(item.id, e.target.value)}
+                              placeholder="Entity A → Entity B (relationship type)"
+                              className="flex-1 font-mono text-[10px] px-2 py-1"
+                              style={{ background: "rgba(10,10,20,0.85)", border: "1px solid rgba(59,130,246,0.22)", color: "rgba(200,200,215,0.92)", outline: "none" }}
+                            />
+                            <button
+                              onClick={() => deleteConnectionItem(item.id)}
+                              title="Delete connection"
+                              className="font-mono text-[9px] px-1.5 py-1 transition-colors flex-shrink-0"
+                              style={{ background: "rgba(239,68,68,0.08)", color: "rgba(239,68,68,0.65)", border: "1px solid rgba(239,68,68,0.18)" }}
+                            >✕</button>
+                          </div>
+                        );
+                      })}
                       <button
                         onClick={addConnectionItem}
-                        className="mt-1 text-[8px] font-mono uppercase tracking-widest px-3 py-1 rounded transition-colors w-full"
-                        style={{ background: "rgba(59,130,246,0.08)", color: "rgba(59,130,246,0.7)", border: "1px dashed rgba(59,130,246,0.25)" }}
+                        className="mt-1 font-mono text-[8px] uppercase tracking-widest px-3 py-1 w-full transition-colors"
+                        style={{ background: "rgba(59,130,246,0.06)", color: "rgba(59,130,246,0.65)", border: "1px dashed rgba(59,130,246,0.22)" }}
                       >+ ADD CONNECTION</button>
                     </div>
                   ) : connectionItems.length > 0 ? (
-                    <div className="space-y-1 mt-1">
-                      {connectionItems.filter(Boolean).map((item, i) => (
-                        <div key={i} className="font-mono text-[10px]" style={{ color: "rgba(180,180,200,0.85)" }}>
-                          {item}
+                    <div className="space-y-1.5 mt-1">
+                      {connectionItems.filter(c => c.text?.trim()).map(item => (
+                        <div key={item.id} className="flex items-center gap-2 font-mono text-[10px]">
+                          <span className="text-[7px] uppercase tracking-widest flex-shrink-0" style={{ color: item.status === "NEW" ? "rgba(59,130,246,0.5)" : item.status === "EDITED" ? "rgba(251,191,36,0.45)" : "rgba(90,90,110,0.45)" }}>{item.status}</span>
+                          <span style={{ color: "rgba(185,185,200,0.88)" }}>{item.text}</span>
                         </div>
                       ))}
                     </div>
-                  ) : null}
+                  ) : s.entityRelationships?.length > 0 ? (
+                    <div className="space-y-1 mt-1">
+                      <div className="font-mono text-[8px] mb-1.5" style={{ color: "rgba(100,100,120,0.55)" }}>SYSTEM — enable EDIT to manage</div>
+                      {s.entityRelationships.slice(0, 6).map((r: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 font-mono text-[10px]">
+                          <span style={{ color: "rgba(185,185,200,0.75)" }}>{r.entityAName}</span>
+                          <span style={{ color: "rgba(100,100,120,0.6)" }}>→</span>
+                          <span style={{ color: "rgba(185,185,200,0.75)" }}>{r.entityBName}</span>
+                          {r.relationshipType && <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.18)" }}>({r.relationshipType})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="font-mono text-[9px] mt-1 py-2" style={{ color: "rgba(100,100,120,0.55)" }}>
+                      No confirmed relationships yet. Enable EDIT and click + ADD CONNECTION.
+                    </div>
+                  )}
                 </div>
 
                 {/* MONEY LEDGER — all numeric signals sorted by amount */}

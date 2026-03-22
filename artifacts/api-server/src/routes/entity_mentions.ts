@@ -24,8 +24,8 @@ router.post("/documents/:id/analyze", async (req, res) => {
   let text = "";
   let extractionMethod = "text";
 
-  // Web-ingested documents: use stored rawText
-  if (doc.ingestMethod === "web" && doc.rawText && doc.rawText.trim().length > 10) {
+  // Use stored rawText when available (covers web-ingest, manual entry, and any document with body text)
+  if (doc.rawText && doc.rawText.trim().length > 10) {
     text = doc.rawText;
     extractionMethod = "raw-text";
   } else if (doc.filePath) {
@@ -128,18 +128,18 @@ router.post("/documents/:id/analyze", async (req, res) => {
   // T006: Year filter — only insert events within ±2 years of the document date
   const docDateRaw = doc.publishDate || (doc.uploadedAt instanceof Date ? doc.uploadedAt.toISOString() : doc.uploadedAt) || null;
   const docYear = docDateRaw ? new Date(docDateRaw).getFullYear() : null;
-  const ALLOWED_TIMELINE_TYPES = new Set(["CONTRACT_AWARDED", "FUNDING_APPROVED", "AUDIT", "LEGAL_ACTION", "INVESTIGATION_STARTED", "PROGRAM_LAUNCH", "PROGRAM_EXPANSION", "POLICY_CHANGE"]);
-  const JUNK_TIMELINE_RE = /\b(episode|season|recap|watch|documentary|film|movie|concert|game|match|tournament|playoff|bracket|stream|preview)\b/i;
+  const JUNK_TIMELINE_TYPES = new Set(["SPORTS", "ENTERTAINMENT", "CELEBRITY", "GAME"]);
+  const JUNK_TIMELINE_RE = /\b(episode|season|recap|watch|documentary|film|movie|concert|game\s+result|match\s+result|tournament|playoff|bracket|stream\s+now|box\s+office)\b/i;
 
   for (const ev of timelineEvents) {
-    // T006: Year validity check
+    // T006: Year validity check (±2 years from document date, when date is known)
     if (docYear && ev.eventDate) {
       const evYear = new Date(ev.eventDate).getFullYear();
-      if (Math.abs(evYear - docYear) > 2) continue; // skip out-of-range events
+      if (Math.abs(evYear - docYear) > 2) continue; // skip clearly out-of-range events
     }
-    // T006: Type gate — only accountability-relevant event types
-    if (ev.eventType && !ALLOWED_TIMELINE_TYPES.has(ev.eventType.toUpperCase())) continue;
-    // T006: Junk content filter
+    // T006: Block explicitly junk types but allow "EVENT" fallback through
+    if (ev.eventType && JUNK_TIMELINE_TYPES.has(ev.eventType.toUpperCase())) continue;
+    // T006: Junk content filter on summary text
     if (JUNK_TIMELINE_RE.test(ev.summary)) continue;
     try {
       await db.insert(timelineEntriesTable).values({
