@@ -49,7 +49,7 @@ const SECTIONS = [
   { id: "entities", label: "ENTITY REGISTRY", icon: Database },
   { id: "documents", label: "DOCUMENT VAULT", icon: Files },
   { id: "web-ingest", label: "WEB INGEST", icon: Globe },
-  { id: "timeline", label: "TEMPORAL TRACE", icon: Clock },
+  { id: "timeline", label: "INVESTIGATIVE TIMELINE", icon: Clock },
   { id: "flows", label: "FLOW TRACE", icon: TrendingUp },
   { id: "notes", label: "ANALYST", icon: Terminal },
 ] as const;
@@ -1590,7 +1590,7 @@ function OverviewPanel({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="nexus-panel rounded-none">
             <div className="atlas-section-header-cyan">
-              <span className="nexus-label">TEMPORAL TRACE ({timeline.length})</span>
+              <span className="nexus-label">INVESTIGATIVE TIMELINE ({timeline.length})</span>
               {timeline.length > 0 && <Clock className="w-2.5 h-2.5 text-neutral-700" />}
             </div>
             <div className="p-3 space-y-2">
@@ -3134,6 +3134,22 @@ function DefaultInspector({
   const [autoTriageResult, setAutoTriageResult] = React.useState<{ promoted: number; rejected: number; held: number } | null>(null);
   const [autoTriageWorking, setAutoTriageWorking] = React.useState(false);
 
+  // T008: Editable connection items — persisted per case
+  const [connectionItems, setConnectionItems] = React.useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`atlas_connection_items_${caseId}`) ?? "[]"); } catch { return []; }
+  });
+  const saveConnectionItems = (items: string[]) => {
+    setConnectionItems(items);
+    try { localStorage.setItem(`atlas_connection_items_${caseId}`, JSON.stringify(items)); } catch { /* ignore */ }
+  };
+  const addConnectionItem = () => saveConnectionItems([...connectionItems, ""]);
+  const updateConnectionItem = (i: number, val: string) => {
+    const next = [...connectionItems];
+    next[i] = val;
+    saveConnectionItems(next);
+  };
+  const deleteConnectionItem = (i: number) => saveConnectionItems(connectionItems.filter((_, idx) => idx !== i));
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/cases/${caseId}/summary`] });
 
   const triggerExport = (d: Record<string, any>) => {
@@ -3143,6 +3159,7 @@ function DefaultInspector({
     if (dossierOverrides.powerStructureOverride) mergedSections.powerStructure = dossierOverrides.powerStructureOverride;
     if (dossierOverrides.whyItMattersOverride) mergedSections.whyItMatters = dossierOverrides.whyItMattersOverride;
     if (dossierOverrides.connectionsNote) mergedSections.connectionsNote = dossierOverrides.connectionsNote;
+    if (connectionItems.length > 0) mergedSections.connectionsNote = (mergedSections.connectionsNote ?? "") + "\n" + connectionItems.filter(Boolean).join("\n");
     if (dossierOverrides.financialNote) mergedSections.financialNote = dossierOverrides.financialNote;
     if (dossierOverrides.anglesOverride) mergedSections.investigativeAngles = dossierOverrides.anglesOverride.split("\n").filter(Boolean).map((a: string) => ({ angle: a }));
     if (dossierOverrides.gapsOverride) mergedSections.knownGaps = dossierOverrides.gapsOverride.split("\n").filter(Boolean);
@@ -4196,11 +4213,12 @@ function DefaultInspector({
                   );
                 })()}
 
-                {/* CONNECTIONS */}
+                {/* CONNECTIONS — editable CRUD list */}
                 <div>
-                  {wsLabel("CONNECTIONS", "rgba(59,130,246,0.7)", "connectionsNote")}
-                  {s.entityRelationships?.length > 0 && (
-                    <div className="space-y-1.5 mb-3">
+                  {wsLabel("CONNECTIONS", "rgba(59,130,246,0.7)")}
+                  {/* Seed from dossier entityRelationships if connectionItems is still empty */}
+                  {connectionItems.length === 0 && s.entityRelationships?.length > 0 && (
+                    <div className="space-y-1 mb-2">
                       {s.entityRelationships.slice(0, 6).map((r: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 font-mono text-[10px]">
                           <span style={{ color: "rgba(190,190,190,0.9)" }}>{r.entityAName}</span>
@@ -4211,12 +4229,39 @@ function DefaultInspector({
                       ))}
                     </div>
                   )}
+                  {/* Editable CRUD rows */}
                   {dossierEditMode ? (
-                    wsTextarea("connectionsNote", dossierOverrides.connectionsNote ?? "", "Add analyst annotation for connections...", 3)
-                  ) : dossierOverrides.connectionsNote ? (
-                    <p className="font-mono text-[10px] leading-relaxed mt-2 pl-3" style={{ color: "rgba(180,180,180,0.7)", borderLeft: "2px solid rgba(59,130,246,0.2)" }}>
-                      {dossierOverrides.connectionsNote}
-                    </p>
+                    <div className="space-y-1.5 mt-1">
+                      {connectionItems.map((item, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <input
+                            value={item}
+                            onChange={e => updateConnectionItem(i, e.target.value)}
+                            placeholder="Entity A → Entity B (relationship)"
+                            className="flex-1 font-mono text-[10px] px-2 py-1 rounded border"
+                            style={{ background: "rgba(10,10,20,0.8)", borderColor: "rgba(59,130,246,0.25)", color: "rgba(200,200,210,0.9)", outline: "none" }}
+                          />
+                          <button
+                            onClick={() => deleteConnectionItem(i)}
+                            className="text-[8px] px-1.5 py-1 rounded font-mono uppercase tracking-widest transition-colors"
+                            style={{ background: "rgba(239,68,68,0.1)", color: "rgba(239,68,68,0.7)", border: "1px solid rgba(239,68,68,0.2)" }}
+                          >✕</button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={addConnectionItem}
+                        className="mt-1 text-[8px] font-mono uppercase tracking-widest px-3 py-1 rounded transition-colors w-full"
+                        style={{ background: "rgba(59,130,246,0.08)", color: "rgba(59,130,246,0.7)", border: "1px dashed rgba(59,130,246,0.25)" }}
+                      >+ ADD CONNECTION</button>
+                    </div>
+                  ) : connectionItems.length > 0 ? (
+                    <div className="space-y-1 mt-1">
+                      {connectionItems.filter(Boolean).map((item, i) => (
+                        <div key={i} className="font-mono text-[10px]" style={{ color: "rgba(180,180,200,0.85)" }}>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
 

@@ -1,0 +1,280 @@
+ATLAS FINAL INTELLIGENCE CORE PASS — ENTITY + MONEY + TIMELINE + DOSSIER CONTROL (LOCKED PASS)
+
+Execute this as a single unified implementation. Do not summarize. Do not partial apply.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T001 — ENTITY NORMALIZATION + HARD FILTER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In entity-extractor.ts:
+
+Add normalization BEFORE admission:
+
+function normalizeEntityName(name: string): string {
+  return name
+    .replace(/^with\s+/i, "")
+    .replace(/^the\s+/i, "")
+    .replace(/^(of|for|by|from)\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+Apply immediately on extraction.
+
+Add HARD REJECTION:
+
+if (
+  name.length < 3 ||
+  /^\d+$/.test(name) ||
+  /^(with|the|of|for|by|from)$/i.test(name)
+) return null;
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T002 — ENTITY TYPE + CONFIDENCE GATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function classifyEntity(name: string, context: string) {
+  if (/\b(department|agency|office|authority|city of|state of)\b/i.test(context)) {
+    return { type: "GOVERNMENT", confidence: 0.95 };
+  }
+
+  if (/\b(program|fund|initiative|grant|allocation)\b/i.test(context)) {
+    return { type: "PROGRAM", confidence: 0.9 };
+  }
+
+  if (/\b(inc|llc|corp|company|group)\b/i.test(name)) {
+    return { type: "ORG", confidence: 0.9 };
+  }
+
+  if (/^[A-Z][a-z]+\s[A-Z][a-z]+$/.test(name)) {
+    return { type: "PERSON", confidence: 0.75 };
+  }
+
+  return { type: "UNKNOWN", confidence: 0.3 };
+}
+
+HARD GATE:
+
+if (entity.confidence < 0.5) return null;
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T003 — ENTITY DEDUPLICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function dedupeEntities(entities) {
+  const map = new Map();
+  for (const e of entities) {
+    const key = e.name.toLowerCase();
+    if (!map.has(key)) map.set(key, e);
+  }
+  return Array.from(map.values());
+}
+
+Run before final insert.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T004 — BUDGET EXTRACTION ENGINE (CRITICAL FIX)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create NEW extractor:
+
+function extractBudgetRows(text: string) {
+  const regex = /([A-Z][A-Za-z\s]+)\s+(\d{1,3}(,\d{3})+)/g;
+  const results = [];
+  let match;
+
+  while ((match = regex.exec(text))) {
+    const label = match[1].trim();
+    const amount = match[2].replace(/,/g, "");
+
+    results.push({
+      programName: label,
+      amount: Number(amount),
+      amountDisplay: "$" + match[2],
+      signalType: "ALLOCATION",
+      confidence: 0.95
+    });
+  }
+
+  return results;
+}
+
+RUN THIS BEFORE ANY OTHER MONEY LOGIC.
+
+BYPASS ALL FUNDING GATES for this extractor.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T005 — FINANCIAL → ENTITY LINKING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function linkFinancials(signals, entities) {
+  return signals.map(signal => {
+    const match = entities.find(e =>
+      signal.programName?.toLowerCase().includes(e.name.toLowerCase())
+    );
+
+    return {
+      ...signal,
+      linkedEntity: match ? match.name : "UNASSIGNED"
+    };
+  });
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T006 — TIMELINE HARD FILTER (FIX BROKEN YEARS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function isValidTimelineEvent(event, docDate) {
+  if (!event.date) return false;
+
+  const eventYear = new Date(event.date).getFullYear();
+  const docYear = new Date(docDate).getFullYear();
+
+  if (Math.abs(eventYear - docYear) > 2) return false;
+
+  if (
+    /\b(episode|season|recap|watch|documentary)\b/i.test(event.text)
+  ) return false;
+
+  return true;
+}
+
+ONLY ALLOW:
+
+- contracts
+- funding
+- audits
+- hearings
+- enforcement
+- grants
+
+LIMIT TO 12 EVENTS MAX.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T007 — DOSSIER TIMELINE ≠ TEMPORAL TRACE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Rename in PDF + UI:
+
+"Temporal Trace" → KEEP INTERNAL ONLY
+
+"Timeline" → RENAME TO:
+
+INVESTIGATIVE TIMELINE
+
+Only show FILTERED events from T006.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T008 — CONNECTIONS FULL EDIT CONTROL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Replace static connections with editable state:
+
+const [connections, setConnections] = useState([]);
+
+Add:
+
+function deleteConnection(index) {
+  setConnections(prev => prev.filter((_, i) => i !== index));
+}
+
+Render:
+
+connections.map((c, i) => (
+  <div key={i}>
+    <input value={c} onChange={(e) => {
+      const updated = [...connections];
+      updated[i] = e.target.value;
+      setConnections(updated);
+    }} />
+    <button onClick={() => deleteConnection(i)}>DELETE</button>
+  </div>
+));
+
+Persist:
+
+localStorage.setItem(`atlas_connections_${caseId}`, JSON.stringify(connections));
+
+PDF MUST USE:
+
+connectionsOverride || systemConnections
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T009 — DOSSIER FULL EDIT MODE (ALL SECTIONS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ensure ALL sections editable:
+
+- executive summary
+- connections
+- financial flows
+- angles
+- power structure
+- risk
+- why it matters
+- actions
+- gaps
+
+Each must use override keys.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T010 — FINANCIAL DISPLAY (FIX "0 DOLLARS" ISSUE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ensure UI uses:
+
+signal.amountDisplay
+
+NOT raw amount.
+
+Ensure insert includes:
+
+amount
+amountDisplay
+programName
+linkedEntity
+confidence
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T011 — EMPTY STATE FIX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If no financials:
+
+SHOW:
+
+"No confirmed financial flows identified from source documents."
+
+DO NOT GUESS.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+T012 — FINAL SYSTEM STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After implementation:
+
+CONFIRM:
+
+- entities are clean (no junk)
+- real budget numbers appear in flows
+- timeline shows ONLY relevant events
+- no 1960s / history noise
+- connections editable + deletable
+- dossier fully editable
+- PDF reflects edits
+- financials link to entities
+- no duplicate entities
+- no empty flow when budget exists
+
+RETURN:
+
+"ATLAS INTELLIGENCE CORE PASS COMPLETE — VERIFIED"
+
+WITH:
+
+- entity count
+- financial signals count
+- timeline events count
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF PASS

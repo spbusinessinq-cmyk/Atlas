@@ -98,9 +98,12 @@ router.post("/documents/:id/analyze", async (req, res) => {
       )
     );
 
+  // T003: Deduplicate extracted entities by lowercase name before insert
+  const dedupedExtracted = [...new Map(extracted.map(m => [m.entityName.toLowerCase(), m])).values()];
+
   // Insert new mentions
   const inserted = [];
-  for (const m of extracted) {
+  for (const m of dedupedExtracted) {
     const rows = await db
       .insert(entityMentionsTable)
       .values({
@@ -121,7 +124,23 @@ router.post("/documents/:id/analyze", async (req, res) => {
   // ── Timeline event extraction ───────────────────────────────────────────────
   const timelineEvents = extractTimelineEvents(cleanText);
   let timelineInserted = 0;
+
+  // T006: Year filter — only insert events within ±2 years of the document date
+  const docDateRaw = doc.publishDate || (doc.uploadedAt instanceof Date ? doc.uploadedAt.toISOString() : doc.uploadedAt) || null;
+  const docYear = docDateRaw ? new Date(docDateRaw).getFullYear() : null;
+  const ALLOWED_TIMELINE_TYPES = new Set(["CONTRACT_AWARDED", "FUNDING_APPROVED", "AUDIT", "LEGAL_ACTION", "INVESTIGATION_STARTED", "PROGRAM_LAUNCH", "PROGRAM_EXPANSION", "POLICY_CHANGE"]);
+  const JUNK_TIMELINE_RE = /\b(episode|season|recap|watch|documentary|film|movie|concert|game|match|tournament|playoff|bracket|stream|preview)\b/i;
+
   for (const ev of timelineEvents) {
+    // T006: Year validity check
+    if (docYear && ev.eventDate) {
+      const evYear = new Date(ev.eventDate).getFullYear();
+      if (Math.abs(evYear - docYear) > 2) continue; // skip out-of-range events
+    }
+    // T006: Type gate — only accountability-relevant event types
+    if (ev.eventType && !ALLOWED_TIMELINE_TYPES.has(ev.eventType.toUpperCase())) continue;
+    // T006: Junk content filter
+    if (JUNK_TIMELINE_RE.test(ev.summary)) continue;
     try {
       await db.insert(timelineEntriesTable).values({
         title: ev.eventType.replace(/_/g, " ") + ": " + ev.summary.slice(0, 80),
@@ -157,8 +176,22 @@ router.post("/documents/:id/analyze", async (req, res) => {
   // Merge: budget signals first (higher confidence), then prose signals
   const allSignals = [...budgetSignals, ...financialSignals];
 
+  // T005: Link financial signals to known entities from this document
+  // If a signal has no entityName, try to find a matching extracted entity by name overlap
+  const knownEntityNames = dedupedExtracted.map(m => m.entityName);
+  const linkedSignals = allSignals.map(sig => {
+    if (!sig.entityName && knownEntityNames.length > 0) {
+      const match = knownEntityNames.find(eName =>
+        sig.programName?.toLowerCase().includes(eName.toLowerCase()) ||
+        sig.eventSummary?.toLowerCase().includes(eName.toLowerCase())
+      );
+      if (match) return { ...sig, entityName: match };
+    }
+    return sig;
+  });
+
   let signalInserted = 0;
-  for (const sig of allSignals) {
+  for (const sig of linkedSignals) {
     try {
       await db.insert(financialSignalsTable).values({
         amountRaw: sig.amountRaw,

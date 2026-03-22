@@ -1384,7 +1384,19 @@ export function extractEntities(
     confidence: number,
     matchIndex?: number
   ) {
-    const name = entityName.trim();
+    // T001: Strip leading prepositions before admission
+    let name = entityName
+      .replace(/^(?:with|of|for|by|from)\s+/i, "")
+      .replace(/^(?:the|a|an)\s+/i, "")
+      .trim();
+
+    // T001: Hard rejection — too short, pure digits, or pure preposition
+    if (
+      name.length < 3 ||
+      /^\d+$/.test(name) ||
+      /^(?:with|the|of|for|by|from|a|an)$/i.test(name)
+    ) return;
+
     // Apply type correction before any downstream logic
     const correctedType = correctEntityType(name, entityType);
     if (!isValidName(name, correctedType)) return;
@@ -1417,6 +1429,9 @@ export function extractEntities(
         adjustedConf *= 0.55; // strong penalty for deep-body-only mentions
       }
     }
+
+    // T002: Hard confidence gate — reject anything below 0.5 regardless of source
+    if (adjustedConf < 0.5) return;
 
     const { role, roleConfidence } = classifyEntityRole(name, ctx, correctedType);
     const topicRelevance = computeTopicRelevance(name, ctx, queryTerms, seedIntent);
