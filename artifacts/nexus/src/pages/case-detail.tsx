@@ -174,19 +174,6 @@ export default function CaseDetail() {
     pendingMentions,
   } = summary as typeof summary & { financialSignals?: any[] };
 
-  // T010: Graph clean mode — filter junk relationship types from the graph
-  const GRAPH_JUNK_REL_TYPES = new Set([
-    "co_mention", "title_co_mention", "cooccurrence", "generic", "unknown", "mentioned", "appears", "found",
-  ]);
-  const GRAPH_JUNK_PATTERNS = /\b(with|by|from|of|and|or|in|at)\s+[A-Z]/i;
-  const cleanGraphRelationships = relationships.filter(r => {
-    const t = (r.relationshipType ?? "").trim().toLowerCase();
-    if (!t) return false;
-    if (GRAPH_JUNK_REL_TYPES.has(t)) return false;
-    if (GRAPH_JUNK_PATTERNS.test(r.relationshipType ?? "")) return false;
-    return true;
-  });
-
   const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
   const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
@@ -356,6 +343,19 @@ function CaseDetailInner({
   onOpenWebIngest: (query: string) => void;
   expansionQuery: string | null;
 }) {
+  // T010: Graph clean mode — filter junk relationship types (defined here in CaseDetailInner scope)
+  const GRAPH_JUNK_REL_TYPES = new Set([
+    "co_mention", "title_co_mention", "cooccurrence", "generic", "unknown", "mentioned", "appears", "found",
+  ]);
+  const cleanGraphRelationships = Array.isArray(relationships) ? relationships.filter(r => {
+    if (!r) return false;
+    const t = (r.relationshipType ?? "").trim().toLowerCase();
+    if (!t) return false;
+    if (GRAPH_JUNK_REL_TYPES.has(t)) return false;
+    if ((r.confidence ?? 1) < 0.3) return false;
+    return true;
+  }) : [];
+
   // Client-side graph visibility filter
   const visibleEntities = useMemo(
     () => entities.filter((e) => !hiddenEntityIds.has(e.id)),
