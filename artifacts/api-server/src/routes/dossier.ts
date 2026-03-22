@@ -408,8 +408,13 @@ router.get("/cases/:caseId/dossier", async (req, res) => {
       const topSig = financialSignals[0];
       const totalAmt = financialSignals.reduce((acc, f) => acc + (f.normalizedAmount ?? 0), 0);
       const totalFmt = totalAmt >= 1e9 ? `$${(totalAmt/1e9).toFixed(2)}B` : totalAmt >= 1e6 ? `$${(totalAmt/1e6).toFixed(2)}M` : totalAmt >= 1e3 ? `$${(totalAmt/1e3).toFixed(1)}K` : null;
-      if (topSig.amountDisplay && topSig.entityName) {
-        p2Parts.push(`${financialSignals.length} confirmed financial signal${financialSignals.length !== 1 ? "s" : ""} extracted — lead signal: ${topSig.amountDisplay} linked to ${topSig.entityName}${totalFmt && financialSignals.length > 1 ? ` (${totalFmt} total)` : ""}.`);
+      // T007: Use clean resolved roles — prefer controlledBy → receivedBy chain, never raw entityName alone
+      const topActor = topSig.controlledBy ?? topSig.receivedBy ?? topSig.entityName;
+      if (topSig.amountDisplay && topActor) {
+        const actorChain = topSig.controlledBy && topSig.receivedBy
+          ? `${topSig.controlledBy} → ${topSig.receivedBy}`
+          : topActor;
+        p2Parts.push(`${financialSignals.length} confirmed financial signal${financialSignals.length !== 1 ? "s" : ""} extracted — lead signal: ${topSig.amountDisplay} (${actorChain})${totalFmt && financialSignals.length > 1 ? `. Total tracked: ${totalFmt}` : ""}.`);
       } else if (totalFmt) {
         p2Parts.push(`${financialSignals.length} quantified financial signal${financialSignals.length !== 1 ? "s" : ""} detected totaling ${totalFmt}.`);
       }

@@ -1,0 +1,270 @@
+ATLAS ENTITY LOCK PASS — MONEY OWNER / RECIPIENT RESOLUTION
+
+We are NOT rebuilding ATLAS.
+We are surgically fixing the last major weakness:
+
+FINANCIAL SIGNALS are extracting,
+but ENTITY resolution is still wrong.
+
+Current bad outputs:
+- ENTITY: IN JANUARY
+- ENTITY: IN FEBRUARY
+- ENTITY: THE OFFICE
+
+That is parser leakage and must be eliminated.
+
+Goal:
+Every financial signal must resolve to a REAL accountable actor:
+- agency
+- office
+- authority
+- contractor
+- company
+- program owner
+- recipient
+
+No date phrases.
+No preposition phrases.
+No filler nouns.
+
+Implement, validate, then return confirmed results only.
+
+━━━━━━━━━━━━━━━━━━
+T001 — HARD BAN GARBAGE ENTITY HEADS
+━━━━━━━━━━━━━━━━━━
+
+Reject entity candidates if they start with or equal:
+- in
+- on
+- at
+- by
+- from
+- with
+- during
+- after
+- before
+- through
+- under
+- over
+- into
+- january
+- february
+- march
+- april
+- may
+- june
+- july
+- august
+- september
+- october
+- november
+- december
+- the office
+- the program
+- the agency
+- the department
+- this office
+- this program
+- this department
+
+Also reject candidates that are:
+- date phrases
+- time phrases
+- bare article+noun junk
+- generic noun shells without named owner
+
+If a candidate fails, do NOT store it.
+Do NOT show it.
+Do NOT use it as fallback.
+
+━━━━━━━━━━━━━━━━━━
+T002 — FINANCIAL ENTITY PRIORITY RESOLVER
+━━━━━━━━━━━━━━━━━━
+
+For each financial signal, resolve entity using this priority order:
+
+1. AWARDING / CONTROLLING BODY
+   examples:
+   - MTA
+   - LA County
+   - Department of Transportation
+   - Office of Inspector General
+   - HUD
+   - City of Los Angeles
+
+2. RECIPIENT / CONTRACTOR
+   examples:
+   - Apex Construction Group
+   - Ridgeline Systems Inc
+   - vendor / nonprofit / contractor name
+
+3. PROGRAM OWNER
+   examples:
+   - Homelessness Services Authority
+   - Emergency Shelter Program
+   - Transportation Modernization Program
+
+4. EXPLICIT OFFICE NAME
+   example:
+   - Office of Inspector General
+NOT:
+   - “the office”
+
+5. UNKNOWN
+   if no valid accountable actor is found
+
+Never fall back to:
+- month phrase
+- sentence opener
+- generic noun
+- preposition phrase
+
+━━━━━━━━━━━━━━━━━━
+T003 — SENTENCE ROLE EXTRACTION
+━━━━━━━━━━━━━━━━━━
+
+When parsing a money sentence, detect roles:
+
+Patterns to support:
+- [Agency] awarded $X to [Contractor]
+- [Agency] allocated $X for [Program]
+- [Office] received $X to conduct [Audit]
+- [City/County] appropriated $X to [Department/Program]
+- [Program] received $X from [Agency]
+
+Extract separately:
+- controlledBy
+- receivedBy
+- programName
+
+Then choose display entity by rule:
+- if contract / grant / award → display recipient + show controlledBy
+- if appropriation / audit / oversight → display controlling office/agency
+- if both are strong → show both in structured row
+
+━━━━━━━━━━━━━━━━━━
+T004 — DISPLAY FORMAT UPGRADE
+━━━━━━━━━━━━━━━━━━
+
+Do not show:
+ENTITY: IN JANUARY
+
+Instead show structured header:
+
+CONTROLLED BY: MTA
+RECIPIENT: Apex Construction Group
+PROGRAM: Infrastructure Contract
+AMOUNT: $12.8M
+
+or
+
+CONTROLLED BY: Office of Inspector General
+RECIPIENT: —
+PROGRAM: Compliance Audit
+AMOUNT: $1.2M
+
+If recipient unknown:
+say “RECIPIENT UNCONFIRMED”
+not junk text.
+
+━━━━━━━━━━━━━━━━━━
+T005 — ENTITY NORMALIZATION
+━━━━━━━━━━━━━━━━━━
+
+Normalize:
+- Office of Inspector General → Office of Inspector General
+NOT “The Office”
+
+- Metropolitan Transportation Authority / MTA
+choose one canonical form, preserve alias mapping
+
+- Apex Construction Group, Inc. / Apex Construction Group
+dedupe to canonical display name
+
+- Ridgeline Systems Inc / Ridgeline Systems
+dedupe to canonical display name
+
+Add alias map support so near-duplicate org names collapse into one real entity.
+
+━━━━━━━━━━━━━━━━━━
+T006 — FLOW TRACE CARD REDESIGN
+━━━━━━━━━━━━━━━━━━
+
+Each flow card must show:
+
+TOP LINE:
+signal type + confidence + amount
+
+BODY:
+Controlled by: X
+Recipient: Y
+Program: Z
+Why flagged: one short sentence
+
+SOURCE:
+document title
+
+No more weak “ENTITY:” line if entity is ambiguous.
+
+Replace single-entity display with role-based display.
+
+━━━━━━━━━━━━━━━━━━
+T007 — DOSSIER + POWER STRUCTURE SYNC
+━━━━━━━━━━━━━━━━━━
+
+Use the same resolved fields in:
+- Flow Trace
+- Power Structure
+- Executive Summary
+- Dossier export
+
+No separate logic.
+One shared resolver.
+
+If flow trace says:
+Controlled by MTA / Recipient Apex Construction Group
+the dossier must say the same thing.
+
+━━━━━━━━━━━━━━━━━━
+T008 — VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Run against the existing test case shown in Flow Trace.
+
+Required outputs:
+
+Signal 1:
+- Controlled by: MTA
+- Recipient: Apex Construction Group
+- Amount: $12.8M
+
+Signal 2:
+- Controlled by: MTA
+- Recipient: Ridgeline Systems Inc
+- Amount: $8.3M
+
+Signal 3:
+- Controlled by: Office of Inspector General
+- Recipient: unconfirmed or internal audit unit if explicit
+- Amount: $1.2M
+
+Must confirm:
+- no “IN JANUARY”
+- no “IN FEBRUARY”
+- no “THE OFFICE”
+- no month/date entities
+- no generic noun entities
+
+━━━━━━━━━━━━━━━━━━
+FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━
+
+Return only:
+1. resolver logic added
+2. exact bad entity patterns blocked
+3. before vs after for the 3 test flows
+4. confirmation that Flow Trace, Power Structure, and Dossier now use same entity resolution
+
+No vague claims.
+No “should.”
+Only confirmed results.

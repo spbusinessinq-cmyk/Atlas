@@ -1664,8 +1664,10 @@ function OverviewPanel({
                         {isInferred && (
                           <span className="font-mono text-[7px] text-cyan-800 border border-cyan-900/30 px-1 flex-shrink-0">INFERRED</span>
                         )}
-                        {sig.entityName && (
-                          <span className="font-mono text-[8px] text-cyan-500 truncate flex-1">{sig.entityName}</span>
+                        {(sig.controlledBy || sig.receivedBy || sig.entityName) && (
+                          <span className="font-mono text-[8px] text-cyan-500 truncate flex-1">
+                            {sig.controlledBy ?? sig.receivedBy ?? sig.entityName}
+                          </span>
                         )}
                       </div>
                       {(sig.programName || sig.eventSummary) && (
@@ -2172,7 +2174,11 @@ function AtlasCaseBrief({ caseId, onViewDocument }: { caseId: number; onViewDocu
                                 {signalStrength} SIGNAL
                               </span>
                               <span className="font-mono text-[8px] text-neutral-700 border border-[#ffffff08] px-1">{sig.signalType?.replace(/^NON_NUMERIC_/, "")}</span>
-                              {sig.entityName && <span className="font-mono text-[8px] text-cyan-500">{sig.entityName}</span>}
+                              {(sig.controlledBy || sig.receivedBy || sig.entityName) && (
+                                <span className="font-mono text-[8px] text-cyan-500">
+                                  {sig.controlledBy ?? sig.receivedBy ?? sig.entityName}
+                                </span>
+                              )}
                             </div>
                             {sig.eventSummary && (
                               <div className="font-mono text-[8px] text-neutral-600 mt-0.5">{sig.eventSummary.slice(0, 140)}</div>
@@ -2737,7 +2743,11 @@ function DossierCenterTab({ caseId, caseTitle }: { caseId: number; caseTitle: st
                             <span className="font-mono text-[10px] text-green-400 font-bold">{sig.amountRaw}</span>
                             <span className="font-mono text-[8px] text-neutral-700">{sig.signalType}</span>
                           </div>
-                          {sig.entityName && <div className="font-mono text-[8px] text-neutral-500 mt-0.5">{sig.entityName}</div>}
+                          {(sig.controlledBy || sig.receivedBy || sig.entityName) && (
+                            <div className="font-mono text-[8px] text-neutral-500 mt-0.5">
+                              {sig.controlledBy ?? sig.receivedBy ?? sig.entityName}
+                            </div>
+                          )}
                           {sig.eventSummary && <div className="font-mono text-[8px] text-neutral-600 mt-0.5 truncate">{sig.eventSummary.slice(0, 80)}</div>}
                         </div>
                       ))}
@@ -3004,39 +3014,38 @@ function FlowTracePanel({ moneyFlows, financialSignals }: { moneyFlows: MoneyFlo
                         )}
                       </div>
 
-                      {/* Actor flow: controlledBy → receivedBy / entityName */}
-                      {(sig.controlledBy || sig.receivedBy || sig.entityName) && (
-                        <div className="flex items-center gap-1.5 flex-wrap font-mono text-[9px]">
-                          {sig.controlledBy && (
-                            <>
-                              <span className="text-neutral-600 uppercase">CONTROLS:</span>
-                              <span className="text-amber-400 uppercase">{sig.controlledBy}</span>
-                            </>
-                          )}
-                          {sig.controlledBy && sig.receivedBy && (
-                            <span className="text-green-700">→</span>
-                          )}
-                          {sig.receivedBy && (
-                            <>
-                              <span className="text-neutral-600 uppercase">RECEIVES:</span>
-                              <span className="text-cyan-400 uppercase">{sig.receivedBy}</span>
-                            </>
-                          )}
-                          {!sig.controlledBy && !sig.receivedBy && sig.entityName && (
-                            <>
-                              <span className="text-neutral-600 uppercase">ENTITY:</span>
-                              <span className="text-cyan-400 uppercase">{sig.entityName}</span>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Program name */}
-                      {sig.programName && (
-                        <div className="font-mono text-[9px] text-neutral-500 uppercase tracking-wide">
-                          PROGRAM: <span className="text-neutral-300">{sig.programName}</span>
-                        </div>
-                      )}
+                      {/* T004: Structured role display — CONTROLLED BY / RECIPIENT / PROGRAM */}
+                      <div className="grid gap-[3px] font-mono text-[9px] mt-0.5">
+                        {sig.controlledBy && (
+                          <div className="flex gap-2">
+                            <span className="text-neutral-600 uppercase shrink-0 w-[88px]">CONTROLLED BY:</span>
+                            <span className="text-amber-400 uppercase tracking-wide">{sig.controlledBy}</span>
+                          </div>
+                        )}
+                        {sig.receivedBy ? (
+                          <div className="flex gap-2">
+                            <span className="text-neutral-600 uppercase shrink-0 w-[88px]">RECIPIENT:</span>
+                            <span className="text-cyan-400 uppercase tracking-wide">{sig.receivedBy}</span>
+                          </div>
+                        ) : (sig.controlledBy || sig.entityName) ? (
+                          <div className="flex gap-2">
+                            <span className="text-neutral-600 uppercase shrink-0 w-[88px]">RECIPIENT:</span>
+                            <span className="text-neutral-600 uppercase">UNCONFIRMED</span>
+                          </div>
+                        ) : null}
+                        {!sig.controlledBy && !sig.receivedBy && sig.entityName && (
+                          <div className="flex gap-2">
+                            <span className="text-neutral-600 uppercase shrink-0 w-[88px]">CONTROLLED BY:</span>
+                            <span className="text-amber-400 uppercase tracking-wide">{sig.entityName}</span>
+                          </div>
+                        )}
+                        {sig.programName && (
+                          <div className="flex gap-2">
+                            <span className="text-neutral-600 uppercase shrink-0 w-[88px]">PROGRAM:</span>
+                            <span className="text-neutral-300">{sig.programName}</span>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Event summary */}
                       {sig.eventSummary && (

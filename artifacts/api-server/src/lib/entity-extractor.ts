@@ -1690,8 +1690,118 @@ const SIGNAL_TYPE_PATTERNS: { regex: RegExp; type: string }[] = [
 const FUNDING_HARD_GATE = /\b(funded?|grant(?:ed?)?|contract(?:ed?)?|appropriated?|allocated?|awarded?|paid?|payment|budget|procurement|reimburse|disburse|spending|expenditure|invest(?:ment|ed)|subsidized?|sole.source|no.bid|change\s+order|cost\s+overrun|audit\s+finding|questioned\s+cost|disallow|oig|inspector\s+general|task\s+order|invoice|invoiced?|capitalized?|encumbered?|obligated?)\b/i;
 
 const CONTROL_VERB_PATTERN = /\b(?:controlled?\s+by|overseen?\s+by|managed?\s+by|administered?\s+by|directed?\s+by|authorized?\s+by|approved?\s+by|led?\s+by|operated?\s+by)\b/i;
-const RECEIVE_VERB_PATTERN = /\b(?:received?\s+by|awarded?\s+to|paid?\s+to|granted?\s+to|contracted?\s+(?:to|with)|given\s+to|allocated?\s+to|disbursed?\s+to|transferred?\s+to)\b/i;
+const RECEIVE_VERB_PATTERN = /\b(?:received?\s+by|awarded?\s+to|paid?\s+to|granted?\s+to|contracted?\s+(?:to|with)|given\s+to|allocated?\s+to|disbursed?\s+to|transferred?\s+to|issued?\s+to|directed?\s+to|funneled?\s+to|channeled?\s+to)\b/i;
+// Extended recipient extraction: catches "[verb] ... to [Proper Noun]" when words intervene
+// e.g. "awarded a $12.8M infrastructure contract to Apex Construction Group"
+// NO i-flag on capture group — [A-Z] must be uppercase to prevent matching lowercase words
+const EXTENDED_RECIPIENT_RE = /\b(?:awarded?|issued?|granted?|contracted?|paid?|disbursed?|Awarded?|Issued?|Granted?|Contracted?|Paid?|Disbursed?)\b[^!?\n]{0,120}\bto\s+([A-Z][A-Za-z]+(?:\s+(?:of|the|and|for|&)?\s*[A-Z][A-Za-z]+){0,5})\b/;
 const PROGRAM_INDICATOR = /\b(?:program|project|initiative|fund|grant|contract|appropriation)\b/i;
+
+// ── Entity Candidate Validation ────────────────────────────────────────────────
+// T001: Hard-banned head words — entities starting with these are always garbage.
+const GARBAGE_HEAD_WORDS = new Set([
+  "in","on","at","by","from","with","during","after","before","through","under",
+  "over","into","for","of","a","an","the","this","that","these","those","its",
+  "january","february","march","april","may","june","july","august","september",
+  "october","november","december",
+  "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+]);
+
+// Exact-match banned phrases (lowercase)
+const GARBAGE_EXACT_PHRASES = new Set([
+  "the office","the program","the agency","the department","the authority",
+  "this office","this program","this department","this agency",
+  "the city","the county","the state","the federal","the administration",
+  "the contractor","the vendor","the recipient","the grantee","the auditor",
+]);
+
+// Alias map: collapse near-duplicate org names to canonical form (lowercase key → canonical display)
+const ORG_ALIAS_MAP: Record<string,string> = {
+  "metropolitan transportation authority": "MTA",
+  "los angeles metropolitan transportation authority": "MTA",
+  "la metro": "MTA",
+  "office of inspector general": "Office of Inspector General",
+  "oig": "Office of Inspector General",
+  "inspector general": "Office of Inspector General",
+  "department of transportation": "Department of Transportation",
+  "u.s. department of transportation": "Department of Transportation",
+  "los angeles county": "LA County",
+  "county of los angeles": "LA County",
+  "city of los angeles": "City of Los Angeles",
+  "la county": "LA County",
+  "hud": "HUD",
+  "department of housing and urban development": "HUD",
+  "u.s. department of housing and urban development": "HUD",
+  "apex construction group, inc.": "Apex Construction Group",
+  "apex construction group inc": "Apex Construction Group",
+  "ridgeline systems inc": "Ridgeline Systems Inc",
+  "ridgeline systems, inc.": "Ridgeline Systems Inc",
+};
+
+/**
+ * T001: Validates an extracted entity candidate.
+ * Returns false if the name starts with a banned preposition/month/article,
+ * matches a generic exact phrase, or is too short/meaningless.
+ */
+function isValidEntityCandidate(name: string | null): boolean {
+  if (!name || name.trim().length < 3) return false;
+  const lower = name.trim().toLowerCase();
+  // Check exact phrase ban
+  if (GARBAGE_EXACT_PHRASES.has(lower)) return false;
+  // Check first word
+  const firstWord = lower.split(/\s+/)[0];
+  if (GARBAGE_HEAD_WORDS.has(firstWord)) return false;
+  // Reject if it's all lowercase (not a proper noun)
+  if (name === name.toLowerCase()) return false;
+  // Reject bare single dictionary words that are not proper nouns
+  if (/^[A-Z][a-z]+$/.test(name) && name.length < 6) return false;
+  return true;
+}
+
+/**
+ * T005: Normalizes an entity name through the alias map.
+ * Returns the canonical form if found, otherwise the trimmed original.
+ */
+function normalizeOrgName(name: string): string {
+  if (!name) return name;
+  const lower = name.trim().toLowerCase().replace(/\.$/, "");
+  if (ORG_ALIAS_MAP[lower]) return ORG_ALIAS_MAP[lower];
+  return name.trim();
+}
+
+/**
+ * T002/T003: Extract the sentence subject — the proper-noun NP appearing BEFORE
+ * the first money amount or award verb. This is the controlling / awarding body.
+ * e.g. "MTA awarded $12.8M to Apex" → subject = "MTA"
+ * e.g. "Office of Inspector General allocated $1.2M" → subject = "Office of Inspector General"
+ */
+const AWARD_VERB_RE = /\b(?:awarded?|allocated?|appropriated?|granted?|contracted?|disbursed?|transferred?|paid?|approved?|authorized?|procured?)\b/i;
+const MONEY_ANCHOR_RE = /\$[\d,.]+\s*(?:million|billion|thousand|M|B|K|mn|bn)?/i;
+
+function extractSentenceSubject(sentence: string): string | null {
+  // Find index of the first money amount or award verb — subject is before that
+  const moneyIdx = MONEY_ANCHOR_RE.exec(sentence)?.index ?? Infinity;
+  const verbIdx = AWARD_VERB_RE.exec(sentence)?.index ?? Infinity;
+  const cutoff = Math.min(moneyIdx, verbIdx);
+  if (cutoff === Infinity || cutoff === 0) return null;
+
+  const prefix = sentence.slice(0, cutoff).trim();
+  if (!prefix || prefix.length < 2) return null;
+
+  // Extract the LAST proper-noun phrase in the prefix (most specific actor)
+  // Support multi-word like "Office of Inspector General", "LA County Board"
+  const candidates: string[] = [];
+  const np = /\b([A-Z][A-Za-z]+(?:\s+(?:of|the|and|for|&)?\s*[A-Z][A-Za-z]+){0,5})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = np.exec(prefix)) !== null) {
+    const cand = m[1].trim();
+    if (isValidEntityCandidate(cand)) candidates.push(cand);
+  }
+  if (candidates.length === 0) return null;
+  // Prefer longer (more specific) candidates; take the last one found
+  candidates.sort((a, b) => b.length - a.length);
+  return normalizeOrgName(candidates[0]);
+}
 
 function normalizeAmount(raw: string): { amount: number | null; currency: string; display: string } {
   let currency = "USD";
@@ -1739,8 +1849,12 @@ function extractActorNearVerb(sentence: string, verbPattern: RegExp): string | n
   const m = verbPattern.exec(sentence);
   if (!m) return null;
   const afterVerb = sentence.slice(m.index + m[0].length).trim();
-  const nm = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4})\b/.exec(afterVerb);
-  return nm ? nm[1] : null;
+  // Support multi-word proper nouns including "of/and/&" connectors (e.g., "Office of Inspector General")
+  const nm = /\b([A-Z][A-Za-z]+(?:\s+(?:of|the|and|for|&)?\s*[A-Z][A-Za-z]+){0,5})\b/.exec(afterVerb);
+  if (!nm) return null;
+  const candidate = nm[1].trim();
+  if (!isValidEntityCandidate(candidate)) return null;
+  return normalizeOrgName(candidate);
 }
 
 function extractProgramName(sentence: string): string | null {
@@ -1838,15 +1952,39 @@ export function extractFinancialSignals(text: string, anchorTokens: string[] = [
       const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
 
       // F3: Extract WHO controls and WHO receives
-      const controlledBy = extractActorNearVerb(sentence, CONTROL_VERB_PATTERN);
-      const receivedBy = extractActorNearVerb(sentence, RECEIVE_VERB_PATTERN);
+      // T002/T003: Priority — subject (awarding body) > passive verb patterns
+      const controlledByVerb = extractActorNearVerb(sentence, CONTROL_VERB_PATTERN);
+      const subjectActor = extractSentenceSubject(sentence);
+      // Prefer passive CONTROL_VERB match; fall back to sentence subject
+      const controlledBy = controlledByVerb ?? subjectActor ?? null;
+      // T003: Detect recipient — direct pattern first, then extended pattern (words between verb and "to")
+      const directReceiver = extractActorNearVerb(sentence, RECEIVE_VERB_PATTERN);
+      let receivedBy: string | null = directReceiver;
+      if (!receivedBy) {
+        const em = EXTENDED_RECIPIENT_RE.exec(sentence);
+        if (em) {
+          const cand = em[1].trim();
+          if (isValidEntityCandidate(cand)) receivedBy = normalizeOrgName(cand);
+        }
+      }
       const programName = extractProgramName(sentence);
 
-      // Primary entity name: prefer receivedBy, then first proper noun
-      let entityName: string | null = receivedBy ?? controlledBy ?? null;
-      if (!entityName) {
-        const properNounMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b/.exec(sentence);
-        if (properNounMatch) entityName = properNounMatch[1];
+      // T002: Priority resolver — controlling body first, then recipient
+      // T001: Validate ALL candidates — never store garbage
+      let entityName: string | null = null;
+      if (isValidEntityCandidate(controlledBy)) entityName = normalizeOrgName(controlledBy!);
+      else if (isValidEntityCandidate(receivedBy)) entityName = normalizeOrgName(receivedBy!);
+      else {
+        // Last resort: scan full sentence for any valid proper-noun NP
+        const propRe = /\b([A-Z][A-Za-z]+(?:\s+(?:of|the|and|for|&)?\s*[A-Z][A-Za-z]+){1,5})\b/g;
+        let pm: RegExpExecArray | null;
+        while ((pm = propRe.exec(sentence)) !== null) {
+          const cand = pm[1].trim();
+          if (isValidEntityCandidate(cand)) {
+            entityName = normalizeOrgName(cand);
+            break;
+          }
+        }
       }
 
       // F5: Confidence scoring
@@ -2029,13 +2167,15 @@ export function extractNonNumericSignals(text: string, anchorTokens: string[] = 
     if (!EXPLICIT_AWARD_GATE.test(sentence) && !DIRECTED_FLOW_GATE.test(sentence)) continue;
 
     // Must have entity/program context to be useful
-    const entityMatch = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/.exec(sentence);
+    const entityMatch = /\b([A-Z][A-Za-z]+(?:\s+(?:of|the|and|for|&)?\s*[A-Z][A-Za-z]+){1,5})\b/.exec(sentence);
     const hasProgram = SOFT_PROGRAM_REF.test(sentence);
     if (!entityMatch && !hasProgram) continue;
 
     const signalType = getSignalType(sentence);
     const summary = sentence.trim().replace(/\s+/g, " ").slice(0, 250);
-    const entityName = entityMatch ? entityMatch[1] : null;
+    // T001: validate entity candidate — reject garbage heads
+    const rawEntity = entityMatch ? entityMatch[1] : null;
+    const entityName = isValidEntityCandidate(rawEntity) ? normalizeOrgName(rawEntity!) : null;
     const programName = extractProgramName(sentence);
 
     const dedupKey = `NON_NUMERIC:${summary.slice(0, 80)}`;
