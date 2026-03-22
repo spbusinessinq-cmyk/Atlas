@@ -509,7 +509,7 @@ export interface ExtractionResult {
   paragraphCount: number;
   charCount: number;
   selectorUsed: string;
-  strategy: "json-ld" | "selector" | "paragraph-agg" | "div-density" | "body-text" | "fallback";
+  strategy: "json-ld" | "selector" | "paragraph-agg" | "div-density" | "body-text" | "fallback" | "direct";
   densityScore: number;
 }
 

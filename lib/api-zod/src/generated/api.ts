@@ -450,7 +450,7 @@ export const DeleteDocumentParams = zod.object({
  * @summary Upload a file
  */
 export const UploadDocumentBody = zod.object({
-  file: zod.instanceof(File).optional(),
+  file: zod.instanceof(Blob).optional(),
   caseId: zod.number().optional(),
   title: zod.string().optional(),
   source: zod.string().optional(),
