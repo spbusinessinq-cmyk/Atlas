@@ -345,11 +345,38 @@ const STRIP_SELECTORS = [
 
 // Boilerplate phrases that indicate junk text (not real article content)
 const BOILERPLATE_PHRASES = [
+  // Auth / paywall walls
   "sign up for our newsletter",
   "subscribe to our newsletter",
   "click here to subscribe",
+  "sign in to continue",
+  "sign in to read",
+  "sign in to access",
+  "log in to continue",
+  "create a free account",
+  "buy a subscription",
+  "subscribe to continue",
+  "subscribe to read",
+  "subscribe to access",
+  "become a member",
+  "unlock full access",
+  "already a subscriber",
+  "subscription required",
+  // Navigation / UI
   "follow us on",
   "share this article",
+  "download the app",
+  "get the app",
+  "click here",
+  "read more",
+  "related articles",
+  "more stories",
+  "most popular",
+  "trending now",
+  "you may also like",
+  "recommended for you",
+  "also read",
+  // Boilerplate
   "terms of service",
   "privacy policy",
   "all rights reserved",
@@ -359,13 +386,35 @@ const BOILERPLATE_PHRASES = [
   "cookie policy",
   "we use cookies",
   "your subscription",
+  "newsletter signup",
+  "advertisement",
+  "sponsored content",
+];
+
+// Hard-reject junk content phrases (any single occurrence → mark invalid)
+const HARD_REJECT_PHRASES = [
   "sign in to continue",
-  "create a free account",
-  "buy a subscription",
+  "sign in to read",
+  "subscribe to continue",
+  "subscribe to read",
+  "subscription required",
+  "unlock full access",
+  "create a free account to read",
+  "before you continue to google",
+  "enable javascript to continue",
+  "javascript is required to view",
+];
+
+// Navigation-only signals: if too many of these appear, content is nav/sidebar
+const NAV_SIGNAL_PHRASES = [
+  "sign in", "log in", "subscribe", "newsletter", "advertisement",
+  "related articles", "click here", "read more", "most popular",
+  "trending", "you may also like", "follow us", "download the app",
+  "share on", "copy link", "copied!", "email this",
 ];
 
 function countRealParagraphs(text: string): number {
-  // A "real" paragraph is >= 80 chars, not pure boilerplate
+  // A "real" paragraph is >= 80 chars, has real punctuation, not pure boilerplate
   return text
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -373,23 +422,95 @@ function countRealParagraphs(text: string): number {
       if (p.length < 80) return false;
       const lower = p.toLowerCase();
       if (BOILERPLATE_PHRASES.some((b) => lower.includes(b))) return false;
+      // Must contain at least one sentence-ending punctuation
+      if (!/[.!?]/.test(p)) return false;
       return true;
     }).length;
 }
 
 function isBoilerplateHeavy(text: string): boolean {
   const lower = text.toLowerCase();
+  // Hard reject: any single hard-reject phrase present
+  if (HARD_REJECT_PHRASES.some((p) => lower.includes(p))) return true;
+  // Boilerplate density: ≥ 2 matches → heavy
   const boilerplateHits = BOILERPLATE_PHRASES.filter((b) => lower.includes(b)).length;
-  return boilerplateHits >= 3;
+  if (boilerplateHits >= 2) return true;
+  return false;
+}
+
+/**
+ * T002: Detect nav/sidebar-only content.
+ * Returns true if the text is predominantly navigation or UI chrome,
+ * not real article content.
+ */
+function isNavOrSidebarContent(text: string): boolean {
+  const lower = text.toLowerCase();
+  const navHits = NAV_SIGNAL_PHRASES.filter((p) => lower.includes(p)).length;
+  // > 4 nav signals in < 1500 chars → nav/sidebar
+  if (navHits >= 4 && text.length < 1500) return true;
+  // More than 3 nav signals per 500 chars → very nav-heavy
+  if (navHits / (text.length / 500) > 3) return true;
+
+  // Count sentences (lines/chunks ending in . ! ?)
+  const sentences = text.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 15);
+  const shortChunks = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0 && l.length < 40);
+  // If > 60% of content is short chunks (nav links), it's a nav menu
+  const totalLines = text.split("\n").filter((l) => l.trim().length > 0).length;
+  if (totalLines > 5 && shortChunks.length / totalLines > 0.6) return true;
+
+  // Very few real sentences but lots of text → probably nav/link lists
+  if (text.length > 400 && sentences.length < 2) return true;
+
+  return false;
+}
+
+/**
+ * T001: Score a text block for "journalistic content density".
+ * Returns 0-100. Higher = more likely to be real article content.
+ */
+function scoreContentDensity(text: string): number {
+  if (!text || text.length < 50) return 0;
+  let score = 0;
+
+  // Length score (up to 30 pts)
+  if (text.length >= 2000) score += 30;
+  else if (text.length >= 1000) score += 20;
+  else if (text.length >= 600) score += 12;
+  else if (text.length >= 300) score += 5;
+
+  // Sentence quality (up to 30 pts)
+  const sentences = text.split(/(?<=[.!?])\s+/).filter((s) => s.length > 30);
+  const avgSentLen = sentences.length > 0
+    ? sentences.reduce((a, b) => a + b.length, 0) / sentences.length
+    : 0;
+  if (avgSentLen >= 80) score += 30;
+  else if (avgSentLen >= 50) score += 20;
+  else if (avgSentLen >= 30) score += 10;
+
+  // Real paragraphs (up to 20 pts)
+  const realParas = countRealParagraphs(text);
+  score += Math.min(20, realParas * 5);
+
+  // Numbers/dates signal factual content (up to 10 pts)
+  const numberMatches = (text.match(/\b\d{4}\b|\$[\d,.]+|\b\d+%|\b\d+\s+(?:million|billion|thousand)\b/gi) || []).length;
+  score += Math.min(10, numberMatches * 2);
+
+  // Boilerplate penalty
+  if (isBoilerplateHeavy(text)) score = Math.max(0, score - 40);
+  if (isNavOrSidebarContent(text)) score = Math.max(0, score - 30);
+
+  return Math.min(100, score);
 }
 
 export interface ExtractionResult {
   text: string;
   status: "ok" | "partial" | "failed";
+  contentQuality: "valid" | "partial" | "invalid";
   paragraphCount: number;
   charCount: number;
   selectorUsed: string;
-  strategy: "json-ld" | "selector" | "paragraph-agg" | "body-text" | "fallback";
+  strategy: "json-ld" | "selector" | "paragraph-agg" | "div-density" | "body-text" | "fallback";
+  densityScore: number;
 }
 
 export function extractArticleText(html: string, fallback: string): ExtractionResult {
@@ -397,6 +518,7 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
     let text = "";
     let selectorUsed = "none";
     let strategy: ExtractionResult["strategy"] = "fallback";
+    let bestDensityScore = 0;
 
     // ── Pass 0: JSON-LD structured data ─────────────────────────────────────
     // Most modern news sites (LA Times, CBS News, NBC, AP, etc.) embed their
@@ -417,12 +539,16 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
           const desc = (obj.description ?? "") as string;
           const candidate = body.length > desc.length ? body : desc;
           if (candidate.length > text.length && candidate.length > 300) {
-            text = candidate;
-            selectorUsed = "json-ld";
-            strategy = "selector";
+            const ds = scoreContentDensity(candidate);
+            if (ds > bestDensityScore || candidate.length > text.length) {
+              text = candidate;
+              selectorUsed = "json-ld";
+              strategy = "selector";
+              bestDensityScore = ds;
+            }
           }
         }
-        if (text.length >= 2000) break; // Great extraction, stop early
+        if (text.length >= 2000 && bestDensityScore >= 40) break; // Great extraction, stop early
       } catch {
         // Invalid JSON block — skip
       }
@@ -437,7 +563,7 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
     }
 
     // ── Pass 1: Try article body selectors in priority order ─────────────────
-    if (text.length < 1000) {
+    if (text.length < 1000 || bestDensityScore < 30) {
       for (const { sel, label } of ARTICLE_SELECTORS) {
         try {
           const el = root.querySelector(sel);
@@ -448,18 +574,22 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
             if (paras.length >= 2) {
               const paraTexts = paras
                 .map((p) => p.text.replace(/\s+/g, " ").trim())
-                .filter((t) => t.length > 50);
+                .filter((t) => t.length > 50 && !BOILERPLATE_PHRASES.some((b) => t.toLowerCase().includes(b)));
               candidate = paraTexts.join("\n\n");
             }
             // Fall back to raw element text if paragraph extraction insufficient
             if (candidate.length < 300) {
               candidate = el.text.replace(/\s+/g, " ").trim();
             }
-            if (candidate.length > text.length && candidate.length > 250) {
-              text = candidate;
-              selectorUsed = label;
-              strategy = "selector";
-              if (text.length > 3000) break; // Good enough
+            if (candidate.length > 250) {
+              const ds = scoreContentDensity(candidate);
+              if (ds > bestDensityScore) {
+                text = candidate;
+                selectorUsed = label;
+                strategy = "selector";
+                bestDensityScore = ds;
+                if (bestDensityScore >= 60 && text.length >= 1500) break; // Good enough
+              }
             }
           }
         } catch { /* bad selector ok */ }
@@ -467,18 +597,71 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
     }
 
     // ── Pass 2: Global paragraph aggregation ─────────────────────────────────
-    if (text.length < 500) {
+    if (bestDensityScore < 40) {
       const paragraphs = root.querySelectorAll("p");
       const paraTexts = paragraphs
         .map((p) => p.text.replace(/\s+/g, " ").trim())
-        .filter((t) => t.length > 60 && !BOILERPLATE_PHRASES.some((b) => t.toLowerCase().includes(b)));
+        .filter((t) => {
+          if (t.length < 60) return false;
+          const tLower = t.toLowerCase();
+          // Filter paragraphs that look like nav/sidebar/boilerplate
+          if (BOILERPLATE_PHRASES.some((b) => tLower.includes(b))) return false;
+          // Filter very short-sentence paragraphs (nav link lists)
+          const words = t.split(/\s+/).length;
+          if (words < 8) return false;
+          // Filter paragraphs with no sentence punctuation (likely UI labels)
+          if (!/[.!?]/.test(t)) return false;
+          return true;
+        });
       if (paraTexts.length >= 2) {
         const aggregated = paraTexts.join("\n\n");
-        if (aggregated.length > text.length) {
+        const ds = scoreContentDensity(aggregated);
+        if (ds > bestDensityScore) {
           text = aggregated;
           selectorUsed = "p-aggregate";
           strategy = "paragraph-agg";
+          bestDensityScore = ds;
         }
+      }
+    }
+
+    // ── Pass 2.5: T005 Div density scoring — pick best content block ──────────
+    // If we still don't have good content, score all major div/section blocks
+    // by journalistic density and pick the best candidate.
+    if (bestDensityScore < 35 || text.length < 600) {
+      const blockCandidates = root.querySelectorAll("div, section, article");
+      let bestCandidate = "";
+      let bestCandidateScore = bestDensityScore;
+
+      for (const block of blockCandidates) {
+        // Skip very small blocks
+        const blockText = block.text.replace(/\s+/g, " ").trim();
+        if (blockText.length < 300) continue;
+
+        // Skip blocks that are just nav/sidebar/footer
+        const blockLower = blockText.toLowerCase();
+        if (NAV_SIGNAL_PHRASES.filter((p) => blockLower.includes(p)).length > 5) continue;
+
+        // Extract paragraphs from this block
+        const paras = block.querySelectorAll("p")
+          .map((p) => p.text.replace(/\s+/g, " ").trim())
+          .filter((t) => t.length > 50 && /[.!?]/.test(t) && !BOILERPLATE_PHRASES.some((b) => t.toLowerCase().includes(b)));
+
+        const candidate = paras.length >= 2 ? paras.join("\n\n") : blockText;
+        if (candidate.length < 400) continue;
+
+        const ds = scoreContentDensity(candidate);
+        if (ds > bestCandidateScore && candidate.length > 400) {
+          bestCandidateScore = ds;
+          bestCandidate = candidate;
+        }
+      }
+
+      if (bestCandidate && bestCandidateScore > bestDensityScore) {
+        text = bestCandidate;
+        selectorUsed = "div-density";
+        strategy = "div-density";
+        bestDensityScore = bestCandidateScore;
       }
     }
 
@@ -489,39 +672,59 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
       text = bodyText.replace(/\s+/g, " ").trim();
       selectorUsed = "body";
       strategy = "body-text";
+      bestDensityScore = scoreContentDensity(text);
     }
 
     const truncated = text.slice(0, 20000);
     const paragraphCount = countRealParagraphs(truncated);
+    const densityScore = bestDensityScore;
 
-    // ── Determine extraction quality ──────────────────────────────────────────
-    let status: ExtractionResult["status"];
+    // ── T002: Post-extraction junk validation ─────────────────────────────────
     const boilerplateHeavy = isBoilerplateHeavy(truncated);
+    const navHeavy = isNavOrSidebarContent(truncated);
 
-    if (truncated.length >= 600 && paragraphCount >= 2 && !boilerplateHeavy) {
+    // ── T003: Minimum content requirement ─────────────────────────────────────
+    const hasMinLength = truncated.length >= 500;
+    const hasRealSentences = /[A-Z][^.!?]{40,}[.!?]/.test(truncated); // at least one real sentence (40+ chars)
+
+    // ── T004: Determine status and contentQuality ─────────────────────────────
+    let status: ExtractionResult["status"];
+    let contentQuality: ExtractionResult["contentQuality"];
+
+    if (!hasMinLength || !hasRealSentences || boilerplateHeavy || navHeavy) {
+      status = "failed";
+      contentQuality = "invalid";
+    } else if (densityScore >= 45 && paragraphCount >= 2 && truncated.length >= 800) {
       status = "ok";
-    } else if (truncated.length >= 150 && !boilerplateHeavy) {
+      contentQuality = "valid";
+    } else if (densityScore >= 20 && truncated.length >= 500) {
       status = "partial";
+      contentQuality = "partial";
     } else {
       status = "failed";
+      contentQuality = "invalid";
     }
 
     return {
       text: truncated,
       status,
+      contentQuality,
       paragraphCount,
       charCount: truncated.length,
       selectorUsed,
       strategy,
+      densityScore,
     };
   } catch {
     return {
       text: fallback,
       status: "failed",
+      contentQuality: "invalid",
       paragraphCount: 0,
       charCount: fallback.length,
       selectorUsed: "none",
       strategy: "fallback",
+      densityScore: 0,
     };
   }
 }
@@ -534,9 +737,9 @@ export function extractArticleText(html: string, fallback: string): ExtractionRe
  * Format: [ATLAS-DIAG:status=ok|chars=4523|paras=12|sel=article|strategy=selector|...]\n
  */
 function encodeDiagPrefix(
-  result: ExtractionResult,
+  result: Partial<ExtractionResult> & { status: ExtractionResult["status"]; charCount: number; paragraphCount: number; selectorUsed: string; strategy: ExtractionResult["strategy"] },
   finalUrl?: string,
-  extra?: { rssUrl?: string; srcUrl?: string; entities?: number; analysisRan?: boolean }
+  extra?: { rssUrl?: string; srcUrl?: string; entities?: number; analysisRan?: boolean; rejected?: number; score?: number; priority?: string; tier?: string; alignment?: string; anchorScore?: number; titleHit?: number; leadHit?: number; contamination?: string; extractionMode?: string }
 ): string {
   const parts = [
     `status=${result.status}`,
@@ -545,11 +748,23 @@ function encodeDiagPrefix(
     `sel=${result.selectorUsed}`,
     `strategy=${result.strategy}`,
   ];
+  if (result.contentQuality) parts.push(`cq=${result.contentQuality}`);
+  if (result.densityScore !== undefined) parts.push(`density=${Math.round(result.densityScore)}`);
   if (finalUrl) parts.push(`final_url=${encodeURIComponent(finalUrl)}`);
   if (extra?.rssUrl) parts.push(`rss_url=${encodeURIComponent(extra.rssUrl)}`);
   if (extra?.srcUrl) parts.push(`src_url=${encodeURIComponent(extra.srcUrl)}`);
   if (extra?.entities !== undefined) parts.push(`entities=${extra.entities}`);
+  if (extra?.rejected !== undefined) parts.push(`rejected=${extra.rejected}`);
   if (extra?.analysisRan !== undefined) parts.push(`analysis_ran=${extra.analysisRan ? 1 : 0}`);
+  if (extra?.score !== undefined) parts.push(`score=${extra.score}`);
+  if (extra?.priority) parts.push(`priority=${extra.priority}`);
+  if (extra?.tier) parts.push(`tier=${extra.tier}`);
+  if (extra?.alignment) parts.push(`alignment=${extra.alignment}`);
+  if (extra?.anchorScore !== undefined) parts.push(`anchorScore=${extra.anchorScore}`);
+  if (extra?.titleHit !== undefined) parts.push(`titleHit=${extra.titleHit}`);
+  if (extra?.leadHit !== undefined) parts.push(`leadHit=${extra.leadHit}`);
+  if (extra?.contamination) parts.push(`contamination=${extra.contamination}`);
+  if (extra?.extractionMode) parts.push(`extraction_mode=${extra.extractionMode}`);
   return `[ATLAS-DIAG:${parts.join("|")}]\n`;
 }
 
@@ -559,6 +774,8 @@ function encodeDiagPrefix(
  */
 export function parseAtlasDiag(rawText: string): {
   status: "ok" | "partial" | "failed" | "wrapper";
+  contentQuality?: "valid" | "partial" | "invalid";
+  densityScore?: number;
   chars: number;
   paras: number;
   sel: string;
@@ -567,7 +784,17 @@ export function parseAtlasDiag(rawText: string): {
   rssUrl?: string;
   srcUrl?: string;
   entities?: number;
+  rejected?: number;
   analysisRan?: boolean;
+  score?: number;
+  priority?: string;
+  tier?: string;
+  alignment?: string;
+  anchorScore?: number;
+  titleHit?: number;
+  leadHit?: number;
+  contamination?: string;
+  extractionMode?: string;
 } | null {
   const m = rawText.match(/^\[ATLAS-DIAG:([^\]]+)\]/);
   if (!m) return null;
@@ -582,6 +809,8 @@ export function parseAtlasDiag(rawText: string): {
   });
   return {
     status: (kv.status as "ok" | "partial" | "failed" | "wrapper") || "failed",
+    contentQuality: kv.cq as "valid" | "partial" | "invalid" | undefined,
+    densityScore: kv.density !== undefined ? parseInt(kv.density) : undefined,
     chars: parseInt(kv.chars || "0"),
     paras: parseInt(kv.paras || "0"),
     sel: kv.sel || "unknown",
@@ -590,7 +819,17 @@ export function parseAtlasDiag(rawText: string): {
     rssUrl: kv.rss_url ? decodeURIComponent(kv.rss_url) : undefined,
     srcUrl: kv.src_url ? decodeURIComponent(kv.src_url) : undefined,
     entities: kv.entities !== undefined ? parseInt(kv.entities) : undefined,
+    rejected: kv.rejected !== undefined ? parseInt(kv.rejected) : undefined,
     analysisRan: kv.analysis_ran !== undefined ? kv.analysis_ran === "1" : undefined,
+    score: kv.score !== undefined ? parseInt(kv.score) : undefined,
+    priority: kv.priority,
+    tier: kv.tier,
+    alignment: kv.alignment,
+    anchorScore: kv.anchorScore !== undefined ? parseInt(kv.anchorScore) : undefined,
+    titleHit: kv.titleHit !== undefined ? parseInt(kv.titleHit) : undefined,
+    leadHit: kv.leadHit !== undefined ? parseInt(kv.leadHit) : undefined,
+    contamination: kv.contamination,
+    extractionMode: kv.extraction_mode,
   };
 }
 
@@ -600,6 +839,9 @@ export function cleanRawText(rawText: string): string {
     .replace(/^\[ATLAS-DIAG:[^\]]+\]\n?/, "")
     .replace(/^\[EXTRACTION_INCOMPLETE\]\n?/, "")
     .replace(/^\[EXTRACTION_FAILED\]\n?/, "")
+    .replace(/^\[INVALID_CONTENT\]\n?/, "")
+    .replace(/^\[WRAPPER_BLOCKED\]\n?/, "")
+    .replace(/^\[FETCH_FAILED\]\n?/, "")
     .trim();
 }
 
@@ -765,9 +1007,14 @@ router.post("/web-ingest", async (req, res) => {
       const extracted = extractArticleText(html, snippet || title);
 
       if (isWrapperOrJunk(html, finalUrl, extracted.text)) {
-        const diagPrefix = encodeDiagPrefix({ ...extracted, status: "failed" as const, strategy: "fallback" as const }, finalUrl);
+        const diagPrefix = encodeDiagPrefix({ ...extracted, status: "failed" as const, contentQuality: "invalid" as const, strategy: "fallback" as const }, finalUrl);
         rawText = `${diagPrefix}[WRAPPER_BLOCKED]\n${snippet || title}`;
         extractionStatus = "wrapper";
+      } else if (extracted.contentQuality === "invalid") {
+        // T002/T003: Content failed validity check (junk, nav, too short, no sentences)
+        const diagPrefix = encodeDiagPrefix({ ...extracted, status: "failed" as const }, finalUrl);
+        rawText = `${diagPrefix}[INVALID_CONTENT]\n${snippet || title}`;
+        extractionStatus = "failed";
       } else {
         const diagPrefix = encodeDiagPrefix(extracted, finalUrl);
         rawText = diagPrefix + extracted.text;

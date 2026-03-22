@@ -884,7 +884,8 @@ router.post("/cases/:caseId/run-analysis", async (req, res) => {
       const rawText = doc.rawText;
       const isSkipped = rawText.includes("[WRAPPER_BLOCKED]")
         || rawText.includes("[EXTRACTION_FAILED]")
-        || rawText.includes("[FETCH_FAILED]");
+        || rawText.includes("[FETCH_FAILED]")
+        || rawText.includes("[INVALID_CONTENT]");
       if (isSkipped) continue;
 
       const cleanText = cleanRawText(rawText)
