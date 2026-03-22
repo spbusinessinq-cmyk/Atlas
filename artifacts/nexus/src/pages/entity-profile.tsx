@@ -83,6 +83,127 @@ function fmtDate(d: string | null) {
   return format(new Date(d), "yyyy-MM-dd");
 }
 
+const TYPE_MAP: Record<string, string> = {
+  "organization": "CONTRACTOR",
+  "company": "CONTRACTOR",
+  "corporation": "CONTRACTOR",
+  "business": "CONTRACTOR",
+  "government_agency": "AGENCY",
+  "government_body": "GOVERNMENT",
+  "government": "GOVERNMENT",
+  "agency": "AGENCY",
+  "nonprofit": "NONPROFIT",
+  "ngo": "NONPROFIT",
+  "charity": "NONPROFIT",
+  "program": "PROGRAM",
+  "department": "AGENCY",
+  "person": "PERSON",
+  "individual": "PERSON",
+  "location": "LOCATION",
+  "place": "LOCATION",
+};
+
+function normalizeEntityType(raw: string): string {
+  return TYPE_MAP[raw?.toLowerCase() ?? ""] ?? raw?.toUpperCase().replace(/_/g, " ") ?? "UNKNOWN";
+}
+
+function buildEntityIntelProfile(
+  entity: any,
+  financialSignals: any[],
+  relationships: any[],
+  mentions: any[],
+  linkedDocuments: any[],
+) {
+  const eName = entity.name ?? "Unknown";
+  const eType = normalizeEntityType(entity.type ?? "");
+  const approvedMents = mentions.filter((m: any) => m.status === "approved");
+  const docCount = linkedDocuments.length;
+  const entityFinancials = financialSignals.filter(
+    (f: any) => f.entityName?.toLowerCase() === eName.toLowerCase() || financialSignals.length > 0
+  );
+
+  // Evidence strength
+  let evidenceStrength: "STRONG" | "MODERATE" | "LIMITED" = "LIMITED";
+  if (docCount >= 3 && approvedMents.length >= 3) evidenceStrength = "STRONG";
+  else if (docCount >= 2 || approvedMents.length >= 2) evidenceStrength = "MODERATE";
+
+  const strengthColor = {
+    STRONG: "#22c55e",
+    MODERATE: "#f59e0b",
+    LIMITED: "#ef4444",
+  }[evidenceStrength];
+
+  // What this entity is
+  const typeDescriptions: Record<string, string> = {
+    PERSON: `An individual identified as a subject of interest. ${docCount > 0 ? `Confirmed presence in ${docCount} source document${docCount !== 1 ? "s" : ""}.` : "Pending independent corroboration."}`,
+    AGENCY: `A government agency or regulatory body with formal oversight authority. ${entityFinancials.length > 0 ? "Financial signals link this agency to public funding flows in this case." : "No financial signals linked yet."}`,
+    GOVERNMENT: `A government entity or political body with legislative or executive authority over relevant programs and budgets.`,
+    CONTRACTOR: `A private-sector organization identified in connection with this investigation. ${entityFinancials.length > 0 ? `${entityFinancials.length} financial signal${entityFinancials.length !== 1 ? "s" : ""} detected — potential contractual or financial relationship.` : "Contractual or financial role pending confirmation."}`,
+    NONPROFIT: `A nonprofit or charitable organization with potential involvement in public funding streams or grant activity.`,
+    PROGRAM: `A government or institutional program through which public funds are authorized, disbursed, or administered.`,
+    LOCATION: `A geographic or jurisdictional entity relevant to this investigation's scope or operational context.`,
+  };
+  const whatItIs = typeDescriptions[eType] ?? `An entity of type ${eType} extracted from source documents in this investigation.`;
+
+  // Role in case
+  let roleInCase = "";
+  if (entityFinancials.length > 0) {
+    const topF = entityFinancials[0];
+    roleInCase = `${eName} is linked to ${entityFinancials.length} financial signal${entityFinancials.length !== 1 ? "s" : ""} in this case`;
+    if (topF.amountDisplay && topF.amountDisplay !== "NON-NUMERIC") roleInCase += `, including a signal of ${topF.amountDisplay}`;
+    if (topF.signalType) roleInCase += ` (${topF.signalType.replace(/_/g, " ").toLowerCase()})`;
+    roleInCase += ".";
+  } else if (relationships.length > 0) {
+    const relNames = relationships.slice(0, 2).map((r: any) => r.entityBName ?? r.entityAName).filter(Boolean);
+    roleInCase = `${eName} is connected to ${relationships.length} entity/entities in the investigation network${relNames.length > 0 ? ` — including links to ${relNames.join(" and ")}` : ""}.`;
+  } else if (docCount > 0) {
+    roleInCase = `${eName} appears in ${docCount} source document${docCount !== 1 ? "s" : ""}. No confirmed financial or relationship connections yet — further linking required.`;
+  } else {
+    roleInCase = `${eName} was extracted from document content and has not yet been independently corroborated. Treat as candidate subject pending verification.`;
+  }
+
+  // Why it matters
+  let whyItMatters = "";
+  if (eType === "AGENCY" || eType === "GOVERNMENT") {
+    whyItMatters = `As a ${eType.toLowerCase()}, ${eName} carries public accountability obligations. Any failure to exercise oversight — or any appearance of political interference — is investigatively significant.`;
+  } else if (eType === "CONTRACTOR" && entityFinancials.length > 0) {
+    whyItMatters = `${eName} is a private-sector actor linked to public contract or grant activity. Without independent verification of deliverables and competitive bidding compliance, these flows represent a potential accountability risk.`;
+  } else if (eType === "PERSON") {
+    whyItMatters = `${eName} is an individual subject whose decision-making authority — and any potential conflicts of interest — are central to establishing the accountability chain in this case.`;
+  } else if (eType === "PROGRAM") {
+    whyItMatters = `${eName} is a program channel through which public funds are authorized and disbursed. Documenting the allocation chain and verifying outcomes against stated goals is essential.`;
+  } else if (docCount >= 3) {
+    whyItMatters = `${eName} appears consistently across ${docCount} source documents, elevating its investigative significance. Cross-reference public records to establish accountability linkage.`;
+  } else {
+    whyItMatters = `${eName} requires additional source corroboration to confirm investigative significance. Public records and FOIA requests are recommended.`;
+  }
+
+  // Open questions
+  const openQuestions: string[] = [];
+  if (docCount < 2) openQuestions.push(`Confirm ${eName} across additional independent sources.`);
+  if (entityFinancials.length === 0 && (eType === "CONTRACTOR" || eType === "AGENCY")) {
+    openQuestions.push(`Identify financial flows connected to ${eName} — file FOIA for contract or grant records.`);
+  }
+  if (relationships.length === 0) {
+    openQuestions.push(`Map ${eName}'s confirmed relationships to other actors in this investigation.`);
+  }
+  if (eType === "PERSON") {
+    openQuestions.push(`Establish ${eName}'s formal decision-making authority and any undisclosed conflicts of interest.`);
+  }
+  if (openQuestions.length === 0) {
+    openQuestions.push(`Verify ${eName}'s role against primary source documents and official public disclosures.`);
+  }
+
+  return {
+    whatItIs,
+    roleInCase,
+    whyItMatters,
+    evidenceStrength,
+    strengthColor,
+    openQuestions: openQuestions.slice(0, 3),
+  };
+}
+
 export default function EntityProfile() {
   const { id } = useParams();
   const entityId = parseInt(id || "0", 10);
@@ -240,9 +361,63 @@ export default function EntityProfile() {
                   </span>
                 </div>
               </div>
-              <div className="text-sm text-neutral-500 leading-relaxed">
-                {entity.description || "No supplemental intelligence recorded for this identity."}
-              </div>
+              {/* T003: Entity Intelligence Profile */}
+              {(() => {
+                const intelProfile = buildEntityIntelProfile(
+                  entity,
+                  financialSignals,
+                  relationships,
+                  mentions,
+                  linkedDocuments,
+                );
+                return (
+                  <div className="space-y-3 mt-2">
+                    {entity.description && (
+                      <div className="text-sm text-neutral-500 leading-relaxed border-l-2 border-neutral-800 pl-3">
+                        {entity.description}
+                      </div>
+                    )}
+                    <div className="space-y-2.5">
+                      {[
+                        { label: "WHAT THIS ENTITY IS", value: intelProfile.whatItIs, color: "rgba(6,182,212,0.7)" },
+                        { label: "ROLE IN THIS CASE", value: intelProfile.roleInCase, color: "rgba(251,191,36,0.7)" },
+                        { label: "WHY IT MATTERS", value: intelProfile.whyItMatters, color: "rgba(251,146,60,0.7)" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="border-l-2 pl-3 py-0.5" style={{ borderColor: color }}>
+                          <div className="font-mono text-[8px] uppercase tracking-[0.2em] mb-1" style={{ color }}>
+                            {label}
+                          </div>
+                          <div className="text-[11px] text-neutral-400 leading-relaxed">{value}</div>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-3 pt-1">
+                        <div className="font-mono text-[8px] uppercase tracking-[0.2em] text-neutral-600">EVIDENCE STRENGTH</div>
+                        <span
+                          className="font-mono text-[9px] font-bold px-2 py-0.5 border"
+                          style={{
+                            color: intelProfile.strengthColor,
+                            borderColor: `${intelProfile.strengthColor}40`,
+                            background: `${intelProfile.strengthColor}10`,
+                          }}
+                        >
+                          {intelProfile.evidenceStrength}
+                        </span>
+                      </div>
+                      <div className="pt-1">
+                        <div className="font-mono text-[8px] uppercase tracking-[0.2em] text-neutral-600 mb-1.5">OPEN QUESTIONS</div>
+                        <div className="space-y-1">
+                          {intelProfile.openQuestions.map((q, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="text-neutral-700 font-mono text-[9px] mt-0.5">→</span>
+                              <span className="text-[10px] text-neutral-500">{q}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {entity.aliases && entity.aliases.length > 0 && (
                 <div className="mt-3 space-y-1">
                   <div className="text-[9px] font-mono text-neutral-700 uppercase tracking-widest">

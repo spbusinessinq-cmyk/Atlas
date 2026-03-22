@@ -174,6 +174,19 @@ export default function CaseDetail() {
     pendingMentions,
   } = summary as typeof summary & { financialSignals?: any[] };
 
+  // T010: Graph clean mode — filter junk relationship types from the graph
+  const GRAPH_JUNK_REL_TYPES = new Set([
+    "co_mention", "title_co_mention", "cooccurrence", "generic", "unknown", "mentioned", "appears", "found",
+  ]);
+  const GRAPH_JUNK_PATTERNS = /\b(with|by|from|of|and|or|in|at)\s+[A-Z]/i;
+  const cleanGraphRelationships = relationships.filter(r => {
+    const t = (r.relationshipType ?? "").trim().toLowerCase();
+    if (!t) return false;
+    if (GRAPH_JUNK_REL_TYPES.has(t)) return false;
+    if (GRAPH_JUNK_PATTERNS.test(r.relationshipType ?? "")) return false;
+    return true;
+  });
+
   const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
   const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
@@ -658,7 +671,7 @@ function CaseDetailInner({
             <div className="h-full">
               <GraphCanvas
                 entities={visibleEntities}
-                relationships={relationships}
+                relationships={cleanGraphRelationships}
                 caseId={caseId}
                 selectedEntityId={selectedEntityId}
                 selectedRelId={selectedRelId}
@@ -755,7 +768,7 @@ function CaseDetailInner({
         {activeSection === "graph" && selectedEntity && !selectedRel && (
           <EntityIntelPanel
             entity={selectedEntity}
-            relationships={relationships}
+            relationships={cleanGraphRelationships}
             caseId={caseId}
             onClose={onEntityClose}
             onOpenWebIngest={(query) => {
@@ -4226,60 +4239,54 @@ function DefaultInspector({
             <div className="flex-1 overflow-y-auto" style={{ padding: "28px 40px" }}>
               <div style={{ maxWidth: "900px", margin: "0 auto" }} className="space-y-8">
 
-                {/* EXECUTIVE SUMMARY */}
+                {/* T011: FAIL-SAFE MODE */}
+                {(dossier as any)?.insufficientData && (
+                  <div className="px-5 py-4" style={{ border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.04)" }}>
+                    <div className="font-mono text-[8px] uppercase tracking-[0.3em] mb-2" style={{ color: "rgba(239,68,68,0.6)" }}>SYSTEM NOTICE</div>
+                    <div className="font-mono text-[11px]" style={{ color: "rgba(220,220,220,0.7)" }}>
+                      Insufficient confirmed intelligence for structured case output.
+                    </div>
+                    <div className="font-mono text-[9px] mt-2" style={{ color: "rgba(160,100,100,0.7)" }}>
+                      Complete entity triage and ingest financial documents to build the intelligence picture.
+                    </div>
+                  </div>
+                )}
+
+                {/* SECTION 1 — EXECUTIVE SUMMARY */}
                 {(s.caseSummary || dossierEditMode) && (
                   <div>
                     {wsLabel("EXECUTIVE SUMMARY", "rgba(139,92,246,0.8)", "caseSummary")}
                     {dossierEditMode ? (
-                      wsTextarea("caseSummary", s.caseSummary ?? "", "Enter executive summary...", 6)
+                      wsTextarea("caseSummary", s.caseSummary ?? "", "Enter executive summary...", 8)
                     ) : (
-                      <p className="font-mono text-[11px] leading-relaxed" style={{ color: "rgba(200,200,200,0.85)" }}>
-                        {dossierOverrides.caseSummary ?? s.caseSummary}
-                      </p>
+                      <div className="space-y-3">
+                        {(dossierOverrides.caseSummary ?? s.caseSummary ?? "").split("\n\n").filter(Boolean).map((para: string, i: number) => (
+                          <p key={i} className="font-mono text-[11px] leading-relaxed" style={{ color: "rgba(200,200,200,0.85)" }}>
+                            {para}
+                          </p>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
 
-                {/* INTELLIGENCE TIERS */}
-                {s.keyEntities?.length > 0 && (() => {
-                  const confirmed = s.keyEntities.filter((e: any) => (e.docCount ?? 0) >= 3);
-                  const developing = s.keyEntities.filter((e: any) => (e.docCount ?? 0) > 0 && (e.docCount ?? 0) < 3);
-                  return (
-                    <div>
-                      {wsLabel("INTELLIGENCE TIERS", "rgba(59,130,246,0.7)")}
-                      <div className="grid grid-cols-2 gap-6">
-                        {confirmed.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgba(34,197,94,0.8)" }} />
-                              <span className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(34,197,94,0.65)" }}>CONFIRMED</span>
-                            </div>
-                            {confirmed.map((e: any) => (
-                              <div key={e.id} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                                <span className="font-mono text-[10px] uppercase" style={{ color: "rgba(220,220,220,0.9)" }}>{e.name}</span>
-                                <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.2)" }}>{e.docCount}d</span>
-                              </div>
-                            ))}
+                {/* SECTION 2 — POWER STRUCTURE */}
+                {(s.powerStructure || dossierEditMode) && (
+                  <div>
+                    {wsLabel("POWER STRUCTURE", "rgba(6,182,212,0.7)", "powerStructureOverride")}
+                    {dossierEditMode ? (
+                      wsTextarea("powerStructureOverride", s.powerStructure ?? "", "Describe power structure...", 5)
+                    ) : (
+                      <div className="font-mono text-[10px] leading-relaxed space-y-1" style={{ color: "rgba(170,170,170,0.75)" }}>
+                        {(dossierOverrides.powerStructureOverride ?? s.powerStructure ?? "").split("\n").map((line: string, i: number) => (
+                          <div key={i} style={{ color: line.startsWith("  ") ? "rgba(34,197,94,0.8)" : line.match(/^[A-Z]/) ? "rgba(6,182,212,0.7)" : "rgba(170,170,170,0.75)" }}>
+                            {line || <br />}
                           </div>
-                        )}
-                        {developing.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgba(251,191,36,0.8)" }} />
-                              <span className="font-mono text-[7px] uppercase tracking-widest" style={{ color: "rgba(251,191,36,0.65)" }}>DEVELOPING</span>
-                            </div>
-                            {developing.map((e: any) => (
-                              <div key={e.id} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                                <span className="font-mono text-[10px] uppercase" style={{ color: "rgba(150,150,150,0.7)" }}>{e.name}</span>
-                                <span className="font-mono text-[8px]" style={{ color: "rgba(255,255,255,0.15)" }}>{e.docCount}d</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        ))}
                       </div>
-                    </div>
-                  );
-                })()}
+                    )}
+                  </div>
+                )}
 
                 {/* CONNECTIONS — full CRUD with status badges */}
                 <div>
@@ -4407,7 +4414,7 @@ function DefaultInspector({
                   );
                 })()}
 
-                {/* FINANCIAL FLOWS */}
+                {/* SECTION 3 — FINANCIAL FLOWS (T006: confirmed numeric, sorted largest→smallest) */}
                 <div>
                   {wsLabel("FINANCIAL FLOWS", "rgba(34,197,94,0.7)", "financialNote")}
                   {(s.financialSignals?.length ?? 0) > 0 ? (
@@ -4451,60 +4458,81 @@ function DefaultInspector({
                   ) : null}
                 </div>
 
-                {/* ACCOUNTABILITY TIMELINE */}
-                {s.timelineSignals?.length > 0 && (
+                {/* SECTION 4 — KEY ENTITIES (T003 entity profiles) */}
+                {s.keyEntities?.length > 0 && (
                   <div>
-                    {wsLabel("ACCOUNTABILITY TIMELINE", "rgba(251,191,36,0.7)")}
-                    <div className="space-y-2">
-                      {s.timelineSignals.slice(0, 12).map((t: any, i: number) => (
-                        <div key={i} className="flex gap-4 font-mono" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "8px" }}>
-                          <span className="text-[9px] flex-shrink-0 tabular-nums" style={{ color: "rgba(160,160,100,0.7)", minWidth: "80px" }}>
-                            {t.date?.slice(0, 10) ?? "UNKNOWN"}
-                          </span>
-                          <span className="text-[10px]" style={{ color: "rgba(200,200,200,0.8)" }}>{t.title}</span>
-                          {t.source && <span className="text-[8px] flex-shrink-0 ml-auto" style={{ color: "rgba(100,100,100,0.6)" }}>{t.source}</span>}
-                        </div>
-                      ))}
+                    {wsLabel("KEY ENTITIES", "rgba(59,130,246,0.8)")}
+                    <div className="space-y-4">
+                      {s.keyEntities.slice(0, 12).map((e: any) => {
+                        const profile = (s.entityProfiles ?? []).find((p: any) => p.entityId === e.id);
+                        const eStrength = profile?.evidenceStrength ?? (e.docCount >= 3 ? "STRONG" : e.docCount >= 1 ? "MODERATE" : "LIMITED");
+                        const sColor = eStrength === "STRONG" ? "#22c55e" : eStrength === "MODERATE" ? "#f59e0b" : "#ef4444";
+                        return (
+                          <div key={e.id} className="pl-3 pb-3" style={{ borderLeft: "2px solid rgba(59,130,246,0.2)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                            <div className="flex items-center gap-3 mb-1.5">
+                              <span className="font-mono text-[11px] font-bold uppercase" style={{ color: "rgba(220,220,220,0.95)" }}>{e.name}</span>
+                              <span className="font-mono text-[7px] px-1.5 py-0.5 border" style={{ color: "rgba(59,130,246,0.7)", borderColor: "rgba(59,130,246,0.25)" }}>{e.type ?? e.rawType}</span>
+                              <span className="font-mono text-[7px] px-1.5 py-0.5 border ml-auto" style={{ color: sColor, borderColor: `${sColor}40` }}>{eStrength}</span>
+                            </div>
+                            {profile ? (
+                              <div className="space-y-1.5">
+                                {profile.roleInCase && <div className="font-mono text-[9px] leading-relaxed" style={{ color: "rgba(160,160,160,0.75)" }}>{profile.roleInCase}</div>}
+                                {profile.whyItMatters && <div className="font-mono text-[9px] leading-relaxed border-l border-amber-500/20 pl-2" style={{ color: "rgba(180,150,80,0.75)" }}>{profile.whyItMatters}</div>}
+                                {profile.openQuestions?.length > 0 && (
+                                  <div className="mt-1 space-y-0.5">
+                                    {profile.openQuestions.map((q: string, qi: number) => (
+                                      <div key={qi} className="flex gap-1.5 font-mono text-[8px]" style={{ color: "rgba(120,120,120,0.7)" }}>
+                                        <span>→</span><span>{q}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="font-mono text-[9px]" style={{ color: "rgba(100,100,100,0.6)" }}>Appears in {e.docCount} source{e.docCount !== 1 ? "s" : ""}.</div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-                {/* INVESTIGATIVE ANGLES */}
-                {(s.investigativeAngles?.length > 0 || dossierEditMode) && (
+                {/* SECTION 5 — INVESTIGATIVE TIMELINE (T007: max 8 events) */}
+                {s.timelineSignals?.length > 0 ? (
                   <div>
-                    {wsLabel("INVESTIGATIVE ANGLES", "rgba(251,146,60,0.7)", "anglesOverride")}
-                    {dossierEditMode ? (
-                      wsListTextarea("anglesOverride", (s.investigativeAngles ?? []).map((a: any) => a.angle ?? a), "One angle per line...")
-                    ) : (
-                      <div className="space-y-1.5">
-                        {(dossierOverrides.anglesOverride
-                          ? dossierOverrides.anglesOverride.split("\n").filter(Boolean)
-                          : (s.investigativeAngles ?? []).map((a: any) => a.angle ?? a)
-                        ).map((a: string, i: number) => (
-                          <div key={i} className="flex gap-2 font-mono text-[10px]" style={{ color: "rgba(180,180,180,0.8)" }}>
-                            <span style={{ color: "rgba(251,146,60,0.5)" }}>·</span>
-                            <span>{a}</span>
+                    {wsLabel("INVESTIGATIVE TIMELINE", "rgba(251,191,36,0.7)")}
+                    <div className="space-y-2">
+                      {s.timelineSignals.slice(0, 8).map((t: any, i: number) => (
+                        <div key={i} className="pl-3" style={{ borderLeft: "2px solid rgba(251,191,36,0.2)", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "8px" }}>
+                          <div className="flex items-baseline gap-3 font-mono">
+                            <span className="text-[9px] flex-shrink-0 tabular-nums font-bold" style={{ color: "rgba(251,191,36,0.8)", minWidth: "90px" }}>
+                              [{t.date?.slice(0, 10) ?? "UNKNOWN"}]
+                            </span>
+                            {t.eventType && (
+                              <span className="text-[7px] uppercase px-1.5 py-0.5" style={{ background: "rgba(251,191,36,0.08)", color: "rgba(251,191,36,0.55)", border: "1px solid rgba(251,191,36,0.15)" }}>
+                                {t.eventType.replace(/_/g, " ")}
+                              </span>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <div className="font-mono text-[10px] mt-1" style={{ color: "rgba(200,200,200,0.85)" }}>→ {t.title}</div>
+                          {t.description && t.description !== t.title && (
+                            <div className="font-mono text-[9px] mt-0.5 leading-snug" style={{ color: "rgba(150,150,150,0.7)" }}>→ {t.description}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-
-                {/* POWER STRUCTURE */}
-                {(s.powerStructure || dossierEditMode) && (
+                ) : (
                   <div>
-                    {wsLabel("POWER STRUCTURE", "rgba(6,182,212,0.7)", "powerStructureOverride")}
-                    {dossierEditMode ? (
-                      wsTextarea("powerStructureOverride", s.powerStructure ?? "", "Describe power structure...", 4)
-                    ) : (
-                      <p className="font-mono text-[10px] leading-relaxed" style={{ color: "rgba(170,170,170,0.75)" }}>
-                        {dossierOverrides.powerStructureOverride ?? s.powerStructure}
-                      </p>
-                    )}
+                    {wsLabel("INVESTIGATIVE TIMELINE", "rgba(251,191,36,0.7)")}
+                    <div className="pl-3 py-2" style={{ borderLeft: "2px solid rgba(255,255,255,0.06)" }}>
+                      <p className="font-mono text-[9px]" style={{ color: "rgba(120,120,120,0.6)" }}>No accountability timeline events confirmed. Ingest dated contract, audit, or enforcement documents.</p>
+                    </div>
                   </div>
                 )}
 
+                {/* SECTION 6 — RISK / EXPOSURE */}
                 {/* RISK FLAGS */}
                 {(s.riskFlags?.length > 0 || dossierEditMode) && (
                   <div>

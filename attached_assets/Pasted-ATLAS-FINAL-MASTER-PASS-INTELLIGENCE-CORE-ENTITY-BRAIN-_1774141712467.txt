@@ -1,0 +1,307 @@
+ATLAS FINAL MASTER PASS — INTELLIGENCE CORE + ENTITY BRAIN + CONTROL LAYER
+
+This is the FINAL pass before deployment.
+
+We are no longer fixing bugs.
+We are enforcing INTELLIGENCE QUALITY, ENTITY UNDERSTANDING, and SYSTEM AUTHORITY.
+
+The system currently works, but still feels:
+- noisy
+- partially dumb on entities
+- weak in relationships
+- not authoritative in output
+
+This pass corrects all remaining gaps.
+
+━━━━━━━━━━━━━━━━━━
+T001 — ENTITY QUALITY HARD CAP
+━━━━━━━━━━━━━━━━━━
+
+Limit entities to MAX 12.
+
+Score each entity by:
+- financial linkage (x3)
+- relevance score (x3)
+- document frequency (x2)
+- title presence (x2)
+- relationship strength (x2)
+
+Keep ONLY top-ranked entities.
+
+Drop all others from:
+- UI
+- graph
+- dossier
+- connections
+
+━━━━━━━━━━━━━━━━━━
+T002 — ENTITY TYPE ENFORCEMENT
+━━━━━━━━━━━━━━━━━━
+
+Force all entities into:
+- GOVERNMENT
+- AGENCY
+- PROGRAM
+- CONTRACTOR
+- NONPROFIT
+- PERSON (only if decision authority)
+
+Reject:
+- generic nouns
+- weak names
+- fragments
+- media fluff
+
+━━━━━━━━━━━━━━━━━━
+T003 — ENTITY INTELLIGENCE PROFILE (NEW CORE FEATURE)
+━━━━━━━━━━━━━━━━━━
+
+REMOVE:
+“No supplemental intelligence recorded for this identity.”
+
+Replace with:
+
+ENTITY PROFILE BLOCK:
+
+For EVERY entity generate:
+
+1. WHAT THIS ENTITY IS 
+→ Short factual description 
+
+2. ROLE IN THIS CASE 
+→ Why it exists in this investigation 
+
+3. WHY IT MATTERS 
+→ Funding / control / oversight relevance 
+
+4. EVIDENCE STRENGTH 
+→ STRONG / MODERATE / LIMITED 
+
+5. OPEN QUESTIONS 
+→ What is missing / unknown 
+
+Rules:
+- 3–5 sentences max
+- no filler
+- no generic language
+- must be case-aware
+
+━━━━━━━━━━━━━━━━━━
+T004 — RELATIONSHIP SANITY (CRITICAL FIX)
+━━━━━━━━━━━━━━━━━━
+
+Current issue:
+Garbage relationships like:
+“WITH AMY JURAVICH”
+
+Fix:
+
+HARD DELETE relationships if:
+- contains prepositions (with, by, from, etc.)
+- not a real relationship
+- only co-mention
+- no financial or control link
+
+ONLY allow:
+- funds → entity
+- entity → controls → program
+- entity → contracts → vendor
+- agency → oversees → program
+- government → allocates → funds
+
+Limit:
+MAX 10 relationships
+
+Each must include:
+- relationship type
+- confidence
+- supporting evidence
+
+━━━━━━━━━━━━━━━━━━
+T005 — FINANCIAL → POWER STRUCTURE (CRITICAL)
+━━━━━━━━━━━━━━━━━━
+
+Convert financial data into structure:
+
+For every financial signal:
+
+MUST include:
+- amount
+- program
+- controlledBy
+- receivedBy
+
+Build:
+
+POWER STRUCTURE:
+
+Entity → controls → Program → allocates → $X
+
+If unknown:
+label:
+“Control structure unclear”
+
+Add new DOSSIER section:
+POWER STRUCTURE
+
+━━━━━━━━━━━━━━━━━━
+T006 — FLOW TRACE CLEAN MODE
+━━━━━━━━━━━━━━━━━━
+
+Only show:
+
+CONFIRMED FINANCIAL FLOWS
+
+Requirements:
+- numeric value
+- real funding context
+- linked source
+
+Remove:
+- duplicates
+- fake signals
+- empty flows
+
+Sort:
+largest → smallest
+
+If none:
+display:
+“No confirmed financial flows identified.”
+
+━━━━━━━━━━━━━━━━━━
+T007 — INVESTIGATIVE TIMELINE (FINAL FORM)
+━━━━━━━━━━━━━━━━━━
+
+Rename everywhere:
+INVESTIGATIVE TIMELINE
+
+Rules:
+
+- max 8 events
+- must be:
+  - funding
+  - contract
+  - audit
+  - oversight
+  - enforcement
+  - policy tied to money
+
+Reject:
+- news fluff
+- entertainment
+- generic events
+- broken dates
+
+Each event must be formatted:
+
+[DATE] — [TYPE] 
+→ What happened 
+→ Why it matters 
+
+━━━━━━━━━━━━━━━━━━
+T008 — EXECUTIVE SUMMARY FINAL FORM
+━━━━━━━━━━━━━━━━━━
+
+Rewrite summary into:
+
+Paragraph 1:
+What the case is
+
+Paragraph 2:
+Key entities + money
+
+Paragraph 3:
+Main issue / risk
+
+Paragraph 4:
+Confidence level
+
+Rules:
+- no templates
+- no labels
+- no filler
+- must read like intelligence brief
+
+━━━━━━━━━━━━━━━━━━
+T009 — DOSSIER STRUCTURE LOCK
+━━━━━━━━━━━━━━━━━━
+
+Final structure:
+
+1. Executive Summary 
+2. Power Structure 
+3. Financial Flows 
+4. Key Entities 
+5. Investigative Timeline 
+6. Risk / Exposure 
+7. Recommended Actions 
+
+All sections:
+- clean
+- tight
+- readable
+
+━━━━━━━━━━━━━━━━━━
+T010 — GRAPH CLEAN MODE
+━━━━━━━━━━━━━━━━━━
+
+Graph must show ONLY:
+- top entities
+- real relationships
+- real flows
+
+If graph looks crowded → system failed
+
+━━━━━━━━━━━━━━━━━━
+T011 — FAIL-SAFE MODE
+━━━━━━━━━━━━━━━━━━
+
+If no:
+- real entities
+OR
+- real financials
+
+Return:
+“Insufficient confirmed intelligence for structured case output.”
+
+NO fake data.
+
+━━━━━━━━━━━━━━━━━━
+T012 — FINAL VALIDATION
+━━━━━━━━━━━━━━━━━━
+
+Run ONE real case and verify:
+
+- ≤ 12 entities
+- real financial flows present
+- ≤ 8 timeline events
+- no junk entities
+- no fake relationships
+- entity profiles populated
+- summary reads clean
+
+Return ONLY:
+
+1. FINAL ENTITY LIST 
+2. ENTITY PROFILES (sample) 
+3. FINAL FINANCIAL FLOWS 
+4. FINAL TIMELINE 
+5. SAMPLE EXECUTIVE SUMMARY 
+6. CONFIRMATION: READY FOR LIVE 
+
+NO fake confirmations.
+
+━━━━━━━━━━━━━━━━━━
+FINAL DIRECTIVE
+━━━━━━━━━━━━━━━━━━
+
+This is the last pass.
+
+The system must now feel:
+- controlled
+- intelligent
+- deliberate
+- authoritative
+
+Execute.

@@ -85,6 +85,19 @@ The project is structured as a pnpm monorepo using Node.js and TypeScript, empha
     *   **Connections CRUD (T008):** Dossier Connections section replaced static list with typed `ConnItem` objects (`status: SYSTEM | EDITED | NEW`), auto-seeded from `entityRelationships` on first edit-mode entry, persisted to `localStorage atlas_connection_items_{caseId}`. Full add/edit/delete operations.
     *   **Dossier Edit Verification (T009):** All 8 dossier workspace textarea sections (caseSummary, powerStructureOverride, whyItMattersOverride, financialNote, anglesOverride, gapsOverride, actionsOverride, riskOverride) verified to correctly call `saveDossierOverride()` and persist to localStorage.
     *   **Test Validation Doc:** Case 38, Doc 259 — synthetic MTA FY2024 Budget Audit Report with 4 named orgs, 4 dated events, 3 financial signals. Produces 5 correct timeline entries (2024-01-01, 2024-03-01 dates) after all pipeline fixes.
+    *   **ATLAS FINAL MASTER PASS (T001-T012):** Complete intelligence quality, entity brain, and control layer overhaul in `dossier.ts`:
+        *   **T001 — Entity Quality Hard Cap:** Entities scored by financial_linkage×3, avg_confidence×3, doc_frequency×2, title_presence×2, relationship_strength×2. Sorted by score, hard-capped at MAX 12.
+        *   **T002 — Entity Type Enforcement:** Types normalized to GOVERNMENT/AGENCY/PROGRAM/CONTRACTOR/NONPROFIT/PERSON/LOCATION via `normalizeEntityType()` lookup in dossier.ts and entity-profile.tsx.
+        *   **T003 — Entity Intelligence Profile:** Per-entity profiles generated for every confirmed entity: WHAT IT IS, ROLE IN CASE, WHY IT MATTERS, EVIDENCE STRENGTH (STRONG/MODERATE/LIMITED), OPEN QUESTIONS. Displayed in dossier workspace KEY ENTITIES section and entity-profile.tsx (replacing "No supplemental intelligence" placeholder).
+        *   **T004 — Relationship Sanity:** Junk types (co_mention, title_co_mention, preposition-based) hard-deleted from dossier output. Only meaningful types retained. Max 10 relationships. Confidence threshold 0.3 minimum.
+        *   **T005 — Power Structure Chains:** Financial signals converted to explicit Entity → Program → $X flow chains. Displayed as labeled control chain text in POWER STRUCTURE section.
+        *   **T006 — Flow Trace Clean Mode:** Only confirmed numeric financial signals exposed. Deduped by entity+amount. Sorted largest→smallest. "No confirmed financial flows identified." fallback.
+        *   **T007 — Timeline Final Form:** Hard cap changed from 12 to 8 events. JUNK_KEYWORDS expanded. Format: [DATE] — [TYPE] → What → Why in dossier workspace.
+        *   **T008 — Executive Summary 4-Paragraph:** `buildCaseSummary()` generates 4 paragraphs separated by \n\n: P1=what the case is, P2=key entities+money, P3=main issue/risk, P4=confidence level. Frontend renders as separate paragraphs.
+        *   **T009 — Dossier Structure Lock:** Workspace sections enforced in order: 1.Executive Summary 2.Power Structure 3.Financial Flows 4.Key Entities 5.Investigative Timeline 6.Risk/Exposure 7.Recommended Actions.
+        *   **T010 — Graph Clean Mode:** `cleanGraphRelationships` computed in case-detail.tsx, filtering out co_mention/title_co_mention/preposition types before passing to GraphCanvas and EntityIntelPanel.
+        *   **T011 — Fail-Safe Mode:** `insufficientData` flag added to dossier response when both entities AND financials are absent. SYSTEM NOTICE block displayed in workspace.
+        *   **T012 — Final Validation:** Confirmed against cases 37 and 38. Entities capped, profiles generated, relationships clean, timeline ≤8, summary 4-paragraph, power structure structured.
 
 **API Routes:**
 *   Comprehensive RESTful API routes under `/api` for CRUD operations across all core data models, including specific endpoints for document upload, analysis, web search/ingestion, and entity mention management.
