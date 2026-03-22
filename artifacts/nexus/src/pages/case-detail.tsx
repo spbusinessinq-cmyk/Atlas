@@ -11,6 +11,7 @@ import {
   Note,
   MoneyFlow,
 } from "@workspace/api-client-react";
+import { asArray } from "@/lib/as-array";
 import {
   LayoutGrid,
   GitBranch,
@@ -82,10 +83,11 @@ export default function CaseDetail() {
   const [showSuggested, setShowSuggested] = useState(true);
   const [hiddenEntityIds, setHiddenEntityIds] = useState<Set<number>>(new Set());
 
-  const { data: approvedMentions = [] } = useListEntityMentions({
+  const { data: _approvedMentions } = useListEntityMentions({
     caseId,
     status: "approved",
   });
+  const approvedMentions = asArray<{ id: number; documentId: number; entityName: string; entityType: string; confidence: number; status: string }>(_approvedMentions);
 
   const handleSectionChange = useCallback((section: SectionId) => {
     setActiveSection(section);
@@ -117,7 +119,7 @@ export default function CaseDetail() {
     const docId = parseInt(pending, 10);
     if (!docId) return;
     sessionStorage.removeItem("atlas_pending_doc");
-    const doc = summary.documents.find((d) => d.id === docId);
+    const doc = asArray(summary.documents).find((d) => d.id === docId);
     if (doc) {
       setActiveSection("documents");
       setViewingDocId(docId);
@@ -164,15 +166,23 @@ export default function CaseDetail() {
 
   const {
     case: caseData,
-    entities,
-    documents,
-    timeline,
-    notes,
-    relationships,
-    moneyFlows,
-    financialSignals,
+    entities: _entities,
+    documents: _documents,
+    timeline: _timeline,
+    notes: _notes,
+    relationships: _relationships,
+    moneyFlows: _moneyFlows,
+    financialSignals: _financialSignals,
     pendingMentions,
   } = summary as typeof summary & { financialSignals?: any[] };
+
+  const entities     = asArray<Entity>(_entities);
+  const documents    = asArray<Document>(_documents);
+  const timeline     = asArray<TimelineEntry>(_timeline);
+  const notes        = asArray<Note>(_notes);
+  const relationships = asArray<Relationship>(_relationships);
+  const moneyFlows   = asArray<MoneyFlow>(_moneyFlows);
+  const financialSignals = asArray<any>(_financialSignals);
 
   const selectedEntity = entities.find((e) => e.id === selectedEntityId) || null;
   const selectedRel = relationships.find((r) => r.id === selectedRelId) || null;
